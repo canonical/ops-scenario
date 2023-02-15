@@ -5,6 +5,7 @@ import urllib.request
 from io import StringIO
 from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union
 
+import ops.model
 from ops import pebble
 from ops.model import SecretInfo, SecretRotate, _ModelBackend
 from ops.pebble import Client, ExecError
@@ -66,7 +67,7 @@ class _MockModelBackend(_ModelBackend):
                 filter(lambda r: r.relation_id == rel_id, self._state.relations)
             )
         except StopIteration as e:
-            raise RuntimeError(f"Not found: relation with id={rel_id}.") from e
+            raise ops.model.ModelError(f"Not found: relation with id={rel_id}.") from e
 
     def _get_secret(self, id=None, label=None):
         # cleanup id:
@@ -119,10 +120,10 @@ class _MockModelBackend(_ModelBackend):
 
     def relation_list(self, relation_id: int):
         relation = self._get_relation_by_id(relation_id)
-        return tuple(
+        return [
             f"{relation.remote_app_name}/{unit_id}"
             for unit_id in relation.remote_unit_ids
-        )
+        ]
 
     def config_get(self):
         state_config = self._state.config
