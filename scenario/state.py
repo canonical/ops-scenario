@@ -261,9 +261,6 @@ class Mount(_DCBase):
     location: Union[str, PurePosixPath]
     src: Union[str, Path]
 
-    def __post_init__(self):
-        self.src = Path(self.src)
-
 
 @dataclasses.dataclass
 class Container(_DCBase):
@@ -353,7 +350,9 @@ class Container(_DCBase):
     @property
     def filesystem(self) -> _MockFileSystem:
         mounts = {
-            name: _MockStorageMount(src=spec.src, location=spec.location)
+            name: _MockStorageMount(
+                src=Path(spec.src), location=PurePosixPath(spec.location)
+            )
             for name, spec in self.mounts.items()
         }
         return _MockFileSystem(mounts=mounts)
