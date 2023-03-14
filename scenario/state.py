@@ -40,12 +40,44 @@ RELATION_EVENTS_SUFFIX = {
     "-relation-departed",
     "-relation-created",
 }
+STORAGE_EVENTS_SUFFIX = {
+    "-storage-detaching",
+    "-storage-attached",
+}
+
+SECRET_EVENTS_SUFFIX = {
+    "-secret-changed",
+    "-secret-removed",
+    "-secret-rotate",
+    "-secret-expired",
+}
+
 META_EVENTS = {
     "CREATE_ALL_RELATIONS": "-relation-created",
     "BREAK_ALL_RELATIONS": "-relation-broken",
     "DETACH_ALL_STORAGES": "-storage-detaching",
     "ATTACH_ALL_STORAGES": "-storage-attached",
 }
+
+
+def is_relation_event(name: str) -> bool:
+    """Whether the event name indicates that this is a relation event."""
+    return any(map(name.replace("_", "-").endswith, RELATION_EVENTS_SUFFIX))
+
+
+def is_secret_event(name: str) -> bool:
+    """Whether the event name indicates that this is a secret event."""
+    return any(map(name.replace("_", "-").endswith, SECRET_EVENTS_SUFFIX))
+
+
+def is_storage_event(name: str) -> bool:
+    """Whether the event name indicates that this is a storage event."""
+    return any(map(name.replace("_", "-").endswith, STORAGE_EVENTS_SUFFIX))
+
+
+def is_workload_event(name: str) -> bool:
+    """Whether the event name indicates that this is a workload event."""
+    return name.replace("_", "-").endswith("-pebble-ready")
 
 
 @dataclasses.dataclass
@@ -90,7 +122,7 @@ class Secret(_DCBase):
             raise ValueError(
                 "This unit will never receive secret-changed for a secret it owns."
             )
-        return Event(name="secret-changed", secret=self)
+        return Event(name="secret_changed", secret=self)
 
     # owner-only events
     @property
@@ -100,7 +132,7 @@ class Secret(_DCBase):
             raise ValueError(
                 "This unit will never receive secret-rotate for a secret it does not own."
             )
-        return Event(name="secret-rotate", secret=self)
+        return Event(name="secret_rotate", secret=self)
 
     @property
     def expired_event(self):
@@ -109,7 +141,7 @@ class Secret(_DCBase):
             raise ValueError(
                 "This unit will never receive secret-expire for a secret it does not own."
             )
-        return Event(name="secret-expire", secret=self)
+        return Event(name="secret_expire", secret=self)
 
     @property
     def remove_event(self):
@@ -118,13 +150,13 @@ class Secret(_DCBase):
             raise ValueError(
                 "This unit will never receive secret-removed for a secret it does not own."
             )
-        return Event(name="secret-removed", secret=self)
+        return Event(name="secret_removed", secret=self)
 
 
 _RELATION_IDS_CTR = 0
 
 
-def _normalize_event_name(s: str):
+def normalize_name(s: str):
     """Event names need underscores instead of dashes."""
     return s.replace("-", "_")
 
@@ -179,40 +211,35 @@ class Relation(_DCBase):
     def changed_event(self):
         """Sugar to generate a <this relation>-relation-changed event."""
         return Event(
-            name=_normalize_event_name(self.endpoint + "-relation-changed"),
-            relation=self,
+            name=normalize_name(self.endpoint + "-relation-changed"), relation=self
         )
 
     @property
     def joined_event(self):
         """Sugar to generate a <this relation>-relation-joined event."""
         return Event(
-            name=_normalize_event_name(self.endpoint + "-relation-joined"),
-            relation=self,
+            name=normalize_name(self.endpoint + "-relation-joined"), relation=self
         )
 
     @property
     def created_event(self):
         """Sugar to generate a <this relation>-relation-created event."""
         return Event(
-            name=_normalize_event_name(self.endpoint + "-relation-created"),
-            relation=self,
+            name=normalize_name(self.endpoint + "-relation-created"), relation=self
         )
 
     @property
     def departed_event(self):
         """Sugar to generate a <this relation>-relation-departed event."""
         return Event(
-            name=_normalize_event_name(self.endpoint + "-relation-departed"),
-            relation=self,
+            name=normalize_name(self.endpoint + "-relation-departed"), relation=self
         )
 
     @property
     def broken_event(self):
         """Sugar to generate a <this relation>-relation-broken event."""
         return Event(
-            name=_normalize_event_name(self.endpoint + "-relation-broken"),
-            relation=self,
+            name=normalize_name(self.endpoint + "-relation-broken"), relation=self
         )
 
 
@@ -366,9 +393,7 @@ class Container(_DCBase):
                 "you **can** fire pebble-ready while the container cannot connect, "
                 "but that's most likely not what you want."
             )
-        return Event(
-            name=_normalize_event_name(self.name + "-pebble-ready"), container=self
-        )
+        return Event(name=normalize_name(self.name + "-pebble-ready"), container=self)
 
 
 @dataclasses.dataclass
@@ -465,15 +490,16 @@ class _EntityStatus(_DCBase):
         )
         return super().__eq__(other)
 
-    @classmethod
-    def _from_statusbase(cls, obj: StatusBase):
-        return _EntityStatus(obj.name, obj.message)
-
     def __iter__(self):
         return iter([self.name, self.message])
 
     def __repr__(self):
         return f"<EntityStatus name={self.name!r}, message={self.message!r}>"
+
+
+def _status_to_entitystatus(obj: StatusBase) -> _EntityStatus:
+    """Convert StatusBase to _EntityStatus."""
+    return _EntityStatus(obj.name, obj.message)
 
 
 @dataclasses.dataclass
@@ -496,7 +522,7 @@ class Status(_DCBase):
             if isinstance(val, _EntityStatus):
                 pass
             elif isinstance(val, StatusBase):
-                setattr(self, name, _EntityStatus._from_statusbase(val))
+                setattr(self, name, _status_to_entitystatus(val))
             elif isinstance(val, tuple):
                 logger.warning(
                     "Initializing Status.[app/unit] with Tuple[str, str] is deprecated "
@@ -544,6 +570,13 @@ class StoredState(_DCBase):
 
 @dataclasses.dataclass
 class State(_DCBase):
+    """Represents the juju-owned portion of a unit's state.
+
+    Roughly speaking, it wraps all hook-tool- and pebble-mediated data a charm can access in its lifecycle.
+    For example, status-get will return data from `State.status`, is-leader will return data from
+    `State.leader`, and so on.
+    """
+
     config: Dict[str, Union[str, int, float, bool]] = dataclasses.field(
         default_factory=dict
     )
@@ -556,11 +589,6 @@ class State(_DCBase):
     juju_log: List[Tuple[str, str]] = dataclasses.field(default_factory=list)
     secrets: List[Secret] = dataclasses.field(default_factory=list)
 
-    # meta stuff: actually belongs in event data structure.
-    juju_version: str = "3.0.0"
-    unit_id: int = 0
-    app_name: str = "local"
-
     # represents the OF's event queue. These events will be emitted before the event being dispatched,
     # and represent the events that had been deferred during the previous run.
     # If the charm defers any events during "this execution", they will be appended
@@ -571,11 +599,7 @@ class State(_DCBase):
     # todo:
     #  actions?
 
-    @property
-    def unit_name(self):
-        return f"{self.app_name}/{self.unit_id}"
-
-    def with_can_connect(self, container_name: str, can_connect: bool):
+    def with_can_connect(self, container_name: str, can_connect: bool) -> "State":
         def replacer(container: Container):
             if container.name == container_name:
                 return container.replace(can_connect=can_connect)
@@ -584,12 +608,14 @@ class State(_DCBase):
         ctrs = tuple(map(replacer, self.containers))
         return self.replace(containers=ctrs)
 
-    def with_leadership(self, leader: bool):
+    def with_leadership(self, leader: bool) -> "State":
         return self.replace(leader=leader)
 
-    def with_unit_status(self, status: str, message: str):
+    def with_unit_status(self, status: StatusBase) -> "State":
         return self.replace(
-            status=dataclasses.replace(self.status, unit=(status, message))
+            status=dataclasses.replace(
+                self.status, unit=_status_to_entitystatus(status)
+            )
         )
 
     def get_container(self, container: Union[str, Container]) -> Container:
@@ -628,7 +654,8 @@ class State(_DCBase):
         actions: Optional[Dict[str, Any]] = None,
         config: Optional[Dict[str, Any]] = None,
         charm_root: Optional["PathLike"] = None,
-    ):
+        juju_version: str = "3.0",
+    ) -> "State":
         """Fluent API for trigger. See runtime.trigger's docstring."""
         return _runtime_trigger(
             state=self,
@@ -640,6 +667,7 @@ class State(_DCBase):
             actions=actions,
             config=config,
             charm_root=charm_root,
+            juju_version=juju_version,
         )
 
     trigger.__doc__ = _runtime_trigger.__doc__
@@ -726,7 +754,7 @@ class Event(_DCBase):
     def __post_init__(self):
         if "-" in self.name:
             logger.warning(f"Only use underscores in event names. {self.name!r}")
-        self.name = self.name.replace("-", "_")
+        self.name = normalize_name(self.name)
 
     def deferred(self, handler: Callable, event_id: int = 1) -> DeferredEvent:
         """Construct a DeferredEvent from this Event."""
@@ -742,13 +770,17 @@ class Event(_DCBase):
 
         snapshot_data = {}
 
-        if self.container:
+        if is_workload_event(self.name):
             # this is a WorkloadEvent. The snapshot:
             snapshot_data = {
                 "container_name": self.container.name,
             }
 
-        elif self.relation:
+        elif is_relation_event(self.name):
+            if not self.relation:
+                raise ValueError(
+                    "this is a relation event; expected relation attribute"
+                )
             # this is a RelationEvent. The snapshot:
             snapshot_data = {
                 "relation_name": self.relation.endpoint,
@@ -774,20 +806,6 @@ def deferred(
 ):
     """Construct a DeferredEvent from an Event or an event name."""
     if isinstance(event, str):
-        norm_evt = event.replace("_", "-")
-
-        if not relation:
-            if any(map(norm_evt.endswith, RELATION_EVENTS_SUFFIX)):
-                raise ValueError(
-                    "cannot construct a deferred relation event without the relation instance. "
-                    "Please pass one."
-                )
-        if not container and norm_evt.endswith("_pebble_ready"):
-            raise ValueError(
-                "cannot construct a deferred workload event without the container instance. "
-                "Please pass one."
-            )
-
         event = Event(event, relation=relation, container=container)
     return event.deferred(handler=handler, event_id=event_id)
 

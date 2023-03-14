@@ -1,9 +1,6 @@
-import dataclasses
-import logging
 import marshal
 import os
 import re
-import shutil
 import sys
 import tempfile
 from contextlib import contextmanager
@@ -13,8 +10,9 @@ from typing import (
     Any,
     Callable,
     Dict,
-    List,
+    Iterable,
     Optional,
+    Tuple,
     Type,
     TypeVar,
     Union,
@@ -22,7 +20,6 @@ from typing import (
 
 import yaml
 from ops.framework import _event_regex
-from ops.log import JujuLogHandler
 from ops.storage import SQLiteStorage
 
 from scenario.logger import logger as scenario_logger
@@ -30,7 +27,6 @@ from scenario.ops_main_mock import NoObserverError
 
 if TYPE_CHECKING:
     from ops.charm import CharmBase
-    from ops.framework import EventBase
     from ops.testing import CharmType
 
     from scenario.state import Event, State, _CharmSpec
@@ -56,6 +52,192 @@ class UncaughtCharmError(ScenarioRuntimeError):
 
 class DirtyVirtualCharmRootError(ScenarioRuntimeError):
     """Error raised when the runtime can't initialize the vroot without overwriting existing metadata files."""
+
+
+class InconsistentScenarioError(ScenarioRuntimeError):
+    """Error raised when the combination of state and event is inconsistent."""
+
+
+class ConsistencyChecker:
+    """This class is responsible for validating the combination of a state, an event, a charm spec, and a juju version.
+
+    Upon calling .run(), it performs a series of checks that validate that the state is consistent with itself, with
+    the event being emitted, the charm metadata, etc...
+    For example, if someone tries to emit a foo-pebble-ready but there is no container 'foo' in metadata or in State,
+    this is where we surface the issue.
+    """
+
+    def __init__(
+        self,
+        state: "State",
+        event: "Event",
+        charm_spec: "_CharmSpec",
+        juju_version: str,
+    ):
+        self.state = state
+        self.event = event
+        self.charm_spec = charm_spec
+        self.juju_version: Tuple[int, ...] = tuple(map(int, juju_version.split(".")))
+
+    def run(self):
+        """Run all consistency checks and raise if any of them fails."""
+        if os.getenv("SCENARIO_SKIP_CONSISTENCY_CHECKS"):
+            logger.info("skipping consistency checks.")
+            return
+
+        errors = []
+
+        for check in (
+            self._check_containers,
+            self._check_config,
+            self._check_event,
+            self._check_secrets,
+        ):
+            try:
+                results = check()
+            except Exception as e:
+                logger.error(
+                    f"error encountered processing check {check}", exc_info=True
+                )
+                errors.append(
+                    f"an unexpected error occurred processing check {check} ({e}); see the logs"
+                )
+                continue
+
+            errors.extend(results)
+
+        if errors:
+            err_fmt = "\n".join(errors)
+            logger.error(
+                f"Inconsistent scenario. The following errors were found: {err_fmt}"
+            )
+            raise InconsistentScenarioError(errors)
+
+    def _check_event(self) -> Iterable[str]:
+        """Check the internal consistency of the Event data structure."""
+        from scenario.state import (  # avoid cycles
+            is_relation_event,
+            is_workload_event,
+            normalize_name,
+        )
+
+        event = self.event
+        errors = []
+        if not event.relation and is_relation_event(event.name):
+            errors.append(
+                "cannot construct a relation event without the relation instance. "
+                "Please pass one."
+            )
+        if is_relation_event(event.name) and not event.name.startswith(
+            normalize_name(event.relation.endpoint)
+        ):
+            errors.append(
+                f"relation event should start with relation endpoint name. {event.name} does "
+                f"not start with {event.relation.endpoint}."
+            )
+
+        if not event.container and is_workload_event(event.name):
+            errors.append(
+                "cannot construct a workload event without the container instance. "
+                "Please pass one."
+            )
+        if is_workload_event(event.name) and not event.name.startswith(
+            normalize_name(event.container.name)
+        ):
+            errors.append(
+                f"workload event should start with container name. {event.name} does "
+                f"not start with {event.container.name}."
+            )
+        return errors
+
+    def _check_config(self) -> Iterable[str]:
+        """Check the consistency of the state.config with the charm_spec.config (config.yaml)."""
+        state_config = self.state.config
+        meta_config = (self.charm_spec.config or {}).get("options", {})
+        errors = []
+
+        for key, value in state_config.items():
+            if key not in meta_config:
+                errors.append(
+                    f"config option {key!r} in state.config but not specified in config.yaml."
+                )
+                continue
+
+            # todo unify with snapshot's when merged.
+            converters = {
+                "string": str,
+                "int": int,
+                "integer": int,  # fixme: which one is it?
+                "number": float,
+                "boolean": bool,
+                "attrs": NotImplemented,  # fixme: wot?
+            }
+
+            expected_type_name = meta_config[key].get("type", None)
+            if not expected_type_name:
+                errors.append(f"config.yaml invalid; option {key!r} has no 'type'.")
+                continue
+
+            expected_type = converters.get(expected_type_name)
+            if not isinstance(value, expected_type):
+                errors.append(
+                    f"config invalid; option {key!r} should be of type {expected_type} "
+                    f"but is of type {type(value)}."
+                )
+
+        return errors
+
+    def _check_secrets(self) -> Iterable[str]:
+        """Check the consistency of Secret-related stuff."""
+        from scenario.state import is_secret_event  # avoid cycles
+
+        errors = []
+        if is_secret_event(self.event.name) and not self.state.secrets:
+            errors.append(
+                "the event being processed is a secret event; but the state has no secrets."
+            )
+
+        if (
+            is_secret_event(self.event.name) or self.state.secrets
+        ) and self.juju_version < (3,):
+            errors.append(
+                f"secrets are not supported in the specified juju version {self.juju_version}. "
+                f"Should be at least 3.0."
+            )
+
+        return errors
+
+    def _check_containers(self) -> Iterable[str]:
+        """Check the consistency of state.containers vs. charm_spec.meta (metadata.yaml/containers)."""
+        from scenario.state import is_workload_event  # avoid cycles
+
+        meta_containers = list(self.charm_spec.meta.get("containers", {}))
+        state_containers = [c.name for c in self.state.containers]
+        errors = []
+
+        # it's fine if you have containers in meta that are not in state.containers (yet), but it's not fine if:
+        # - you're processing a pebble-ready event and that container is not in state.containers or meta.containers
+        if is_workload_event(self.event.name):
+            evt_container_name = self.event.name[: -len("-pebble-ready")]
+            if evt_container_name not in meta_containers:
+                errors.append(
+                    f"the event being processed concerns container {evt_container_name!r}, but a container "
+                    f"with that name is not declared in the charm metadata"
+                )
+            if evt_container_name not in state_containers:
+                errors.append(
+                    f"the event being processed concerns container {evt_container_name!r}, but a container "
+                    f"with that name is not present in the state. It's odd, but consistent, if it cannot "
+                    f"connect; but it should at least be there."
+                )
+
+        # - a container in state.containers is not in meta.containers
+        if diff := (set(state_containers).difference(set(meta_containers))):
+            errors.append(
+                f"some containers declared in the state are not specified in metadata. That's not possible. "
+                f"Missing from metadata: {diff}."
+            )
+        return errors
 
 
 class Runtime:
@@ -298,6 +480,8 @@ class Runtime:
         This will set the environment up and call ops.main.main().
         After that it's up to ops.
         """
+        ConsistencyChecker(state, event, self._charm_spec, self._juju_version).run()
+
         charm_type = self._charm_spec.charm_type
         logger.info(f"Preparing to fire {event.name} on {charm_type.__name__}")
 
@@ -362,6 +546,7 @@ def trigger(
     actions: Optional[Dict[str, Any]] = None,
     config: Optional[Dict[str, Any]] = None,
     charm_root: Optional[Dict["PathLike", "PathLike"]] = None,
+    juju_version: str = "3.0",
 ) -> "State":
     """Trigger a charm execution with an Event and a State.
 
@@ -382,6 +567,7 @@ def trigger(
         If none is provided, we will search for a ``actions.yaml`` file in the charm root.
     :arg config: charm config to use. Needs to be a valid config.yaml format (as a python dict).
         If none is provided, we will search for a ``config.yaml`` file in the charm root.
+    :arg juju_version: Juju agent version to simulate.
     :arg charm_root: virtual charm root the charm will be executed with.
      If the charm, say, expects a `./src/foo/bar.yaml` file present relative to the
         execution cwd, you need to use this.
@@ -408,7 +594,7 @@ def trigger(
 
     runtime = Runtime(
         charm_spec=spec,
-        juju_version=state.juju_version,
+        juju_version=juju_version,
         charm_root=charm_root,
     )
 
