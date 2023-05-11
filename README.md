@@ -786,6 +786,70 @@ If you have a clear false negative, are explicitly testing 'edge', inconsistent 
 checker is in your way, you can set the `SCENARIO_SKIP_CONSISTENCY_CHECKS` envvar and skip it altogether. Hopefully you
 don't need that.
 
+# Charm State
+
+Suppose that your charm code makes an http call to a server somewhere to get some data, say, the current temperature reading from a sensor on top of the Nieuwe Kerk in Delft, The Netherlands. 
+
+If you follow the best practices of how to structure your charm code, then you are aware that this piece of data, at runtime, is categorised as 'charm state'. 
+Scenario offers a way to plug into this system natively, and integrate this charm state data structure into its own `State` tree.
+
+If your charm code looks like this:
+```python
+from dataclasses import dataclass
+from ops import CharmBase, Framework
+
+from scenario.charm_state import CharmStateBackend
+from scenario.state import CharmState
+
+# in state.py
+@dataclass(frozen=True)
+class MyState(CharmState):
+    temperature: float = 4.5  # brr
+
+# in state.py
+class MyCharmStateBackend(CharmStateBackend):
+    @property
+    def temperature(self) -> int:
+        import requests
+        return requests.get('http://nieuwekerk.delft.nl/temp...').json()['celsius']
+    
+    # no setter: you can't change the weather. 
+    # ... Can you?
+    
+# in charm.py
+class MyCharm(CharmBase):
+    state = MyCharmStateBackend()
+
+    def __init__(self, framework: Framework):
+        super().__init__(framework)
+        self.temperature = self.state.temperature
+```
+
+Then you can write scenario tests like that:
+
+```python
+import pytest
+from scenario import Context, State
+from charm import MyCharm
+from state import MyState
+
+@pytest.fixture
+def ctx():
+    return Context(MyCharm, meta={"name": "foo"})
+
+
+@pytest.mark.parametrize("temp", (1.1, 10.2, 20.3))
+def test_get(ctx, temp):
+    state = State(charm_state=MyState("state", temperature=temp))
+
+    # the charm code will get the value from State.charm_state.temperature instead of making http calls at test-time.
+    def post_event(charm: MyCharm):
+        assert charm.temperature == temp
+
+    ctx.run("start", state=state, post_event=post_event)
+```
+
+
 # Snapshot
 
 Scenario comes with a cli tool called `snapshot`. Assuming you've pip-installed `ops-scenario`, you should be able to
@@ -807,3 +871,4 @@ You can also pass a `--format` flag to obtain instead:
 - a jsonified `State` data structure, for portability
 - a full-fledged pytest test case (with imports and all), where you only have to fill in the charm type and the event
   that you wish to trigger.
+
