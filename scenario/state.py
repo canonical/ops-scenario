@@ -29,6 +29,14 @@ if typing.TYPE_CHECKING:
 
     PathLike = Union[str, Path]
     AnyRelation = Union["Relation", "PeerRelation", "SubordinateRelation"]
+    StatusName = Literal[
+        "waiting",
+        "blocked",
+        "active",
+        "unknown",
+        "error",
+        "maintenance",
+    ]
 
 logger = scenario_logger.getChild("state")
 
@@ -265,7 +273,7 @@ class RelationBase(_DCBase):
         """Sugar to generate a <this relation>-relation-changed event."""
         return Event(
             name=normalize_name(self.endpoint + "-relation-changed"),
-            relation=self,
+            relation=typing.cast(self, "AnyRelation"),
         )
 
     @property
@@ -273,7 +281,7 @@ class RelationBase(_DCBase):
         """Sugar to generate a <this relation>-relation-joined event."""
         return Event(
             name=normalize_name(self.endpoint + "-relation-joined"),
-            relation=self,
+            relation=typing.cast(self, "AnyRelation"),
         )
 
     @property
@@ -281,7 +289,7 @@ class RelationBase(_DCBase):
         """Sugar to generate a <this relation>-relation-created event."""
         return Event(
             name=normalize_name(self.endpoint + "-relation-created"),
-            relation=self,
+            relation=typing.cast(self, "AnyRelation"),
         )
 
     @property
@@ -289,7 +297,7 @@ class RelationBase(_DCBase):
         """Sugar to generate a <this relation>-relation-departed event."""
         return Event(
             name=normalize_name(self.endpoint + "-relation-departed"),
-            relation=self,
+            relation=typing.cast(self, "AnyRelation"),
         )
 
     @property
@@ -297,7 +305,7 @@ class RelationBase(_DCBase):
         """Sugar to generate a <this relation>-relation-broken event."""
         return Event(
             name=normalize_name(self.endpoint + "-relation-broken"),
-            relation=self,
+            relation=typing.cast(self, "AnyRelation"),
         )
 
 
@@ -341,6 +349,27 @@ def unify_ids_and_remote_units_data(ids: List[int], data: Dict[int, Any]):
         ids = [0]
         data = {0: {}}
     return ids, data
+
+
+_DEFAULT_ADDRESS = "10.152.183.30"
+_DEFAULT_PORT_RANGE = 32
+
+
+def inject_juju_relation_data(
+    databag: Dict[str, str],
+    ingress_address: str = _DEFAULT_ADDRESS,
+    egress_address: str = _DEFAULT_ADDRESS,
+    private_address: str = _DEFAULT_ADDRESS,
+    egress_port_range: int = _DEFAULT_PORT_RANGE,
+):
+    """Update a databag dict to contain the default juju-injected keys."""
+    databag.update(
+        {
+            "egress-subnets": f"{egress_address}/{egress_port_range}",
+            "ingress-address": ingress_address,
+            "private-address": private_address,
+        },
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -708,7 +737,7 @@ class _EntityStatus(_DCBase):
 
     # Why not use StatusBase directly? Because that's not json-serializable.
 
-    name: Literal["waiting", "blocked", "active", "unknown", "error", "maintenance"]
+    name: "StatusName"
     message: str = ""
 
     def __eq__(self, other):
@@ -735,7 +764,7 @@ class _EntityStatus(_DCBase):
 
 def _status_to_entitystatus(obj: StatusBase) -> _EntityStatus:
     """Convert StatusBase to _EntityStatus."""
-    return _EntityStatus(obj.name, obj.message)
+    return _EntityStatus(typing.cast(obj.name, "StatusName"), obj.message)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -780,7 +809,7 @@ class Status(_DCBase):
 
     def _update_status(
         self,
-        new_status: str,
+        new_status: "StatusName",
         new_message: str = "",
         is_app: bool = False,
     ):
