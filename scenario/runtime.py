@@ -235,10 +235,10 @@ class Runtime:
 
         return env
 
-    @staticmethod
-    def _wrap(charm_type: "_CT") -> "_CT":
+    @contextmanager
+    def _wrap_charm(self, charm_type: "_CT", state: "State") -> "_CT":
         # dark sorcery to work around framework using class attrs to hold on to event sources
-        # todo this should only be needed if we call play multiple times on the same runtime.
+        # todo this should only be needed if we call run multiple times on the same runtime.
         #  can we avoid it?
         class WrappedEvents(charm_type.on.__class__):
             pass
@@ -249,7 +249,24 @@ class Runtime:
             on = WrappedEvents()
 
         WrappedCharm.__name__ = charm_type.__name__
-        return WrappedCharm
+
+        # charm state patchery
+        state_model = state.charm_state
+        if not state_model:
+            # this charm has no declared state; leave it.
+            yield WrappedCharm
+            return
+
+        old_model = getattr(charm_type, state_model.name, None)
+        if not old_model:
+            raise RuntimeError(
+                f"charm state model name {state_model.name!r} not "
+                f"found on {charm_type.__name__}",
+            )
+
+        setattr(charm_type, state_model.name, state_model)
+        yield WrappedCharm
+        setattr(charm_type, state_model.name, old_model)
 
     @contextmanager
     def virtual_charm_root(self):
@@ -369,24 +386,26 @@ class Runtime:
             # pre/post_event hooks
             from scenario.ops_main_mock import main as mocked_main
 
-            try:
-                mocked_main(
-                    pre_event=pre_event,
-                    post_event=post_event,
-                    state=output_state,
-                    event=event,
-                    charm_spec=self._charm_spec.replace(
-                        charm_type=self._wrap(charm_type),
-                    ),
-                )
-            except NoObserverError:
-                raise  # propagate along
-            except Exception as e:
-                raise UncaughtCharmError(
-                    f"Uncaught exception ({type(e)}) in operator/charm code: {e!r}",
-                ) from e
-            finally:
-                logger.info(" - Exited ops.main.")
+            # patch charm.state as well as other hackery needed for working around ops design
+            with self._wrap_charm(charm_type, state) as wrapped_charm:
+                try:
+                    mocked_main(
+                        pre_event=pre_event,
+                        post_event=post_event,
+                        state=output_state,
+                        event=event,
+                        charm_spec=self._charm_spec.replace(
+                            charm_type=wrapped_charm,
+                        ),
+                    )
+                except NoObserverError:
+                    raise  # propagate along
+                except Exception as e:
+                    raise UncaughtCharmError(
+                        f"Uncaught exception ({type(e)}) in operator/charm code: {e!r}",
+                    ) from e
+                finally:
+                    logger.info(" - Exited ops.main.")
 
             logger.info(" - Clearing env")
             self._cleanup_env(env)

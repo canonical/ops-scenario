@@ -812,6 +812,11 @@ class StoredState(_DCBase):
 
 
 @dataclasses.dataclass(frozen=True)
+class CharmState(_DCBase):
+    name: str = "state"
+
+
+@dataclasses.dataclass(frozen=True)
 class State(_DCBase):
     """Represents the juju-owned portion of a unit's state.
 
@@ -839,6 +844,8 @@ class State(_DCBase):
     # to this list.
     deferred: List["DeferredEvent"] = dataclasses.field(default_factory=list)
     stored_state: List["StoredState"] = dataclasses.field(default_factory=dict)
+
+    charm_state: Optional[CharmState] = None
 
     # todo:
     #  actions?
