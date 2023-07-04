@@ -15,16 +15,16 @@ event on the charm and execute its logic.
 
 This puts scenario tests somewhere in between unit and integration tests: some say 'functional', some say 'contract'.
 
-Scenario tests nudge you into thinking of a charm as an input->output function. Input is what we call a `Scene`: the
+Scenario tests nudge you into thinking of a charm as an input->output function. Input is the
 union of an `Event` (why am I being executed) and a `State` (am I leader? what is my relation data? what is my
-config?...). The output is another context instance: the context after the charm has had a chance to interact with the
-mocked juju model and affect the state back.
+config?...). The output is another state: the state after the charm has had a chance to interact with the
+mocked juju model and affect it back.
 
 ![state transition model depiction](resources/state-transition-model.png)
 
 Scenario-testing a charm, then, means verifying that:
 
-- the charm does not raise uncaught exceptions while handling the scene
+- the charm does not raise uncaught exceptions while handling the event in the input state
 - the output state (or the diff with the input state) is as expected.
 
 # Core concepts as a metaphor
@@ -98,7 +98,7 @@ def test_scenario_base():
     assert out.unit_status == UnknownStatus()
 ```
 
-Now let's start making it more complicated. Our charm sets a special state if it has leadership on 'start':
+Now let's start making it more complicated. Our charm sets a custom status depending on whether it has leadership on 'start':
 
 ```python
 import pytest
@@ -482,7 +482,7 @@ be no containers. So if the charm were to `self.unit.containers`, it would get b
 To give the charm access to some containers, you need to pass them to the input state, like so:
 `State(containers=[...])`
 
-An example of a scene including some containers:
+An example of a state including some containers:
 
 ```python
 from scenario.state import Container, State
@@ -626,14 +626,14 @@ state = State(
 )
 ```
 
-The only mandatory arguments to Secret are its secret ID (which should be unique) and its 'contents': that is, a mapping
-from revision numbers (integers) to a str:str dict representing the payload of the revision.
+The only mandatory arguments to `Secret` are its secret ID (which should be unique) and its 'contents': that is, a mapping
+from revision numbers (integers) to a `str:str` dict representing the payload of the revision.
 
-By default, the secret is not owned by **this charm** nor is it granted to it.
+By default, the secret is not owned by **this charm** nor is it granted to it. It's simply a secret that exists in the state, but we can neither read nor write.
 Therefore, if charm code attempted to get that secret revision, it would get a permission error: we didn't grant it to
 this charm, nor we specified that the secret is owned by it.
 
-To specify a secret owned by this unit (or app):
+To specify a secret owned by this unit (or app) and granted to some `remote` application:
 
 ```python
 from scenario import State, Secret
@@ -651,7 +651,7 @@ state = State(
 )
 ```
 
-To specify a secret owned by some other application and give this unit (or app) access to it:
+To specify a secret owned by some other application and grant this unit (or app) access to it:
 
 ```python
 from scenario import State, Secret
@@ -671,7 +671,7 @@ state = State(
 
 # Actions
 
-An action is a special sort of event, even though `ops` handles them almost identically.
+An action is a special sort of event, even though `ops` handles them almost identically, treating the action as a special type of event.
 In most cases, you'll want to inspect the 'results' of an action, or whether it has failed or
 logged something while executing. Many actions don't have a direct effect on the output state.
 For this reason, the output state is less prominent in the return type of `Context.run_action`.
@@ -682,6 +682,7 @@ How to test actions with scenario:
 
 ```python
 from scenario import Context, State, ActionOutput
+from ops import ActiveStatus
 from charm import MyCharm
 
 
@@ -696,6 +697,9 @@ def test_backup_action():
     assert out.results == {'foo': 'bar'}
     assert out.logs == ['baz', 'qux']
     assert out.failure == 'boo-hoo'
+    
+    # if you want to inspect the output state after all, you can:
+    assert out.state.unit_status == ActiveStatus('...')
 ```
 
 ## Parametrized Actions
@@ -718,6 +722,7 @@ def test_backup_action():
 
     # ...
 ```
+
 
 # Deferred events
 
