@@ -9,7 +9,7 @@ import re
 import shlex
 import sys
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import Enum
 from itertools import chain
 from pathlib import Path
@@ -24,6 +24,7 @@ from ops.storage import SQLiteStorage
 from scenario.runtime import UnitStateDB
 from scenario.scripts.errors import InvalidTargetModelName, InvalidTargetUnitName
 from scenario.scripts.logger import logger as root_scripts_logger
+from scenario.scripts.state_to_dict import state_to_dict
 from scenario.scripts.utils import JujuUnitName
 from scenario.state import (
     Address,
@@ -402,6 +403,7 @@ def get_container(
     remote_client = RemotePebbleClient(container_name, target, model)
     plan = remote_client.get_plan()
 
+    # todo find a way to include pebble layers?
     return Container(
         name=container_name,
         _base_plan=plan,
@@ -870,7 +872,7 @@ def _snapshot(
         elif format == FormatOption.state:
             txt = format_state(state)
         elif format == FormatOption.json:
-            txt = json.dumps(asdict(state), indent=2)
+            txt = json.dumps(state_to_dict(state), indent=2)
         else:
             raise ValueError(f"unknown format {format}")
 
