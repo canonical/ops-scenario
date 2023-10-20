@@ -59,18 +59,27 @@ def set_status(
     logger.info("preparing status...")
     cmds = []
 
-    cmds.append(f"status-set {unit_status.name} {unit_status.message}")
-    cmds.append(f"status-set --application {app_status.name} {app_status.message}")
-    cmds.append(f"application-version-set {app_version}")
+    if unit_status.name == "unknown":
+        logger.warning("Cannot set unit status to unknown. Only Juju can.")
+    else:
+        cmds.append(f"status-set {unit_status.name} {unit_status.message}")
 
+    if app_status.name == "unknown":
+        logger.warning("Cannot set app status to unknown. Only Juju can.")
+    else:
+        cmds.append(f"status-set --application {app_status.name} {app_status.message}")
+
+    cmds.append(f'application-version-set "{app_version}"')
     return cmds
 
 
-def set_config(config: Dict[str, str]) -> List[str]:
+def set_config(config: Dict[str, str], target: JujuUnitName) -> List[str]:
     logger.info("preparing config...")
+    cmds = []
     if config:
-        logger.warning("set_config not implemented yet")
-    return []
+        for key, value in config.items():
+            cmds.append(f"juju config {target.unit_name} {key}={value}")
+    return cmds
 
 
 def set_opened_ports(opened_ports: List[Port]) -> List[str]:
@@ -145,6 +154,42 @@ def run_commands(cmds: List[str]):
             )
 
 
+def _gather_juju_exec_cmds(include, state):
+    def if_include(key, fn):
+        if include is None or key in include:
+            return fn()
+        return []
+
+    j_exec_cmds: List[str] = []
+
+    j_exec_cmds += if_include(
+        "s",
+        lambda: set_status(state.unit_status, state.app_status, state.workload_version),
+    )
+    j_exec_cmds += if_include("p", lambda: set_opened_ports(state.opened_ports))
+    j_exec_cmds += if_include("r", lambda: set_relations(state.relations))
+    j_exec_cmds += if_include("S", lambda: set_secrets(state.secrets))
+
+    return j_exec_cmds
+
+
+def _gather_raw_calls(include, state, target):
+    def if_include(key, fn):
+        if include is None or key in include:
+            return fn()
+        return []
+
+    cmds: List[str] = []
+
+    # todo: config is a bit special because it's not owned by the unit but by the cloud admin.
+    #  should it be included in state-apply?
+    if_include("c", lambda: set_config(state.config, target))
+    cmds += if_include("k", lambda: set_containers(state.containers))
+    cmds += if_include("d", lambda: set_deferred_events(state.deferred))
+    cmds += if_include("t", lambda: set_stored_state(state.stored_state))
+    return cmds
+
+
 def _state_apply(
     target: str,
     state: State,
@@ -167,31 +212,12 @@ def _state_apply(
         )
         sys.exit(1)
 
-    logger.info(f'beginning snapshot of {target} in model {model or "<current>"}...')
-
-    def if_include(key, fn):
-        if include is None or key in include:
-            return fn()
-        return []
-
-    j_exec_cmds: List[str] = []
-
-    j_exec_cmds += if_include(
-        "s",
-        lambda: set_status(state.unit_status, state.app_status, state.workload_version),
+    logger.info(
+        f'Preparing to drop {state} onto {target} in model {model or "<current>"}...',
     )
-    j_exec_cmds += if_include("p", lambda: set_opened_ports(state.opened_ports))
-    j_exec_cmds += if_include("r", lambda: set_relations(state.relations))
-    j_exec_cmds += if_include("S", lambda: set_secrets(state.secrets))
 
-    cmds: List[str] = []
-
-    # todo: config is a bit special because it's not owned by the unit but by the cloud admin.
-    #  should it be included in state-apply?
-    # if_include("c", lambda: set_config(state.config))
-    cmds += if_include("k", lambda: set_containers(state.containers))
-    cmds += if_include("d", lambda: set_deferred_events(state.deferred))
-    cmds += if_include("t", lambda: set_stored_state(state.stored_state))
+    j_exec_cmds = _gather_juju_exec_cmds(include, state)
+    cmds = _gather_raw_calls(include, state, target)
 
     if dry_run:
         print("would do:")

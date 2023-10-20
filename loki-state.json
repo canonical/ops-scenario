@@ -1,0 +1,97 @@
+{
+  "config": {},
+  "relations": [
+    {
+      "endpoint": "ingress",
+      "interface": "ingress_per_unit",
+      "relation_id": 8,
+      "local_app_data": {},
+      "local_unit_data": {
+        "host": "loki-0.loki-endpoints.clite.svc.cluster.local",
+        "mode": "http",
+        "model": "clite",
+        "name": "loki/0",
+        "port": "3100",
+        "scheme": "http",
+        "strip-prefix": "true"
+      },
+      "remote_app_name": "traefik",
+      "limit": 1,
+      "remote_app_data": {
+        "ingress": "loki/0:\n  url: http://192.168.0.105/clite-loki-0\n"
+      },
+      "remote_units_data": {
+        "0": {}
+      },
+      "relation_type": "Relation"
+    },
+    {
+      "endpoint": "grafana-source",
+      "interface": "grafana_datasource",
+      "relation_id": 13,
+      "local_app_data": {
+        "grafana_source_data": "{\"model\": \"clite\", \"model_uuid\": \"1870459b-a7e3-4644-8fb0-7c25840a9540\", \"application\": \"loki\", \"type\": \"loki\", \"extra_fields\": null}"
+      },
+      "local_unit_data": {
+        "grafana_source_host": "http://192.168.0.105/clite-loki-0",
+        "foo": "bar"
+      },
+      "remote_app_name": "grafana",
+      "limit": 1,
+      "remote_app_data": {},
+      "remote_units_data": {
+        "0": {}
+      },
+      "relation_type": "Relation"
+    },
+    {
+      "endpoint": "alertmanager",
+      "interface": "alertmanager_dispatch",
+      "relation_id": 15,
+      "local_app_data": {},
+      "local_unit_data": {},
+      "remote_app_name": "alertmanager",
+      "limit": 1,
+      "remote_app_data": {},
+      "remote_units_data": {
+        "0": {
+          "public_address": "alertmanager-0.alertmanager-endpoints.clite.svc.cluster.local:9093",
+          "scheme": "http",
+          "url": "http://alertmanager-0.alertmanager-endpoints.clite.svc.cluster.local:9093"
+        }
+      },
+      "relation_type": "Relation"
+    },
+    {
+      "endpoint": "metrics-endpoint",
+      "interface": "prometheus_scrape",
+      "relation_id": 18,
+      "local_app_data": {
+        "alert_rules": "{\"groups\": [{\"name\": \"clite_1870459b_loki_loki_process_too_many_restarts_alerts\", \"rules\": [{\"alert\": \"LokiProcessTooManyRestarts\", \"expr\": \"changes(process_start_time_seconds{juju_application=\\\"loki\\\",juju_model=\\\"clite\\\",juju_model_uuid=\\\"1870459b-a7e3-4644-8fb0-7c25840a9540\\\"}[15m]) > 5\", \"for\": \"0m\", \"labels\": {\"severity\": \"warning\", \"juju_model\": \"clite\", \"juju_model_uuid\": \"1870459b-a7e3-4644-8fb0-7c25840a9540\", \"juju_application\": \"loki\", \"juju_charm\": \"loki-k8s\"}, \"annotations\": {\"summary\": \"Loki process too many restarts (instance {{ $labels.instance }})\", \"description\": \"A loki process had too many restarts (target {{ $labels.instance }})\\n  VALUE = {{ $value }}\\n  LABELS = {{ $labels }}\"}}]}, {\"name\": \"clite_1870459b_loki_loki_request_errors_alerts\", \"rules\": [{\"alert\": \"LokiRequestErrors\", \"expr\": \"100 * sum by(namespace, job, route)
+        
+        }}],
+ "networks": [],
+  "containers": [],
+  "storage": [],
+  "opened_ports": [],
+  "leader": false,
+  "model": {
+    "name": "clite",
+    "uuid": "1870459b-a7e3-4644-8fb0-7c25840a9540",
+    "type": "kubernetes"
+  },
+  "secrets": [],
+  "planned_units": 1,
+  "unit_id": 0,
+  "deferred": [],
+  "stored_state": [],
+  "app_status": {
+    "name": "active",
+    "message": ""
+  },
+  "unit_status": {
+    "name": "active",
+    "message": ""
+  },
+  "workload_version": "2.7.4"
+}

@@ -555,6 +555,22 @@ def _get_interface_from_metadata(endpoint: str, metadata: Dict) -> Optional[str]
     return None
 
 
+def _get_local_relation_data(relation_id: int, target: JujuUnitName, model: str):
+    local_unit_data_raw = _juju_exec(
+        target,
+        model,
+        f"relation-get -r {relation_id} - {target} --format json",
+    )
+    local_unit_data = json.loads(local_unit_data_raw)
+    local_app_data_raw = _juju_exec(
+        target,
+        model,
+        f"relation-get -r {relation_id} - {target} --format json --app",
+    )
+    local_app_data = json.loads(local_app_data_raw)
+    return local_unit_data, local_app_data
+
+
 def get_relations(
     target: JujuUnitName,
     model: Optional[str],
@@ -595,18 +611,18 @@ def get_relations(
 
         relation_id = raw_relation["relation-id"]
 
-        local_unit_data_raw = _juju_exec(
-            target,
-            model,
-            f"relation-get -r {relation_id} - {target} --format json",
-        )
-        local_unit_data = json.loads(local_unit_data_raw)
-        local_app_data_raw = _juju_exec(
-            target,
-            model,
-            f"relation-get -r {relation_id} - {target} --format json --app",
-        )
-        local_app_data = json.loads(local_app_data_raw)
+        try:
+            local_unit_data, local_app_data = _get_local_relation_data(
+                relation_id,
+                target,
+                model,
+            )
+        except json.JSONDecodeError:
+            logger.error(
+                f"error decoding relation data for {target}: relation with ID {relation_id} "
+                f"is probably dead but juju doesn't know yet.",
+            )
+            continue
 
         some_remote_unit_id = JujuUnitName(next(iter(related_units)))
 
