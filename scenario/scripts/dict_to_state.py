@@ -5,6 +5,7 @@
 """Facilities to convert json to State."""
 
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
 from ops import SecretRotate, pebble
@@ -120,6 +121,8 @@ def dict_to_state(state_json: Dict) -> State:
             overrides[key] = [_dict_to_relation(obj) for obj in value]
         elif key == "networks":
             overrides[key] = [_dict_to_network(obj) for obj in value]
+        elif key == "resources":
+            overrides[key] = {name: Path(obj) for name, obj in value.items()}
         elif key == "containers":
             overrides[key] = [_dict_to_container(obj) for obj in value]
         elif key == "storage":
