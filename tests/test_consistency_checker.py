@@ -304,22 +304,35 @@ def test_action_name():
     )
 
 
-def test_action_params_type():
-    action = Action("foo", params={"bar": "baz"})
+_ACTION_TYPE_CHECKS = [
+    ("string", "baz", None),
+    ("boolean", True, "baz"),
+    ("integer", 42, 1.5),
+    ("number", 28.8, "baz"),
+    ("array", ["a", "b", "c"], 1.5),  # A string is an acceptable array.
+    ("object", {"k": "v"}, "baz"),
+]
+
+
+@pytest.mark.parametrize("ptype,good,bad", _ACTION_TYPE_CHECKS)
+def test_action_params_type(ptype, good, bad):
+    action = Action("foo", params={"bar": good})
     assert_consistent(
         State(),
         action.event,
         _CharmSpec(
-            MyCharm, meta={}, actions={"foo": {"params": {"bar": {"type": "string"}}}}
+            MyCharm, meta={}, actions={"foo": {"params": {"bar": {"type": ptype}}}}
         ),
     )
-    assert_inconsistent(
-        State(),
-        action.event,
-        _CharmSpec(
-            MyCharm, meta={}, actions={"foo": {"params": {"bar": {"type": "boolean"}}}}
-        ),
-    )
+    if bad is not None:
+        action = Action("foo", params={"bar": bad})
+        assert_inconsistent(
+            State(),
+            action.event,
+            _CharmSpec(
+                MyCharm, meta={}, actions={"foo": {"params": {"bar": {"type": ptype}}}}
+            ),
+        )
 
 
 def test_duplicate_relation_ids():
@@ -411,5 +424,46 @@ def test_storage_states():
                     "marx": {"type": "filesystem"},
                 },
             },
+        ),
+    )
+
+
+def test_resource_states():
+    # happy path
+    assert_consistent(
+        State(resources={"foo": "/foo/bar.yaml"}),
+        Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={"name": "yamlman", "resources": {"foo": {"type": "oci-image"}}},
+        ),
+    )
+
+    # no resources in state but some in meta: OK. Not realistic wrt juju but fine for testing
+    assert_consistent(
+        State(),
+        Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={"name": "yamlman", "resources": {"foo": {"type": "oci-image"}}},
+        ),
+    )
+
+    # resource not defined in meta
+    assert_inconsistent(
+        State(resources={"bar": "/foo/bar.yaml"}),
+        Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={"name": "yamlman", "resources": {"foo": {"type": "oci-image"}}},
+        ),
+    )
+
+    assert_inconsistent(
+        State(resources={"bar": "/foo/bar.yaml"}),
+        Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={"name": "yamlman"},
         ),
     )
