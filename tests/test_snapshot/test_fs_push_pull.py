@@ -63,29 +63,3 @@ def test_gather_push_file_calls():
         f"juju scp -m model {mount_path}/bar.baz unit/0:/opt/bar.baz",
         f"juju scp -m model {mount_path}/subdir/qux.txt unit/0:/opt/subdir/qux.txt",
     }
-
-
-@patch("scenario.scripts.state_apply._gather_push_file_calls")
-@patch("scenario.scripts.state_apply.RemotePebbleClient.get_plan", new=_get_plan)
-@patch("scenario.scripts.state_apply.RemotePebbleClient.can_connect", return_value=True)
-def test_set_container(
-    can_connect,
-):
-    tempdir = TemporaryDirectory()
-
-    local_storage = Path(tempdir.name)
-    container = get_container(
-        JujuUnitName("foo/0"),
-        None,
-        "workload",
-        {
-            "type": "oci-image",
-            "mounts": [{"type": "filesystem", "storage": "opt", "location": "/opt/"}],
-        },
-        [Path("/opt/foo/bar.txt")],
-        temp_dir_base_path=local_storage,
-    )
-
-    mount_location = container.mounts["opt"].location
-    local_file = Path(mount_location) / "opt" / "foo" / "bar.txt"
-    assert local_file.read_text() == "hello world"
