@@ -470,8 +470,21 @@ _ExecMock = Dict[Tuple[str, ...], ExecOutput]
 
 @dataclasses.dataclass(frozen=True)
 class Mount(_DCBase):
+    """Represents a container mount point.
+
+    If you assign a Mount("pathA", "pathB") to a container, it means that if the container
+    attempts to do I/O on pathA, it will in fact be doing I/O on pathB.
+
+    Usage:
+    >>> Mount("/etc/foo", TemporaryDirectory())
+    """
+
+    # todo consider casting this to Path in post_init
     location: Union[str, PurePosixPath]
+    """Represents the virtual filesystem root for this mount."""
     src: Union[str, Path]
+    """Represents the local filesystem path backing this mount.
+    AKA the real filesystem root for this mount."""
 
 
 @dataclasses.dataclass(frozen=True)

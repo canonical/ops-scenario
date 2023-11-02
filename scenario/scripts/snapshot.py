@@ -311,6 +311,7 @@ class RemotePebbleClient:
 
 
 def fetch_file(
+    *,
     target: JujuUnitName,
     remote_path: Union[Path, str],
     container_name: str,
@@ -331,7 +332,7 @@ def get_mounts(
     model: Optional[str],
     container_name: str,
     container_meta: Dict,
-    fetch_files: Optional[List[Path]] = None,
+    fetch_files: Optional[Dict[Path, Path]] = None,
     temp_dir_base_path: Path = SNAPSHOT_OUTPUT_DIR,
 ) -> Dict[str, Mount]:
     """Get named Mounts from a container's metadata, and download specified files from the unit."""
@@ -369,7 +370,7 @@ def get_mounts(
         mount = mounts.get(mount_name)
         if not mount:
             # create the mount obj and tempdir
-            location = tempfile.TemporaryDirectory(prefix=str(temp_dir_base_path)).name
+            location = tempfile.TemporaryDirectory(dir=str(temp_dir_base_path)).name
             mount = Mount(src=src, location=location)
             mounts[mount_name] = mount
 
@@ -378,7 +379,7 @@ def get_mounts(
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         try:
             fetch_file(
-                target,
+                target=target,
                 container_name=container_name,
                 model=model,
                 remote_path=remote_path,
@@ -729,7 +730,7 @@ class RemoteUnitStateDB(UnitStateDB):
 
     def _fetch_state(self):
         fetch_file(
-            self._target,
+            target=self._target,
             remote_path=self._target.remote_charm_root / ".unit-state.db",
             container_name="charm",
             local_path=self._state_file,
@@ -756,7 +757,7 @@ def _snapshot(
     include_dead_relation_networks=False,
     format: FormatOption = "state",
     event_name: Optional[str] = None,
-    fetch_files: Optional[Dict[str, List[Path]]] = None,
+    fetch_files: Optional[Dict[str, Dict[Path, Path]]] = None,
     temp_dir_base_path: Path = SNAPSHOT_OUTPUT_DIR,
 ):
     """see snapshot's docstring"""

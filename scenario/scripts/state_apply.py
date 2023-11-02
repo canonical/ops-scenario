@@ -19,6 +19,7 @@ from scenario.scripts.utils import JujuUnitName
 from scenario.state import (
     Container,
     DeferredEvent,
+    Mount,
     Port,
     Secret,
     State,
@@ -190,14 +191,47 @@ def _gather_raw_calls(include, state, target):
     return cmds
 
 
+def _gather_push_file_calls(
+    containers: List[Container],
+    target: str,
+    model: str,
+) -> List[str]:
+    if not containers:
+        return []
+
+    cmds = []
+    _model = f" -m {model}" if model else ""
+
+    for container in containers:
+        mount: Mount
+        for mount in container.mounts.values():
+            if not mount.src.exists():
+                logger.error(f"mount source directory {mount.src} not found.")
+                continue
+
+            mount_loc = Path(mount.location)
+
+            for root, _, files in os.walk(mount.src):
+                for file in files:
+                    # `file` is the absolute path of the object as it would be on the container filesystem.
+                    # we need to relativize it to the tempdir the mount is simulated by.
+                    # dest_path = Path(file).relative_to(mount.src)
+                    dest_path = (
+                        mount_loc.joinpath(*Path(root).relative_to(mount.src).parts)
+                        / file
+                    )
+                    src_path = Path(root) / file
+                    cmds.append(f"juju scp{_model} {src_path} {target}:{dest_path}")
+    return cmds
+
+
 def _state_apply(
     target: str,
     state: State,
     model: Optional[str] = None,
     include: str = None,
-    include_juju_relation_data=False,  # noqa: U100
-    push_files: Dict[str, List[Path]] = None,  # noqa: U100
-    snapshot_data_dir: Path = SNAPSHOT_DATA_DIR,  # noqa: U100
+    data_dir: Path = None,
+    push_files: Dict[str, List[Path]] = None,
     dry_run: bool = False,
 ):
     """see state_apply's docstring"""
@@ -217,7 +251,12 @@ def _state_apply(
     )
 
     j_exec_cmds = _gather_juju_exec_cmds(include, state)
-    cmds = _gather_raw_calls(include, state, target)
+    cmds = _gather_raw_calls(include, state, target) + _gather_push_file_calls(
+        state.containers,
+        data_dir,
+        target,
+        model,
+    )
 
     if dry_run:
         print("would do:")
@@ -259,19 +298,12 @@ def state_apply(
         "``s``: status, ``S``: secrets(!), "
         "``d``: deferred events, ``t``: stored state.",
     ),
-    include_juju_relation_data: bool = typer.Option(
-        False,
-        "--include-juju-relation-data",
-        help="Whether to include in the relation data the default juju keys (egress-subnets,"
-        "ingress-address, private-address).",
-        is_flag=True,
-    ),
     push_files: Path = typer.Option(
         None,
         "--push-files",
         help="Path to a local file containing a json spec of files to be fetched from the unit. "
-        "For k8s units, it's supposed to be a {container_name: List[Path]} mapping listing "
-        "the files that need to be pushed to the each container.",
+        "For k8s units, it's supposed to be a {container_name: {Path: Path}} mapping listing "
+        "the files that need to be pushed to the each container and their destinations.",
     ),
     # TODO: generalize "push_files" to allow passing '.' for the 'charm' container or 'the machine'.
     data_dir: Path = typer.Option(
@@ -282,12 +314,7 @@ def state_apply(
     ),
     dry_run: bool = typer.Option(False, help="dry-run", is_flag=True),
 ):
-    """Apply a State to a remote target unit.
-
-    If black is available, the output will be piped through it for formatting.
-
-    Usage: state-apply myapp/0 > ./tests/scenario/case1.py
-    """
+    """Apply a State to a remote target unit."""
     push_files_ = json.loads(push_files.read_text()) if push_files else None
     state_json = json.loads(state.read_text())
 
@@ -298,8 +325,7 @@ def state_apply(
         state=state_,
         model=model,
         include=include,
-        include_juju_relation_data=include_juju_relation_data,
-        snapshot_data_dir=data_dir,
+        data_dir=data_dir,
         push_files=push_files_,
         dry_run=dry_run,
     )
