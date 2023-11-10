@@ -129,16 +129,17 @@ def exec_in_unit(target: JujuUnitName, model: str, cmds: List[str]):
     logger.info("Running juju exec...")
 
     _model = f" -m {model}" if model else ""
-    cmd_fmt = "; ".join(cmds)
-    cmd = f'juju exec -u {target}{_model} -- "{cmd_fmt}"'
-    try:
-        run(shlex.split(cmd))
-    except CalledProcessError as e:
-        raise StateApplyError(
-            f"Failed to apply state: process exited with {e.returncode}; "
-            f"stdout = {e.stdout}; "
-            f"stderr = {e.stderr}.",
-        )
+    for cmd in cmds:
+        print(cmd[:12])
+        j_exec_cmd = f"juju exec -u {target}{_model} -- {cmd}"
+        try:
+            run(shlex.split(j_exec_cmd))
+        except CalledProcessError as e:
+            raise StateApplyError(
+                f"Failed to apply state: process exited with {e.returncode}; "
+                f"stdout = {e.stdout}; "
+                f"stderr = {e.stderr}.",
+            )
 
 
 def run_commands(cmds: List[str]):
@@ -253,7 +254,6 @@ def _state_apply(
     j_exec_cmds = _gather_juju_exec_cmds(include, state)
     cmds = _gather_raw_calls(include, state, target) + _gather_push_file_calls(
         state.containers,
-        data_dir,
         target,
         model,
     )

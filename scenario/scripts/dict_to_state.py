@@ -101,7 +101,6 @@ def _dict_to_storage(value: Dict) -> Storage:
 def dict_to_state(state_json: Dict) -> State:
     overrides = {}
     for key, value in state_json.items():
-        print(key, value)
         if key in [
             "leader",
             "config",
