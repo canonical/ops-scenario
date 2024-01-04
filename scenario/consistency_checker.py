@@ -344,12 +344,11 @@ def check_config_consistency(
             )
             continue
 
-        # todo unify with snapshot's when merged.
+        # from https://juju.is/docs/sdk/config-yaml
         converters = {
             "string": str,
             "int": int,
-            "integer": int,  # fixme: which one is it?
-            "number": float,
+            "float": float,
             "boolean": bool,
             # "attrs": NotImplemented,  # fixme: wot?
         }
