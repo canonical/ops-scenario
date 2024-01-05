@@ -3,10 +3,10 @@ from hypothesis import strategies as st
 from ops import CharmBase, Framework
 
 from scenario import State, Context
-from scenario.strategies import Plugin
+from scenario.strategies import Plugin, bind_event
 
 
-class MyCharm(CharmBase):
+class MyCharm1(CharmBase):
     def __init__(self, framework: Framework):
         super().__init__(framework)
         self.config["foo"]
@@ -14,7 +14,7 @@ class MyCharm(CharmBase):
 
 
 config_plugin = Plugin(
-    MyCharm,
+    MyCharm1,
     meta={"name": "george"},
     config={
         "options": {
@@ -30,8 +30,13 @@ def test_configs_hypothesis(ctx, s):
     ctx.run("start", s)
 
 
+class MyCharm2(CharmBase):
+    def __init__(self, framework: Framework):
+        super().__init__(framework)
+
+
 relation_plugin = Plugin(
-    MyCharm,
+    MyCharm2,
     meta={
         "name": "george",
         "provides": {
@@ -49,3 +54,9 @@ relation_plugin = Plugin(
 @given(relation_plugin.context, st.builds(State, relations=relation_plugin.relations))
 def test_relations_hypothesis(ctx, s):
     ctx.run("start", s)
+
+
+@given(relation_plugin.context, st.builds(State), relation_plugin.events())
+def test_events_hypothesis(ctx, s, e):
+    event = bind_event(e, s)
+    ctx.run(event, s)
