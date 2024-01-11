@@ -59,4 +59,5 @@ def test_relations_hypothesis(ctx, s):
 @given(relation_plugin.context, st.builds(State), relation_plugin.events())
 def test_events_hypothesis(ctx, s, e):
     event = bind_event(e, s)
-    ctx.run(event, s)
+    if event:
+        ctx.run(event, s)

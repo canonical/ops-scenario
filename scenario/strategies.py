@@ -91,7 +91,8 @@ class Plugin:
         base_strategies = {
             "local_unit_data": self.databags(),
             "local_app_data": self.databags(),
-            "relation_id": st.integers(max_value=10),
+            # do not randomize IDs as that's juju-inconsistent
+            # "relation_id": st.integers(max_value=10),
         }
         if peer:
             return st.builds(
@@ -260,13 +261,13 @@ class Plugin:
             events.append(storage + "_attached")
             events.append(storage + "_detaching")
 
-        for action in self._actions:
+        for action in self._actions or ():
             events.append(action + "_action")
 
         return st.sampled_from(events)
 
 
-def bind_event(event: str, state: State) -> Event:
+def bind_event(event: str, state: State) -> Optional[Event]:
     """Return an Event obtained by attempting to bind the input event (name) to a State.
 
     On failure, it will raise pytest.Skipped thereby skipping the test from which this is called.
@@ -277,8 +278,4 @@ def bind_event(event: str, state: State) -> Event:
     try:
         return e.bind(state)
     except BindFailedError:
-        import pytest
-
-        pytest.skip(
-            f"invalid test case: the event {event} is inapplicable in state {state}",
-        )
+        return None
