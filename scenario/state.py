@@ -160,7 +160,7 @@ class Secret(_DCBase):
             raise ValueError(
                 "This unit will never receive secret-changed for a secret it owns.",
             )
-        return Event(name="secret_changed", secret=self)
+        return Event(path="secret_changed", secret=self)
 
     # owner-only events
     @property
@@ -170,7 +170,7 @@ class Secret(_DCBase):
             raise ValueError(
                 "This unit will never receive secret-rotate for a secret it does not own.",
             )
-        return Event(name="secret_rotate", secret=self)
+        return Event(path="secret_rotate", secret=self)
 
     @property
     def expired_event(self):
@@ -179,7 +179,7 @@ class Secret(_DCBase):
             raise ValueError(
                 "This unit will never receive secret-expire for a secret it does not own.",
             )
-        return Event(name="secret_expire", secret=self)
+        return Event(path="secret_expire", secret=self)
 
     @property
     def remove_event(self):
@@ -188,7 +188,7 @@ class Secret(_DCBase):
             raise ValueError(
                 "This unit will never receive secret-removed for a secret it does not own.",
             )
-        return Event(name="secret_removed", secret=self)
+        return Event(path="secret_removed", secret=self)
 
     def _set_revision(self, revision: int):
         """Set a new tracked revision."""
