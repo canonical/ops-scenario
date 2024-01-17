@@ -56,6 +56,7 @@ def test_relations_hypothesis(ctx, s):
     ctx.run("start", s)
 
 
+# todo find a way to make .events dependent on the currently selected state.
 @given(relation_plugin.context, st.builds(State), relation_plugin.events())
 def test_events_hypothesis(ctx, s, e):
     event = bind_event(e, s)
