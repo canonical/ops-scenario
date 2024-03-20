@@ -5,34 +5,25 @@ import marshal
 import os
 import re
 import tempfile
+import typing
 from contextlib import contextmanager
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import TYPE_CHECKING, Dict, List, Optional, Type, Union
 
 import yaml
 from ops.framework import _event_regex
-from ops.storage import SQLiteStorage
+from ops.storage import NoSnapshotError, SQLiteStorage
 
+from scenario.capture_events import capture_events
 from scenario.logger import logger as scenario_logger
 from scenario.ops_main_mock import NoObserverError
 from scenario.state import DeferredEvent, PeerRelation, StoredState
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from ops.testing import CharmType
 
-    from scenario.state import AnyRelation, Event, State, _CharmSpec
-
-    _CT = TypeVar("_CT", bound=Type[CharmType])
+    from scenario.context import Context
+    from scenario.state import Event, State, _CharmSpec
 
     PathLike = Union[str, Path]
 
@@ -53,10 +44,6 @@ class UncaughtCharmError(ScenarioRuntimeError):
     """Error raised if the charm raises while handling the event being dispatched."""
 
 
-class DirtyVirtualCharmRootError(ScenarioRuntimeError):
-    """Error raised when the runtime can't initialize the vroot without overwriting metadata."""
-
-
 class InconsistentScenarioError(ScenarioRuntimeError):
     """Error raised when the combination of state and event is inconsistent."""
 
@@ -68,7 +55,7 @@ class UnitStateDB:
         self._db_path = db_path
         self._state_file = Path(self._db_path)
 
-    def _open_db(self) -> Optional[SQLiteStorage]:
+    def _open_db(self) -> SQLiteStorage:
         """Open the db."""
         return SQLiteStorage(self._state_file)
 
@@ -100,10 +87,16 @@ class UnitStateDB:
             if EVENT_REGEX.match(handle_path):
                 notices = db.notices(handle_path)
                 for handle, owner, observer in notices:
+                    try:
+                        snapshot_data = db.load_snapshot(handle)
+                    except NoSnapshotError:
+                        snapshot_data = {}
+
                     event = DeferredEvent(
                         handle_path=handle,
                         owner=owner,
                         observer=observer,
+                        snapshot_data=snapshot_data,
                     )
                     deferred.append(event)
 
@@ -129,6 +122,28 @@ class UnitStateDB:
         db.close()
 
 
+class _OpsMainContext:
+    """Context manager representing ops.main execution context.
+
+    When entered, ops.main sets up everything up until the charm.
+    When .emit() is called, ops.main proceeds with emitting the event.
+    When exited, if .emit has not been called manually, it is called automatically.
+    """
+
+    def __init__(self):
+        self._has_emitted = False
+
+    def __enter__(self):
+        pass
+
+    def emit(self):
+        self._has_emitted = True
+
+    def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: U100
+        if not self._has_emitted:
+            self.emit()
+
+
 class Runtime:
     """Charm runtime wrapper.
 
@@ -140,53 +155,56 @@ class Runtime:
         charm_spec: "_CharmSpec",
         charm_root: Optional["PathLike"] = None,
         juju_version: str = "3.0.0",
+        app_name: Optional[str] = None,
+        unit_id: Optional[int] = 0,
     ):
         self._charm_spec = charm_spec
         self._juju_version = juju_version
         self._charm_root = charm_root
 
-        app_name = self._charm_spec.meta.get("name")
+        app_name = app_name or self._charm_spec.meta.get("name")
         if not app_name:
             raise ValueError('invalid metadata: mandatory "name" field is missing.')
 
         self._app_name = app_name
+        self._unit_id = unit_id
 
     @staticmethod
     def _cleanup_env(env):
         # TODO consider cleaning up env on __delete__, but ideally you should be
-        #  running this in a clean venv or a container anyway.
-        # cleanup env, in case we'll be firing multiple events, we don't want to accumulate.
+        #  running this in a clean env or a container anyway.
+        # cleanup the env, in case we'll be firing multiple events, we don't want to pollute it.
         for key in env:
-            # os.unsetenv does not work !?
+            # os.unsetenv does not always seem to work !?
             del os.environ[key]
 
     def _get_event_env(self, state: "State", event: "Event", charm_root: Path):
-        if event.name.endswith("_action"):
-            # todo: do we need some special metadata, or can we assume action names
-            #  are always dashes?
-            action_name = event.name[: -len("_action")].replace("_", "-")
-        else:
-            action_name = ""
-
+        """Build the simulated environment the operator framework expects."""
         env = {
             "JUJU_VERSION": self._juju_version,
-            "JUJU_UNIT_NAME": f"{self._app_name}/{state.unit_id}",
+            "JUJU_UNIT_NAME": f"{self._app_name}/{self._unit_id}",
             "_": "./dispatch",
             "JUJU_DISPATCH_PATH": f"hooks/{event.name}",
             "JUJU_MODEL_NAME": state.model.name,
-            "JUJU_ACTION_NAME": action_name,
             "JUJU_MODEL_UUID": state.model.uuid,
             "JUJU_CHARM_DIR": str(charm_root.absolute()),
             # todo consider setting pwd, (python)path
         }
 
-        relation: "AnyRelation"
+        if event._is_action_event and (action := event.action):
+            env.update(
+                {
+                    # TODO: we should check we're doing the right thing here.
+                    "JUJU_ACTION_NAME": action.name.replace("_", "-"),
+                    "JUJU_ACTION_UUID": action.id,
+                },
+            )
 
         if event._is_relation_event and (relation := event.relation):
             if isinstance(relation, PeerRelation):
                 remote_app_name = self._app_name
             else:
-                remote_app_name = relation._remote_app_name
+                remote_app_name = relation.remote_app_name
             env.update(
                 {
                     "JUJU_RELATION": relation.endpoint,
@@ -196,9 +214,9 @@ class Runtime:
             )
 
             remote_unit_id = event.relation_remote_unit_id
-            if (
-                remote_unit_id is None
-            ):  # don't check truthiness because it could be int(0)
+
+            # don't check truthiness because remote_unit_id could be 0
+            if remote_unit_id is None:
                 remote_unit_ids = relation._remote_unit_ids  # pyright: ignore
 
                 if len(remote_unit_ids) == 1:
@@ -208,12 +226,17 @@ class Runtime:
                         "but you probably should be parametrizing the event with `remote_unit_id` "
                         "to be explicit.",
                     )
-                else:
+                elif len(remote_unit_ids) > 1:
                     remote_unit_id = remote_unit_ids[0]
                     logger.warning(
                         "remote unit ID unset, and multiple remote unit IDs are present; "
                         "We will pick the first one and hope for the best. You should be passing "
                         "`remote_unit_id` to the Event constructor.",
+                    )
+                else:
+                    logger.warning(
+                        "remote unit ID unset; no remote unit data present. "
+                        "Is this a realistic scenario?",  # TODO: is it?
                     )
 
             if remote_unit_id is not None:
@@ -224,6 +247,9 @@ class Runtime:
 
         if container := event.container:
             env.update({"JUJU_WORKLOAD_NAME": container.name})
+
+        if storage := event.storage:
+            env.update({"JUJU_STORAGE_ID": f"{storage.name}/{storage.index}"})
 
         if secret := event.secret:
             env.update(
@@ -236,7 +262,11 @@ class Runtime:
         return env
 
     @contextmanager
-    def _wrap_charm(self, charm_type: "_CT", state: "State") -> "_CT":
+    def _wrap_charm(
+        self,
+        charm_type: Type["CharmType"],
+        state: "State",
+    ) -> Type["CharmType"]:
         # dark sorcery to work around framework using class attrs to hold on to event sources
         # todo this should only be needed if we call run multiple times on the same runtime.
         #  can we avoid it?
@@ -251,25 +281,26 @@ class Runtime:
         WrappedCharm.__name__ = charm_type.__name__
 
         # charm state patchery
-        state_model = state.charm_state
-        if not state_model:
+        charm_state = state.charm
+        if not charm_state:
             # this charm has no declared state; leave it.
             yield WrappedCharm
             return
 
-        old_model = getattr(charm_type, state_model.name, None)
+        old_model = getattr(charm_type, charm_state.name, None)
         if not old_model:
             raise RuntimeError(
-                f"charm state model name {state_model.name!r} not "
+                f"charm state model name {charm_state.name!r} not "
                 f"found on {charm_type.__name__}",
             )
 
-        setattr(charm_type, state_model.name, state_model)
-        yield WrappedCharm
-        setattr(charm_type, state_model.name, old_model)
+        setattr(charm_type, charm_state.name, charm_state)
+        yield typing.cast(Type["CharmType"], WrappedCharm)
+
+        setattr(charm_type, charm_state.name, old_model)
 
     @contextmanager
-    def virtual_charm_root(self):
+    def _virtual_charm_root(self):
         # If we are using runtime on a real charm, we can make some assumptions about the
         # directory structure we are going to find.
         # If we're, say, dynamically defining charm types and doing tests on them, we'll have to
@@ -277,42 +308,50 @@ class Runtime:
         # is what the user passed via the CharmSpec
         spec = self._charm_spec
 
-        if vroot := self._charm_root:
-            vroot_is_custom = True
-            virtual_charm_root = Path(vroot)
+        if charm_virtual_root := self._charm_root:
+            charm_virtual_root_is_custom = True
+            virtual_charm_root = Path(charm_virtual_root)
         else:
-            vroot = tempfile.TemporaryDirectory()
-            virtual_charm_root = Path(vroot.name)
-            vroot_is_custom = False
+            charm_virtual_root = tempfile.TemporaryDirectory()
+            virtual_charm_root = Path(charm_virtual_root.name)
+            charm_virtual_root_is_custom = False
 
         metadata_yaml = virtual_charm_root / "metadata.yaml"
         config_yaml = virtual_charm_root / "config.yaml"
         actions_yaml = virtual_charm_root / "actions.yaml"
 
-        metadata_files_present = any(
-            file.exists() for file in (metadata_yaml, config_yaml, actions_yaml)
+        metadata_files_present: Dict[Path, Optional[str]] = {
+            file: file.read_text() if file.exists() else None
+            for file in (metadata_yaml, config_yaml, actions_yaml)
+        }
+
+        any_metadata_files_present_in_charm_virtual_root = any(
+            v is not None for v in metadata_files_present.values()
         )
 
-        if spec.is_autoloaded and vroot_is_custom:
+        if spec.is_autoloaded and charm_virtual_root_is_custom:
             # since the spec is autoloaded, in theory the metadata contents won't differ, so we can
             # overwrite away even if the custom vroot is the real charm root (the local repo).
             # Still, log it for clarity.
-            if metadata_files_present:
-                logger.info(
-                    f"metadata files found in custom vroot {vroot}. "
+            if any_metadata_files_present_in_charm_virtual_root:
+                logger.debug(
+                    f"metadata files found in custom charm_root {charm_virtual_root}. "
                     f"The spec was autoloaded so the contents should be identical. "
                     f"Proceeding...",
                 )
 
-        elif not spec.is_autoloaded and metadata_files_present:
-            logger.error(
-                f"Some metadata files found in custom user-provided vroot {vroot} "
-                f"while you have passed meta, config or actions to trigger(). "
-                "We don't want to risk overwriting them mindlessly, so we abort. "
-                "You should not include any metadata files in the charm_root. "
-                "Single source of truth are the arguments passed to trigger(). ",
+        elif (
+            not spec.is_autoloaded and any_metadata_files_present_in_charm_virtual_root
+        ):
+            logger.warn(
+                f"Some metadata files found in custom user-provided charm_root "
+                f"{charm_virtual_root} while you have passed meta, config or actions to "
+                f"Context.run(). "
+                "Single source of truth are the arguments passed to Context.run(). "
+                "charm_root metadata files will be overwritten for the "
+                "duration of this test, and restored afterwards. "
+                "To avoid this, clean any metadata files from the charm_root before calling run.",
             )
-            raise DirtyVirtualCharmRootError(vroot)
 
         metadata_yaml.write_text(yaml.safe_dump(spec.meta))
         config_yaml.write_text(yaml.safe_dump(spec.config or {}))
@@ -320,8 +359,16 @@ class Runtime:
 
         yield virtual_charm_root
 
-        if not vroot_is_custom:
-            vroot.cleanup()
+        if charm_virtual_root_is_custom:
+            for file, previous_content in metadata_files_present.items():
+                if previous_content is None:  # None == file did not exist before
+                    file.unlink()
+                else:
+                    file.write_text(previous_content)
+
+        else:
+            # charm_virtual_root is a tempdir
+            typing.cast(tempfile.TemporaryDirectory, charm_virtual_root).cleanup()
 
     @staticmethod
     def _get_state_db(temporary_charm_root: Path):
@@ -340,13 +387,24 @@ class Runtime:
         stored_state = store.get_stored_state()
         return state.replace(deferred=deferred, stored_state=stored_state)
 
+    @contextmanager
+    def _exec_ctx(self, ctx: "Context"):
+        """python 3.8 compatibility shim"""
+        with self._virtual_charm_root() as temporary_charm_root:
+            # todo allow customizing capture_events
+            with capture_events(
+                include_deferred=ctx.capture_deferred_events,
+                include_framework=ctx.capture_framework_events,
+            ) as captured:
+                yield (temporary_charm_root, captured)
+
+    @contextmanager
     def exec(
         self,
         state: "State",
         event: "Event",
-        pre_event: Optional[Callable[["CharmType"], None]] = None,
-        post_event: Optional[Callable[["CharmType"], None]] = None,
-    ) -> "State":
+        context: "Context",
+    ):
         """Runs an event with this state as initial state on a charm.
 
         Returns the 'output state', that is, the state as mutated by the charm during the
@@ -355,6 +413,9 @@ class Runtime:
         This will set the environment up and call ops.main.main().
         After that it's up to ops.
         """
+        # todo consider forking out a real subprocess and do the mocking by
+        #  mocking hook tool executables
+
         from scenario.consistency_checker import check_consistency  # avoid cycles
 
         check_consistency(state, event, self._charm_spec, self._juju_version)
@@ -366,10 +427,7 @@ class Runtime:
         output_state = state.copy()
 
         logger.info(" - generating virtual charm root")
-        with self.virtual_charm_root() as temporary_charm_root:
-            # todo consider forking out a real subprocess and do the mocking by
-            #  generating hook tool executables
-
+        with self._exec_ctx(context) as (temporary_charm_root, captured):
             logger.info(" - initializing storage")
             self._initialize_storage(state, temporary_charm_root)
 
@@ -382,112 +440,41 @@ class Runtime:
             os.environ.update(env)
 
             logger.info(" - Entering ops.main (mocked).")
-            # we don't import from ops.main because we need some extras, such as the
-            # pre/post_event hooks
-            from scenario.ops_main_mock import main as mocked_main
+            from scenario.ops_main_mock import Ops  # noqa: F811
 
-            # patch charm.state as well as other hackery needed for working around ops design
             with self._wrap_charm(charm_type, state) as wrapped_charm:
                 try:
-                    mocked_main(
-                        pre_event=pre_event,
-                        post_event=post_event,
+                    ops = Ops(
                         state=output_state,
                         event=event,
+                        context=context,
                         charm_spec=self._charm_spec.replace(
                             charm_type=wrapped_charm,
                         ),
                     )
+                    ops.setup()
+
+                    yield ops
+
+                    # if the caller did not manually emit or commit: do that.
+                    ops.finalize()
+
                 except NoObserverError:
                     raise  # propagate along
                 except Exception as e:
                     raise UncaughtCharmError(
                         f"Uncaught exception ({type(e)}) in operator/charm code: {e!r}",
                     ) from e
+
                 finally:
                     logger.info(" - Exited ops.main.")
 
-            logger.info(" - Clearing env")
-            self._cleanup_env(env)
+                    logger.info(" - Clearing env")
+                    self._cleanup_env(env)
 
             logger.info(" - closing storage")
             output_state = self._close_storage(output_state, temporary_charm_root)
 
+        context.emitted_events.extend(captured)
         logger.info("event dispatched. done.")
-        return output_state
-
-
-def trigger(
-    state: "State",
-    event: Union["Event", str],
-    charm_type: Type["CharmType"],
-    pre_event: Optional[Callable[["CharmType"], None]] = None,
-    post_event: Optional[Callable[["CharmType"], None]] = None,
-    # if not provided, will be autoloaded from charm_type.
-    meta: Optional[Dict[str, Any]] = None,
-    actions: Optional[Dict[str, Any]] = None,
-    config: Optional[Dict[str, Any]] = None,
-    charm_root: Optional[Dict["PathLike", "PathLike"]] = None,
-    juju_version: str = "3.0",
-) -> "State":
-    """Trigger a charm execution with an Event and a State.
-
-    Calling this function will call ops' main() and set up the context according to the specified
-    State, then emit the event on the charm.
-
-    :arg event: the Event that the charm will respond to. Can be a string or an Event instance.
-    :arg state: the State instance to use as data source for the hook tool calls that the charm will
-        invoke when handling the Event.
-    :arg charm_type: the CharmBase subclass to call ``ops.main()`` on.
-    :arg pre_event: callback to be invoked right before emitting the event on the newly
-        instantiated charm. Will receive the charm instance as only positional argument.
-    :arg post_event: callback to be invoked right after emitting the event on the charm instance.
-        Will receive the charm instance as only positional argument.
-    :arg meta: charm metadata to use. Needs to be a valid metadata.yaml format (as a python dict).
-        If none is provided, we will search for a ``metadata.yaml`` file in the charm root.
-    :arg actions: charm actions to use. Needs to be a valid actions.yaml format (as a python dict).
-        If none is provided, we will search for a ``actions.yaml`` file in the charm root.
-    :arg config: charm config to use. Needs to be a valid config.yaml format (as a python dict).
-        If none is provided, we will search for a ``config.yaml`` file in the charm root.
-    :arg juju_version: Juju agent version to simulate.
-    :arg charm_root: virtual charm root the charm will be executed with.
-        If the charm, say, expects a `./src/foo/bar.yaml` file present relative to the
-        execution cwd, you need to use this. E.g.:
-
-        >>> virtual_root = tempfile.TemporaryDirectory()
-        >>> local_path = Path(local_path.name)
-        >>> (local_path / 'foo').mkdir()
-        >>> (local_path / 'foo' / 'bar.yaml').write_text('foo: bar')
-        >>> scenario, State(), (... charm_root=virtual_root)
-
-    """
-    from scenario.state import Event, _CharmSpec
-
-    if isinstance(event, str):
-        event = Event(event)
-
-    if not any((meta, actions, config)):
-        logger.debug("Autoloading charmspec...")
-        spec = _CharmSpec.autoload(charm_type)
-    else:
-        if not meta:
-            meta = {"name": str(charm_type.__name__)}
-        spec = _CharmSpec(
-            charm_type=charm_type,
-            meta=meta,
-            actions=actions,
-            config=config,
-        )
-
-    runtime = Runtime(
-        charm_spec=spec,
-        juju_version=juju_version,
-        charm_root=charm_root,
-    )
-
-    return runtime.exec(
-        state=state,
-        event=event,
-        pre_event=pre_event,
-        post_event=post_event,
-    )
+        context._set_output_state(output_state)

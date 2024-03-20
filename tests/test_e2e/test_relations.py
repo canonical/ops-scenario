@@ -1,11 +1,18 @@
 from typing import Type
 
 import pytest
-from ops.charm import CharmBase, CharmEvents, RelationDepartedEvent
+from ops.charm import (
+    CharmBase,
+    CharmEvents,
+    CollectStatusEvent,
+    RelationDepartedEvent,
+    RelationEvent,
+)
 from ops.framework import EventBase, Framework
 
-from scenario import trigger
+from scenario import Context
 from scenario.state import (
+    DEFAULT_JUJU_DATABAG,
     PeerRelation,
     Relation,
     RelationBase,
@@ -13,6 +20,7 @@ from scenario.state import (
     StateValidationError,
     SubordinateRelation,
 )
+from tests.helpers import trigger
 
 
 @pytest.fixture(scope="function")
@@ -115,8 +123,15 @@ def test_relation_events(mycharm, evt_name, remote_app_name):
         endpoint="foo", interface="foo", remote_app_name=remote_app_name
     )
 
-    def callback(charm: CharmBase, _):
-        assert charm.model.get_relation("foo").app.name == remote_app_name
+    def callback(charm: CharmBase, e):
+        if not isinstance(e, RelationEvent):
+            return  # filter out collect status events
+
+        if evt_name == "broken":
+            assert charm.model.get_relation("foo") is None
+            assert e.relation.app.name == remote_app_name
+        else:
+            assert charm.model.get_relation("foo").app.name == remote_app_name
 
     mycharm._call = callback
 
@@ -155,6 +170,9 @@ def test_relation_events_attrs(mycharm, evt_name, remote_app_name, remote_unit_i
     )
 
     def callback(charm: CharmBase, event):
+        if isinstance(event, CollectStatusEvent):
+            return
+
         assert event.app
         assert event.unit
         if isinstance(event, RelationDepartedEvent):
@@ -196,6 +214,9 @@ def test_relation_events_no_attrs(mycharm, evt_name, remote_app_name, caplog):
     )
 
     def callback(charm: CharmBase, event):
+        if isinstance(event, CollectStatusEvent):
+            return
+
         assert event.app  # that's always present
         assert event.unit
         assert (evt_name == "departed") is bool(getattr(event, "departing_unit", False))
@@ -221,6 +242,62 @@ def test_relation_events_no_attrs(mycharm, evt_name, remote_app_name, caplog):
     assert (
         "remote unit ID unset, and multiple remote unit IDs are present" in caplog.text
     )
+
+
+def test_relation_default_unit_data_regular():
+    relation = Relation("baz")
+    assert relation.local_unit_data == DEFAULT_JUJU_DATABAG
+    assert relation.remote_units_data == {0: DEFAULT_JUJU_DATABAG}
+
+
+def test_relation_default_unit_data_sub():
+    relation = SubordinateRelation("baz")
+    assert relation.local_unit_data == DEFAULT_JUJU_DATABAG
+    assert relation.remote_unit_data == DEFAULT_JUJU_DATABAG
+
+
+def test_relation_default_unit_data_peer():
+    relation = PeerRelation("baz")
+    assert relation.local_unit_data == DEFAULT_JUJU_DATABAG
+
+
+@pytest.mark.parametrize(
+    "evt_name",
+    ("changed", "broken", "departed", "joined", "created"),
+)
+def test_relation_events_no_remote_units(mycharm, evt_name, caplog):
+    relation = Relation(
+        endpoint="foo",
+        interface="foo",
+        remote_units_data={},  # no units
+    )
+
+    def callback(charm: CharmBase, event):
+        if isinstance(event, CollectStatusEvent):
+            return
+
+        assert event.app  # that's always present
+        assert not event.unit
+
+    mycharm._call = callback
+
+    trigger(
+        State(
+            relations=[
+                relation,
+            ],
+        ),
+        getattr(relation, f"{evt_name}_event"),
+        mycharm,
+        meta={
+            "name": "local",
+            "requires": {
+                "foo": {"interface": "foo"},
+            },
+        },
+    )
+
+    assert "remote unit ID unset; no remote unit data present" in caplog.text
 
 
 @pytest.mark.parametrize("data", (set(), {}, [], (), 1, 1.0, None, b""))
@@ -279,10 +356,10 @@ def test_trigger_sub_relation(mycharm):
     }
 
     sub1 = SubordinateRelation(
-        "foo", remote_unit_data={"1": "2"}, primary_app_name="primary1"
+        "foo", remote_unit_data={"1": "2"}, remote_app_name="primary1"
     )
     sub2 = SubordinateRelation(
-        "foo", remote_unit_data={"3": "4"}, primary_app_name="primary2"
+        "foo", remote_unit_data={"3": "4"}, remote_app_name="primary2"
     )
 
     def post_event(charm: CharmBase):
@@ -303,3 +380,24 @@ def test_trigger_sub_relation(mycharm):
 def test_cannot_instantiate_relationbase():
     with pytest.raises(RuntimeError):
         RelationBase("")
+
+
+def test_relation_ids():
+    from scenario.state import _next_relation_id_counter
+
+    initial_id = _next_relation_id_counter
+    for i in range(10):
+        rel = Relation("foo")
+        assert rel.relation_id == initial_id + i
+
+
+def test_broken_relation_not_in_model_relations(mycharm):
+    rel = Relation("foo")
+
+    with Context(
+        mycharm, meta={"name": "local", "requires": {"foo": {"interface": "foo"}}}
+    ).manager(rel.broken_event, state=State(relations=[rel])) as mgr:
+        charm = mgr.charm
+
+        assert charm.model.get_relation("foo") is None
+        assert charm.model.relations["foo"] == []

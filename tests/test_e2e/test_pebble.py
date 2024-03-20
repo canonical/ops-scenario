@@ -2,14 +2,14 @@ import tempfile
 from pathlib import Path
 
 import pytest
-import yaml
 from ops import pebble
 from ops.charm import CharmBase
 from ops.framework import Framework
-from ops.pebble import ServiceStartup, ServiceStatus
+from ops.pebble import ExecError, ServiceStartup, ServiceStatus
 
-from scenario import trigger
-from scenario.state import Container, ExecOutput, Mount, State
+from scenario import Context
+from scenario.state import Container, ExecOutput, Mount, Port, State
+from tests.helpers import trigger
 
 
 @pytest.fixture(scope="function")
@@ -95,6 +95,10 @@ def test_fs_push(charm_cls):
     )
 
 
+def test_port_equality():
+    assert Port("tcp", 42) == Port("tcp", 42)
+
+
 @pytest.mark.parametrize("make_dirs", (True, False))
 def test_fs_pull(charm_cls, make_dirs):
     text = "lorem ipsum/n alles amat gloriae foo"
@@ -115,28 +119,45 @@ def test_fs_pull(charm_cls, make_dirs):
                 container.pull("/foo/bar/baz.txt")
 
     td = tempfile.TemporaryDirectory()
-    state = State(
-        containers=[
-            Container(
-                name="foo", can_connect=True, mounts={"foo": Mount("/foo", td.name)}
-            )
-        ]
+    container = Container(
+        name="foo", can_connect=True, mounts={"foo": Mount("/foo", td.name)}
     )
+    state = State(containers=[container])
 
-    out = trigger(
-        state,
+    ctx = Context(
         charm_type=charm_cls,
         meta={"name": "foo", "containers": {"foo": {}}},
+    )
+    out = ctx.run(
         event="start",
+        state=state,
         post_event=callback,
     )
 
     if make_dirs:
-        file = out.get_container("foo").filesystem.open("/foo/bar/baz.txt")
-        assert file.read() == text
+        # file = (out.get_container("foo").mounts["foo"].src + "bar/baz.txt").open("/foo/bar/baz.txt")
+
+        # this is one way to retrieve the file
+        file = Path(td.name + "/bar/baz.txt")
+
+        # another is:
+        assert (
+            file == Path(out.get_container("foo").mounts["foo"].src) / "bar" / "baz.txt"
+        )
+
+        # but that is actually a symlink to the context's root tmp folder:
+        assert (
+            Path(ctx._tmp.name) / "containers" / "foo" / "foo" / "bar" / "baz.txt"
+        ).read_text() == text
+        assert file.read_text() == text
+
+        # shortcut for API niceness purposes:
+        file = container.get_filesystem(ctx) / "foo" / "bar" / "baz.txt"
+        assert file.read_text() == text
+
     else:
         # nothing has changed
-        out_purged = out.replace(juju_log=[], stored_state=state.stored_state)
+        out_purged = out.replace(stored_state=state.stored_state)
         assert not out_purged.jsonpatch_delta(state)
 
 
@@ -280,3 +301,67 @@ def test_pebble_plan(charm_cls, starting_service_status):
 
     assert container.services["barserv"].current == pebble.ServiceStatus.ACTIVE
     assert container.services["barserv"].startup == pebble.ServiceStartup.DISABLED
+
+
+def test_exec_wait_error(charm_cls):
+    state = State(
+        containers=[
+            Container(
+                name="foo",
+                can_connect=True,
+                exec_mock={("foo",): ExecOutput(stdout="hello pebble", return_code=1)},
+            )
+        ]
+    )
+
+    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
+        "start", state
+    ) as mgr:
+        container = mgr.charm.unit.get_container("foo")
+        proc = container.exec(["foo"])
+        with pytest.raises(ExecError):
+            proc.wait()
+        assert proc.stdout.read() == "hello pebble"
+
+
+def test_exec_wait_output(charm_cls):
+    state = State(
+        containers=[
+            Container(
+                name="foo",
+                can_connect=True,
+                exec_mock={
+                    ("foo",): ExecOutput(stdout="hello pebble", stderr="oepsie")
+                },
+            )
+        ]
+    )
+
+    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
+        "start", state
+    ) as mgr:
+        container = mgr.charm.unit.get_container("foo")
+        proc = container.exec(["foo"])
+        out, err = proc.wait_output()
+        assert out == "hello pebble"
+        assert err == "oepsie"
+
+
+def test_exec_wait_output_error(charm_cls):
+    state = State(
+        containers=[
+            Container(
+                name="foo",
+                can_connect=True,
+                exec_mock={("foo",): ExecOutput(stdout="hello pebble", return_code=1)},
+            )
+        ]
+    )
+
+    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
+        "start", state
+    ) as mgr:
+        container = mgr.charm.unit.get_container("foo")
+        proc = container.exec(["foo"])
+        with pytest.raises(ExecError):
+            proc.wait_output()

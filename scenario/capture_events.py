@@ -4,9 +4,9 @@
 
 import typing
 from contextlib import contextmanager
-from typing import ContextManager, List, Type, TypeVar
+from typing import Type, TypeVar
 
-import pytest
+from ops import CollectStatusEvent
 from ops.framework import (
     CommitEvent,
     EventBase,
@@ -24,7 +24,7 @@ def capture_events(
     *types: Type[EventBase],
     include_framework=False,
     include_deferred=True,
-) -> ContextManager[List[EventBase]]:
+):
     """Capture all events of type `*types` (using instance checks).
 
     Arguments exposed so that you can define your own fixtures if you want to.
@@ -50,10 +50,15 @@ def capture_events(
     _real_reemit = Framework.reemit
 
     def _wrapped_emit(self, evt):
-        if not include_framework and isinstance(evt, (PreCommitEvent, CommitEvent)):
+        if not include_framework and isinstance(
+            evt,
+            (PreCommitEvent, CommitEvent, CollectStatusEvent),
+        ):
             return _real_emit(self, evt)
 
         if isinstance(evt, allowed_types):
+            # dump/undump the event to ensure any custom attributes are (re)set by restore()
+            evt.restore(evt.snapshot())
             captured.append(evt)
 
         return _real_emit(self, evt)
@@ -94,9 +99,3 @@ def capture_events(
 
     Framework._emit = _real_emit  # type: ignore
     Framework.reemit = _real_reemit  # type: ignore
-
-
-@pytest.fixture()
-def emitted_events():
-    with capture_events() as captured:
-        yield captured

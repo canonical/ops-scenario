@@ -3,6 +3,7 @@ from dataclasses import asdict
 import pytest
 from ops.charm import (
     CharmBase,
+    CollectStatusEvent,
     RelationChangedEvent,
     StartEvent,
     UpdateStatusEvent,
@@ -10,8 +11,9 @@ from ops.charm import (
 )
 from ops.framework import Framework
 
-from scenario import trigger
+from scenario import Context
 from scenario.state import Container, DeferredEvent, Relation, State, deferred
+from tests.helpers import trigger
 
 CHARM_CALLED = 0
 
@@ -34,7 +36,7 @@ def mycharm():
 
         def _on_event(self, event):
             self.captured.append(event)
-            if self.defer_next:
+            if self.defer_next > 0:
                 self.defer_next -= 1
                 return event.defer()
 
@@ -64,14 +66,14 @@ def test_deferred_evt_emitted(mycharm):
     assert out.deferred[1].name == "update_status"
 
     # we saw start and update-status.
-    assert len(mycharm.captured) == 2
-    upstat, start = mycharm.captured
+    assert len(mycharm.captured) == 3
+    upstat, start, _ = mycharm.captured
     assert isinstance(upstat, UpdateStatusEvent)
     assert isinstance(start, StartEvent)
 
 
 def test_deferred_relation_event_without_relation_raises(mycharm):
-    with pytest.raises(ValueError):
+    with pytest.raises(AttributeError):
         deferred(event="foo_relation_changed", handler=mycharm._on_event)
 
 
@@ -122,8 +124,8 @@ def test_deferred_relation_event(mycharm):
     assert out.deferred[1].name == "start"
 
     # we saw start and relation-changed.
-    assert len(mycharm.captured) == 2
-    upstat, start = mycharm.captured
+    assert len(mycharm.captured) == 3
+    upstat, start, _ = mycharm.captured
     assert isinstance(upstat, RelationChangedEvent)
     assert isinstance(start, StartEvent)
 
@@ -134,7 +136,9 @@ def test_deferred_relation_event_from_relation(mycharm):
     out = trigger(
         State(
             relations=[rel],
-            deferred=[rel.changed_event.deferred(handler=mycharm._on_event)],
+            deferred=[
+                rel.changed_event(remote_unit_id=1).deferred(handler=mycharm._on_event)
+            ],
         ),
         "start",
         mycharm,
@@ -144,13 +148,20 @@ def test_deferred_relation_event_from_relation(mycharm):
     # we deferred the first 2 events we saw: foo_relation_changed, start.
     assert len(out.deferred) == 2
     assert out.deferred[0].name == "foo_relation_changed"
+    assert out.deferred[0].snapshot_data == {
+        "relation_name": rel.endpoint,
+        "relation_id": rel.relation_id,
+        "app_name": "remote",
+        "unit_name": "remote/1",
+    }
     assert out.deferred[1].name == "start"
 
     # we saw start and foo_relation_changed.
-    assert len(mycharm.captured) == 2
-    upstat, start = mycharm.captured
+    assert len(mycharm.captured) == 3
+    upstat, start, collect_status = mycharm.captured
     assert isinstance(upstat, RelationChangedEvent)
     assert isinstance(start, StartEvent)
+    assert isinstance(collect_status, CollectStatusEvent)
 
 
 def test_deferred_workload_event(mycharm):
@@ -174,7 +185,45 @@ def test_deferred_workload_event(mycharm):
     assert out.deferred[1].name == "start"
 
     # we saw start and foo_pebble_ready.
-    assert len(mycharm.captured) == 2
-    upstat, start = mycharm.captured
+    assert len(mycharm.captured) == 3
+    upstat, start, collect_status = mycharm.captured
     assert isinstance(upstat, WorkloadEvent)
     assert isinstance(start, StartEvent)
+    assert isinstance(collect_status, CollectStatusEvent)
+
+
+def test_defer_reemit_lifecycle_event(mycharm):
+    ctx = Context(mycharm, meta=mycharm.META, capture_deferred_events=True)
+
+    mycharm.defer_next = 1
+    state_1 = ctx.run("update-status", State())
+
+    mycharm.defer_next = 0
+    state_2 = ctx.run("start", state_1)
+
+    assert [type(e).__name__ for e in ctx.emitted_events] == [
+        "UpdateStatusEvent",
+        "UpdateStatusEvent",
+        "StartEvent",
+    ]
+    assert len(state_1.deferred) == 1
+    assert not state_2.deferred
+
+
+def test_defer_reemit_relation_event(mycharm):
+    ctx = Context(mycharm, meta=mycharm.META, capture_deferred_events=True)
+
+    rel = Relation("foo")
+    mycharm.defer_next = 1
+    state_1 = ctx.run(rel.created_event, State(relations=[rel]))
+
+    mycharm.defer_next = 0
+    state_2 = ctx.run("start", state_1)
+
+    assert [type(e).__name__ for e in ctx.emitted_events] == [
+        "RelationCreatedEvent",
+        "RelationCreatedEvent",
+        "StartEvent",
+    ]
+    assert len(state_1.deferred) == 1
+    assert not state_2.deferred

@@ -45,10 +45,9 @@ def ctx():
 @pytest.mark.parametrize("attr", ("foo", "bar"))
 @pytest.mark.parametrize("val", (1, 10, 20))
 def test_get(ctx, attr, val):
-    state = State(charm_state=MyState("state", val, str(val)))
+    state = State(charm=MyState(name="state", foo=val, bar=str(val)))
 
-    def post_event(charm: MyCharm):
+    with ctx.manager("start", state=state) as mgr:
+        charm = mgr.charm
         assert charm.foo == val
         assert charm.bar == str(val)
-
-    ctx.run("start", state=state, post_event=post_event)

@@ -2,12 +2,12 @@ from dataclasses import asdict
 from typing import Type
 
 import pytest
-from ops.charm import CharmBase, CharmEvents
+from ops.charm import CharmBase, CharmEvents, CollectStatusEvent
 from ops.framework import EventBase, Framework
 from ops.model import ActiveStatus, UnknownStatus, WaitingStatus
 
-from scenario import trigger
-from scenario.state import Container, Relation, State, sort_patch
+from scenario.state import DEFAULT_JUJU_DATABAG, Container, Relation, State, sort_patch
+from tests.helpers import trigger
 
 CUSTOM_EVT_SUFFIXES = {
     "relation_created",
@@ -56,7 +56,7 @@ def state():
 
 def test_bare_event(state, mycharm):
     out = trigger(state, "start", mycharm, meta={"name": "foo"})
-    out_purged = out.replace(juju_log=[], stored_state=state.stored_state)
+    out_purged = out.replace(stored_state=state.stored_state)
     assert state.jsonpatch_delta(out_purged) == []
 
 
@@ -74,7 +74,10 @@ def test_leader_get(state, mycharm):
 
 
 def test_status_setting(state, mycharm):
-    def call(charm: CharmBase, _):
+    def call(charm: CharmBase, e):
+        if isinstance(e, CollectStatusEvent):
+            return
+
         assert isinstance(charm.unit.status, UnknownStatus)
         charm.unit.status = ActiveStatus("foo test")
         charm.app.status = WaitingStatus("foo barz")
@@ -87,28 +90,18 @@ def test_status_setting(state, mycharm):
         meta={"name": "foo"},
         config={"options": {"foo": {"type": "string"}}},
     )
-    assert out.status.unit == ActiveStatus("foo test")
-    assert out.status.app == WaitingStatus("foo barz")
-    assert out.status.workload_version == ""
+    assert out.unit_status == ActiveStatus("foo test")
+    assert out.app_status == WaitingStatus("foo barz")
+    assert out.workload_version == ""
 
-    # ignore logging output and stored state in the delta
-    out_purged = out.replace(juju_log=[], stored_state=state.stored_state)
+    # ignore stored state in the delta
+    out_purged = out.replace(stored_state=state.stored_state)
     assert out_purged.jsonpatch_delta(state) == sort_patch(
         [
-            {"op": "replace", "path": "/status/app/message", "value": "foo barz"},
-            {"op": "replace", "path": "/status/app/name", "value": "waiting"},
-            {
-                "op": "add",
-                "path": "/status/app_history/0",
-                "value": {"message": "", "name": "unknown"},
-            },
-            {"op": "replace", "path": "/status/unit/message", "value": "foo test"},
-            {"op": "replace", "path": "/status/unit/name", "value": "active"},
-            {
-                "op": "add",
-                "path": "/status/unit_history/0",
-                "value": {"message": "", "name": "unknown"},
-            },
+            {"op": "replace", "path": "/app_status/message", "value": "foo barz"},
+            {"op": "replace", "path": "/app_status/name", "value": "waiting"},
+            {"op": "replace", "path": "/unit_status/message", "value": "foo test"},
+            {"op": "replace", "path": "/unit_status/name", "value": "active"},
         ]
     )
 
@@ -157,7 +150,6 @@ def test_relation_get(mycharm):
                 interface="bar",
                 local_app_data={"a": "because"},
                 remote_app_name="remote",
-                remote_unit_ids=[0, 1, 2],
                 remote_app_data={"a": "b"},
                 local_unit_data={"c": "d"},
                 remote_units_data={0: {}, 1: {"e": "f"}, 2: {}},
@@ -194,6 +186,7 @@ def test_relation_set(mycharm):
 
     def pre_event(charm: CharmBase):
         assert charm.model.get_relation("foo")
+        assert charm.model.app.planned_units() == 4
 
         # this would NOT raise an exception because we're not in an event context!
         # we're right before the event context is entered in fact.
@@ -208,12 +201,11 @@ def test_relation_set(mycharm):
         endpoint="foo",
         interface="bar",
         remote_app_name="remote",
-        remote_unit_ids=[1, 4],
-        local_app_data={},
-        local_unit_data={},
+        remote_units_data={1: {}, 4: {}},
     )
     state = State(
         leader=True,
+        planned_units=4,
         relations=[relation],
     )
 
@@ -233,9 +225,9 @@ def test_relation_set(mycharm):
     assert asdict(out.relations[0]) == asdict(
         relation.replace(
             local_app_data={"a": "b"},
-            local_unit_data={"c": "d"},
+            local_unit_data={"c": "d", **DEFAULT_JUJU_DATABAG},
         )
     )
 
     assert out.relations[0].local_app_data == {"a": "b"}
-    assert out.relations[0].local_unit_data == {"c": "d"}
+    assert out.relations[0].local_unit_data == {"c": "d", **DEFAULT_JUJU_DATABAG}

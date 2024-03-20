@@ -8,19 +8,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ops-scenario"
 
-version = "3.0.1"
+version = "6.0.3"
 
 authors = [
     { name = "Pietro Pasotti", email = "pietro.pasotti@canonical.com" }
 ]
-description = "Python library providing a Scenario-based testing API for Operator Framework charms."
+description = "Python library providing a state-transition testing API for Operator Framework charms."
 license.text = "Apache-2.0"
 keywords = ["juju", "test"]
 
 dependencies = [
-    "ops>=2.0",
-    "PyYAML==6.0",
-    "typer==0.7.0",
+    "ops>=2.6",
+    "PyYAML>=6.0.1",
 ]
 readme = "README.md"
 requires-python = ">=3.8"
@@ -35,15 +34,10 @@ classifiers = [
     'Topic :: Utilities',
 ]
 
-[project.entry-points.pytest11]
-emitted_events = "scenario"
-
 [project.urls]
 "Homepage" = "https://github.com/canonical/ops-scenario"
 "Bug Tracker" = "https://github.com/canonical/ops-scenario/issues"
 
-[project.scripts]
-scenario = "scenario.scripts.main:main"
 
 [tool.setuptools.package-dir]
 scenario = "scenario"
@@ -53,11 +47,44 @@ scenario = "scenario"
 include = '\.pyi?$'
 
 
-[tool.flake8]
-dictionaries = ["en_US","python","technical","django"]
-max-line-length = 100
-ignore = ["SC100", "SC200", "B008"]
+[tool.ruff]
+# Same as Black.
+line-length = 88
+indent-width = 4
 
+# Assume Python 3.11
+target-version = "py311"
+
+[tool.ruff.lint]
+# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
+select = ["E4", "E7", "E9", "F"]
+ignore = []
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.pyright]
+ignore = [
+    "scenario/sequences.py",
+    "scenario/capture_events.py"
+]
 [tool.isort]
 profile = "black"
 
