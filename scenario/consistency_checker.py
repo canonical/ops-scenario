@@ -658,3 +658,34 @@ def check_storedstate_consistency(
                 f"The StoredState object {ss.owner_path}.{ss.name} should contain only simple types.",
             )
     return Results(errors, [])
+
+
+def check_storedstate_consistency(
+    *,
+    state: "State",
+    **_kwargs,  # noqa: U101
+) -> Results:
+    """Check the internal consistency of `state.storedstate`."""
+    errors = []
+
+    # Attribute names must be unique on each object.
+    names = defaultdict(list)
+    for ss in state.stored_state:
+        names[ss.owner_path].append(ss.name)
+    for owner, owner_names in names.items():
+        if len(owner_names) != len(set(owner_names)):
+            errors.append(
+                f"{owner} has multiple StoredState objects with the same name.",
+            )
+
+    # The content must be marshallable.
+    for ss in state.stored_state:
+        # We don't need the marshalled state, just to know that it can be.
+        # This is the same "only simple types" check that ops does.
+        try:
+            marshal.dumps(ss.content)
+        except ValueError:
+            errors.append(
+                f"{ss!r} must contain only simple types.",
+            )
+    return Results(errors, [])
