@@ -374,7 +374,7 @@ def next_relation_id(update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class RelationBase:
+class _RelationBase:
     endpoint: str
     """Relation endpoint name. Must match some endpoint name defined in metadata.yaml."""
 
@@ -413,9 +413,9 @@ class RelationBase:
         raise NotImplementedError()
 
     def __post_init__(self):
-        if type(self) is RelationBase:
+        if type(self) is _RelationBase:
             raise RuntimeError(
-                "RelationBase cannot be instantiated directly; "
+                "_RelationBase cannot be instantiated directly; "
                 "please use Relation, PeerRelation, or SubordinateRelation",
             )
 
@@ -484,7 +484,7 @@ DEFAULT_JUJU_DATABAG = {
 
 
 @dataclasses.dataclass(frozen=True)
-class Relation(RelationBase):
+class Relation(_RelationBase):
     remote_app_name: str = "remote"
 
     # local limit
@@ -519,7 +519,7 @@ class Relation(RelationBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class SubordinateRelation(RelationBase):
+class SubordinateRelation(_RelationBase):
     remote_app_data: "RawDataBagContents" = dataclasses.field(default_factory=dict)
     remote_unit_data: "RawDataBagContents" = dataclasses.field(
         default_factory=lambda: DEFAULT_JUJU_DATABAG.copy(),
@@ -557,7 +557,7 @@ class SubordinateRelation(RelationBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class PeerRelation(RelationBase):
+class PeerRelation(_RelationBase):
     peers_data: Dict["UnitID", "RawDataBagContents"] = dataclasses.field(
         default_factory=lambda: {0: DEFAULT_JUJU_DATABAG.copy()},
     )
