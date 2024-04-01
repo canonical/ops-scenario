@@ -714,6 +714,19 @@ def test_storedstate_consistency():
             }
         ),
         _Event("start"),
+
+
+def test_storedstate_consistency():
+    assert_consistent(
+        State(
+            stored_state=[
+                StoredState(None, content={"foo": "bar"}),
+                StoredState(None, "my_stored_state", content={"foo": 1}),
+                StoredState("MyCharmLib", content={"foo": None}),
+                StoredState("OtherCharmLib", content={"foo": (1, 2, 3)}),
+            ]
+        ),
+        Event("start"),
         _CharmSpec(
             MyCharm,
             meta={
