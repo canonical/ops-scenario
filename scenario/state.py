@@ -266,6 +266,7 @@ class Secret(_max_posargs(1)):
     # mapping from revision IDs to each revision's contents
     contents: Dict[int, "RawSecretRevisionContents"]
 
+class Secret:
     id: str
     # CAUTION: ops-created Secrets (via .add_secret()) will have a canonicalized
     #  secret id (`secret:` prefix)
