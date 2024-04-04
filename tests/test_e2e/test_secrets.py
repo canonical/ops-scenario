@@ -28,7 +28,7 @@ def mycharm():
 
 
 def test_get_secret_no_secret(mycharm):
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         "update_status", State()
     ) as mgr:
         with pytest.raises(SecretNotFoundError):
@@ -38,7 +38,7 @@ def test_get_secret_no_secret(mycharm):
 
 
 def test_get_secret(mycharm):
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         state=State(secrets=[Secret(id="foo", contents={0: {"a": "b"}}, granted=True)]),
         event="update_status",
     ) as mgr:
@@ -46,7 +46,7 @@ def test_get_secret(mycharm):
 
 
 def test_get_secret_not_granted(mycharm):
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         state=State(secrets=[]),
         event="update_status",
     ) as mgr:
@@ -57,7 +57,7 @@ def test_get_secret_not_granted(mycharm):
 @pytest.mark.parametrize("owner", ("app", "unit", "application"))
 # "application" is deprecated but still supported
 def test_get_secret_get_refresh(mycharm, owner):
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         "update_status",
         State(
             secrets=[
@@ -78,7 +78,7 @@ def test_get_secret_get_refresh(mycharm, owner):
 
 @pytest.mark.parametrize("app", (True, False))
 def test_get_secret_nonowner_peek_update(mycharm, app):
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         "update_status",
         State(
             leader=app,
@@ -105,7 +105,7 @@ def test_get_secret_nonowner_peek_update(mycharm, app):
 @pytest.mark.parametrize("owner", ("app", "unit", "application"))
 # "application" is deprecated but still supported
 def test_get_secret_owner_peek_update(mycharm, owner):
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         "update_status",
         State(
             secrets=[
@@ -157,7 +157,7 @@ def test_consumer_events_failures(mycharm, evt_prefix):
 
 @pytest.mark.parametrize("app", (True, False))
 def test_add(mycharm, app):
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         "update_status",
         State(leader=app),
     ) as mgr:
@@ -177,7 +177,7 @@ def test_set_legacy_behaviour(mycharm):
     # in juju < 3.1.7, secret owners always used to track the latest revision.
     # ref: https://bugs.launchpad.net/juju/+bug/2037120
     rev1, rev2, rev3 = {"foo": "bar"}, {"foo": "baz"}, {"foo": "baz", "qux": "roz"}
-    with Context(mycharm, meta={"name": "local"}, juju_version="3.1.6").manager(
+    with Context(mycharm, meta={"name": "local"}, juju_version="3.1.6").event(
         "update_status",
         State(),
     ) as mgr:
@@ -216,7 +216,7 @@ def test_set_legacy_behaviour(mycharm):
 
 def test_set(mycharm):
     rev1, rev2, rev3 = {"foo": "bar"}, {"foo": "baz"}, {"foo": "baz", "qux": "roz"}
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         "update_status",
         State(),
     ) as mgr:
@@ -247,7 +247,7 @@ def test_set(mycharm):
 
 def test_set_juju33(mycharm):
     rev1, rev2, rev3 = {"foo": "bar"}, {"foo": "baz"}, {"foo": "baz", "qux": "roz"}
-    with Context(mycharm, meta={"name": "local"}, juju_version="3.3.1").manager(
+    with Context(mycharm, meta={"name": "local"}, juju_version="3.3.1").event(
         "update_status",
         State(),
     ) as mgr:
@@ -275,7 +275,7 @@ def test_set_juju33(mycharm):
 
 @pytest.mark.parametrize("app", (True, False))
 def test_meta(mycharm, app):
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         "update_status",
         State(
             leader=True,
@@ -340,7 +340,7 @@ def test_secret_permission_model(mycharm, leader, owner):
         or (owner == "unit")
     )
 
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         "update_status",
         State(
             leader=leader,
@@ -392,7 +392,7 @@ def test_secret_permission_model(mycharm, leader, owner):
 def test_grant(mycharm, app):
     with Context(
         mycharm, meta={"name": "local", "requires": {"foo": {"interface": "bar"}}}
-    ).manager(
+    ).event(
         "update_status",
         State(
             relations=[Relation("foo", "remote")],
@@ -424,7 +424,7 @@ def test_grant(mycharm, app):
 def test_update_metadata(mycharm):
     exp = datetime.datetime(2050, 12, 12)
 
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(mycharm, meta={"name": "local"}).event(
         "update_status",
         State(
             secrets=[
@@ -527,7 +527,7 @@ def test_add_grant_revoke_remove():
         ],
     )
 
-    with context.manager("start", state) as mgr:
+    with context.event("start", state) as mgr:
         charm = mgr.charm
         secret = charm.app.add_secret({"foo": "bar"}, label="mylabel")
         bar_relation = charm.model.relations["bar"][0]
@@ -538,7 +538,7 @@ def test_add_grant_revoke_remove():
     scenario_secret = mgr.output.secrets[0]
     assert relation_remote_app in scenario_secret.remote_grants[relation_id]
 
-    with context.manager("start", mgr.output) as mgr:
+    with context.event("start", mgr.output) as mgr:
         charm: GrantingCharm = mgr.charm
         secret = charm.model.get_secret(label="mylabel")
         secret.revoke(bar_relation)
@@ -546,7 +546,7 @@ def test_add_grant_revoke_remove():
     scenario_secret = mgr.output.secrets[0]
     assert scenario_secret.remote_grants == {}
 
-    with context.manager("start", mgr.output) as mgr:
+    with context.event("start", mgr.output) as mgr:
         charm: GrantingCharm = mgr.charm
         secret = charm.model.get_secret(label="mylabel")
         secret.remove_all_revisions()

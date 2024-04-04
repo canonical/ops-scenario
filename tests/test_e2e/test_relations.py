@@ -396,7 +396,7 @@ def test_broken_relation_not_in_model_relations(mycharm):
 
     with Context(
         mycharm, meta={"name": "local", "requires": {"foo": {"interface": "foo"}}}
-    ).manager(rel.broken_event, state=State(relations=[rel])) as mgr:
+    ).event(rel.broken_event, state=State(relations=[rel])) as mgr:
         charm = mgr.charm
 
         assert charm.model.get_relation("foo") is None

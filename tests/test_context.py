@@ -67,6 +67,6 @@ def test_clear():
 def test_app_name(app_name, unit_id):
     with Context(
         MyCharm, meta={"name": "foo"}, app_name=app_name, unit_id=unit_id
-    ).manager("start", State()) as mgr:
+    ).event("start", State()) as mgr:
         assert mgr.charm.app.name == app_name
         assert mgr.charm.unit.name == f"{app_name}/{unit_id}"

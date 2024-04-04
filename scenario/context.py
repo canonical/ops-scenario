@@ -109,7 +109,7 @@ class _Manager:
         This can only be done once.
         """
         if self._emitted:
-            raise AlreadyEmittedError("Can only context.manager.run() once.")
+            raise AlreadyEmittedError("Can only context.event.run() once.")
         self._emitted = True
 
         # wrap up Runtime.exec() so that we can gather the output state
@@ -394,7 +394,7 @@ class Context:
                 "Please use the ``Context.[action_]manager`` context manager.",
             )
 
-    def manager(
+    def event(
         self,
         event: Union["Event", str],
         state: "State",
@@ -402,7 +402,7 @@ class Context:
         """Context manager to introspect live charm object before and after the event is emitted.
 
         Usage:
-        >>> with Context().manager("start", State()) as manager:
+        >>> with Context().event("start", State()) as manager:
         >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
         >>>     manager.run()  # this will fire the event
         >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
@@ -413,7 +413,7 @@ class Context:
         """
         return _EventManager(self, event, state)
 
-    def action_manager(
+    def action(
         self,
         action: Union["Action", str],
         state: "State",
@@ -421,7 +421,7 @@ class Context:
         """Context manager to introspect live charm object before and after the event is emitted.
 
         Usage:
-        >>> with Context().action_manager("foo-action", State()) as manager:
+        >>> with Context().action("foo-action", State()) as manager:
         >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
         >>>     manager.run()  # this will fire the event
         >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
@@ -459,10 +459,10 @@ class Context:
             charm will invoke when handling the Event.
         :arg pre_event: callback to be invoked right before emitting the event on the newly
             instantiated charm. Will receive the charm instance as only positional argument.
-            This argument is deprecated. Please use ``Context.manager`` instead.
+            This argument is deprecated. Please use ``Context.event`` instead.
         :arg post_event: callback to be invoked right after emitting the event on the charm.
             Will receive the charm instance as only positional argument.
-            This argument is deprecated. Please use ``Context.manager`` instead.
+            This argument is deprecated. Please use ``Context.event`` instead.
         """
         self._warn_deprecation_if_pre_or_post_event(pre_event, post_event)
 
@@ -494,10 +494,10 @@ class Context:
             charm will invoke when handling the Action (event).
         :arg pre_event: callback to be invoked right before emitting the event on the newly
             instantiated charm. Will receive the charm instance as only positional argument.
-            This argument is deprecated. Please use ``Context.action_manager`` instead.
+            This argument is deprecated. Please use ``Context.action`` instead.
         :arg post_event: callback to be invoked right after emitting the event on the charm.
             Will receive the charm instance as only positional argument.
-            This argument is deprecated. Please use ``Context.action_manager`` instead.
+            This argument is deprecated. Please use ``Context.action`` instead.
         """
         self._warn_deprecation_if_pre_or_post_event(pre_event, post_event)
 

@@ -732,7 +732,7 @@ storage = Storage("foo")
 # setup storage with some content
 (storage.get_filesystem(ctx) / "myfile.txt").write_text("helloworld")
 
-with ctx.manager("update-status", State(storage=[storage])) as mgr:
+with ctx.event("update-status", State(storage=[storage])) as mgr:
     foo = mgr.charm.model.storages["foo"][0]
     loc = foo.location
     path = loc / "myfile.txt"
@@ -1118,7 +1118,7 @@ So, the only consistency-level check we enforce in Scenario when it comes to res
 ```python
 from scenario import State, Context
 ctx = Context(MyCharm, meta={'name': 'juliette', "resources": {"foo": {"type": "oci-image"}}})
-with ctx.manager("start", State(resources={'foo': '/path/to/resource.tar'})) as mgr:
+with ctx.event("start", State(resources={'foo': '/path/to/resource.tar'})) as mgr:
     # if the charm, at runtime, were to call self.model.resources.fetch("foo"), it would get '/path/to/resource.tar' back.
     path = mgr.charm.model.resources.fetch('foo')
     assert path == '/path/to/resource.tar' 
@@ -1165,7 +1165,7 @@ Scenario is a black-box, state-transition testing framework. It makes it trivial
 B, but not to assert that, in the context of this charm execution, with this state, a certain charm-internal method was called and returned a
 given piece of data, or would return this and that _if_ it had been called.
 
-Scenario offers a cheekily-named context manager for this use case specifically:
+Scenario offers a context manager for this use case specifically:
 
 ```python
 from ops import CharmBase, StoredState
@@ -1190,8 +1190,8 @@ class MyCharm(CharmBase):
 
 def test_live_charm_introspection(mycharm):
     ctx = Context(mycharm, meta=mycharm.META)
-    # If you want to do this with actions, you can use `Context.action_manager` instead.
-    with ctx.manager("start", State()) as manager:
+    # If you want to do this with actions, you can use `Context.action` instead.
+    with ctx.event("start", State()) as manager:
         # this is your charm instance, after ops has set it up
         charm: MyCharm = manager.charm
         

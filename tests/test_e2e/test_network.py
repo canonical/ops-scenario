@@ -40,7 +40,7 @@ def test_ip_get(mycharm):
         },
     )
 
-    with ctx.manager(
+    with ctx.event(
         "update_status",
         State(
             relations=[
@@ -77,7 +77,7 @@ def test_no_sub_binding(mycharm):
         },
     )
 
-    with ctx.manager(
+    with ctx.event(
         "update_status",
         State(
             relations=[
@@ -102,7 +102,7 @@ def test_no_relation_error(mycharm):
         },
     )
 
-    with ctx.manager(
+    with ctx.event(
         "update_status",
         State(
             relations=[
