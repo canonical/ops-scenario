@@ -614,12 +614,6 @@ class Container(_DCBase):
     name: str
     can_connect: bool = False
 
-    # This is the base plan. On top of it, one can add layers.
-    # We need to model pebble in this way because it's impossible to retrieve the layers from
-    # pebble or derive them from the resulting plan (which one CAN get from pebble).
-    # So if we are instantiating Container by fetching info from a 'live' charm, the 'layers'
-    # will be unknown. all that we can know is the resulting plan (the 'computed plan').
-    _base_plan: dict = dataclasses.field(default_factory=dict)
     # We expect most of the user-facing testing to be covered by this 'layers' attribute,
     # as all will be known when unit-testing.
     layers: Dict[str, pebble.Layer] = dataclasses.field(default_factory=dict)
@@ -645,6 +639,13 @@ class Container(_DCBase):
     mounts: Dict[str, Mount] = dataclasses.field(default_factory=dict)
 
     exec_mock: _ExecMock = dataclasses.field(default_factory=dict)
+
+    # This is the base plan. On top of it, one can add layers.
+    # We need to model pebble in this way because it's impossible to retrieve the layers from
+    # pebble or derive them from the resulting plan (which one CAN get from pebble).
+    # So if we are instantiating Container by fetching info from a 'live' charm, the 'layers'
+    # will be unknown. all that we can know is the resulting plan (the 'computed plan').
+    _base_plan: dict = dataclasses.field(default_factory=dict)
 
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
