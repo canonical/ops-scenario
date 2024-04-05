@@ -169,6 +169,8 @@ class Context:
         capture_framework_events: bool = False,
         app_name: Optional[str] = None,
         unit_id: Optional[int] = 0,
+        hook: Union[Event, Action] = None,
+        state: "State" = None,
     ):
         """Represents a simulated charm's execution context.
 
@@ -258,6 +260,9 @@ class Context:
                 config=config,
             )
 
+        self._context_args = hook, state
+        self._contextmanager = None
+
         self.charm_spec = spec
         self.charm_root = charm_root
         self.juju_version = juju_version
@@ -345,6 +350,23 @@ class Context:
         self._tmp.cleanup()
         self._tmp = tempfile.TemporaryDirectory()
 
+    def __enter__(self):
+        event_or_action, state = self._context_args
+        event_or_action = event_or_action or "update_status"
+
+        if isinstance(event_or_action, Action):
+            _contextmanager = _ActionManager(self, event_or_action, state or State())
+        else:
+            _contextmanager = _EventManager(self, event_or_action, state or State())
+        self._contextmanager = _contextmanager
+
+        _contextmanager.__enter__()
+        return _contextmanager
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._contextmanager.__exit__(exc_type, exc_val, exc_tb)
+        self._contextmanager = False
+
     def _record_status(self, state: "State", is_app: bool):
         """Record the previous status before a status change."""
         if is_app:
@@ -394,44 +416,6 @@ class Context:
                 "Please use the ``Context.[action_]manager`` context manager.",
             )
 
-    def manager(
-        self,
-        event: Union["Event", str],
-        state: "State",
-    ):
-        """Context manager to introspect live charm object before and after the event is emitted.
-
-        Usage:
-        >>> with Context().manager("start", State()) as manager:
-        >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
-        >>>     manager.run()  # this will fire the event
-        >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
-
-        :arg event: the Event that the charm will respond to. Can be a string or an Event instance.
-        :arg state: the State instance to use as data source for the hook tool calls that the
-            charm will invoke when handling the Event.
-        """
-        return _EventManager(self, event, state)
-
-    def action_manager(
-        self,
-        action: Union["Action", str],
-        state: "State",
-    ):
-        """Context manager to introspect live charm object before and after the event is emitted.
-
-        Usage:
-        >>> with Context().action_manager("foo-action", State()) as manager:
-        >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
-        >>>     manager.run()  # this will fire the event
-        >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
-
-        :arg action: the Action that the charm will execute. Can be a string or an Action instance.
-        :arg state: the State instance to use as data source for the hook tool calls that the
-            charm will invoke when handling the Action (event).
-        """
-        return _ActionManager(self, action, state)
-
     @contextmanager
     def _run_event(
         self,
@@ -448,7 +432,7 @@ class Context:
         state: "State",
         pre_event: Optional[Callable[[CharmBase], None]] = None,
         post_event: Optional[Callable[[CharmBase], None]] = None,
-    ) -> "State":
+    ) -> Union["State", _EventManager]:
         """Trigger a charm execution with an Event and a State.
 
         Calling this function will call ``ops.main`` and set up the context according to the
@@ -483,7 +467,7 @@ class Context:
         state: "State",
         pre_event: Optional[Callable[[CharmBase], None]] = None,
         post_event: Optional[Callable[[CharmBase], None]] = None,
-    ) -> ActionOutput:
+    ) -> Union[ActionOutput, _ActionManager]:
         """Trigger a charm execution with an Action and a State.
 
         Calling this function will call ``ops.main`` and set up the context according to the
