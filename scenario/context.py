@@ -180,8 +180,9 @@ class Context:
         capture_framework_events: bool = False,
         app_name: Optional[str] = None,
         unit_id: Optional[int] = 0,
-        hook: Union[Event, Action] = None,
-        state: "State" = None,
+        event: Optional["Event"] = None,
+        action: Optional["Action"] = None,
+        state: Optional["State"] = None,
     ):
         """Represents a simulated charm's execution context.
 
@@ -271,7 +272,10 @@ class Context:
                 config=config,
             )
 
-        self._context_args = hook, state
+        if event and action:
+            raise RuntimeError("only provide one of `event`, `action`.")
+
+        self._context_args = event, action, state
         self._contextmanager = None
 
         self.charm_spec = spec
@@ -362,12 +366,16 @@ class Context:
         self._tmp = tempfile.TemporaryDirectory()
 
     def __enter__(self):
-        event_or_action, state = self._context_args
+        event, action, state = self._context_args
+        if not (action or event) or not state:
+            raise RuntimeError(
+                "to use Context as a context manager, you need to pass `state` and (`event` or `action`).",
+            )
 
-        if isinstance(event_or_action, Action):
-            _contextmanager = _ActionManager(self, event_or_action, state or State())
+        if action:
+            _contextmanager = _ActionManager(self, action, state or State())
         else:
-            _contextmanager = _EventManager(self, event_or_action, state or State())
+            _contextmanager = _EventManager(self, event, state or State())
         self._contextmanager = _contextmanager
 
         _contextmanager.__enter__()
@@ -561,8 +569,8 @@ class Context:
         event_or_action: Optional[Union[Event, Action]],
         state: Optional[State],
     ) -> Tuple[Optional[Union[Event, Action]], Optional[State]]:
-        ctx_event_or_action, ctx_state = self._context_args
-        arg1 = event_or_action or ctx_event_or_action
+        event, action, ctx_state = self._context_args
+        arg1 = event_or_action or event or action
         arg2 = state or ctx_state
 
         errors = []
