@@ -5,7 +5,18 @@ import dataclasses
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 from ops import CharmBase, EventBase
 
@@ -169,6 +180,8 @@ class Context:
         capture_framework_events: bool = False,
         app_name: Optional[str] = None,
         unit_id: Optional[int] = 0,
+        hook: Union[Event, Action] = None,
+        state: "State" = None,
     ):
         """Represents a simulated charm's execution context.
 
@@ -258,6 +271,9 @@ class Context:
                 config=config,
             )
 
+        self._context_args = hook, state
+        self._contextmanager = None
+
         self.charm_spec = spec
         self.charm_root = charm_root
         self.juju_version = juju_version
@@ -345,6 +361,22 @@ class Context:
         self._tmp.cleanup()
         self._tmp = tempfile.TemporaryDirectory()
 
+    def __enter__(self):
+        event_or_action, state = self._context_args
+
+        if isinstance(event_or_action, Action):
+            _contextmanager = _ActionManager(self, event_or_action, state or State())
+        else:
+            _contextmanager = _EventManager(self, event_or_action, state or State())
+        self._contextmanager = _contextmanager
+
+        _contextmanager.__enter__()
+        return _contextmanager
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._contextmanager.__exit__(exc_type, exc_val, exc_tb)
+        self._contextmanager = False
+
     def _record_status(self, state: "State", is_app: bool):
         """Record the previous status before a status change."""
         if is_app:
@@ -394,44 +426,6 @@ class Context:
                 "Please use the ``Context.[action_]manager`` context manager.",
             )
 
-    def manager(
-        self,
-        event: Union["Event", str],
-        state: "State",
-    ):
-        """Context manager to introspect live charm object before and after the event is emitted.
-
-        Usage:
-        >>> with Context().manager("start", State()) as manager:
-        >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
-        >>>     manager.run()  # this will fire the event
-        >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
-
-        :arg event: the Event that the charm will respond to. Can be a string or an Event instance.
-        :arg state: the State instance to use as data source for the hook tool calls that the
-            charm will invoke when handling the Event.
-        """
-        return _EventManager(self, event, state)
-
-    def action_manager(
-        self,
-        action: Union["Action", str],
-        state: "State",
-    ):
-        """Context manager to introspect live charm object before and after the event is emitted.
-
-        Usage:
-        >>> with Context().action_manager("foo-action", State()) as manager:
-        >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
-        >>>     manager.run()  # this will fire the event
-        >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
-
-        :arg action: the Action that the charm will execute. Can be a string or an Action instance.
-        :arg state: the State instance to use as data source for the hook tool calls that the
-            charm will invoke when handling the Action (event).
-        """
-        return _ActionManager(self, action, state)
-
     @contextmanager
     def _run_event(
         self,
@@ -444,11 +438,12 @@ class Context:
 
     def run(
         self,
-        event: Union["Event", str],
-        state: "State",
+        *,
+        event: Union["Event", str] = None,
+        state: "State" = None,
         pre_event: Optional[Callable[[CharmBase], None]] = None,
         post_event: Optional[Callable[[CharmBase], None]] = None,
-    ) -> "State":
+    ) -> Union["State", _EventManager]:
         """Trigger a charm execution with an Event and a State.
 
         Calling this function will call ``ops.main`` and set up the context according to the
@@ -465,6 +460,7 @@ class Context:
             This argument is deprecated. Please use ``Context.manager`` instead.
         """
         self._warn_deprecation_if_pre_or_post_event(pre_event, post_event)
+        event, state = self._merge_ctx_args(event, state)
 
         with self._run_event(event=event, state=state) as ops:
             if pre_event:
@@ -479,11 +475,12 @@ class Context:
 
     def run_action(
         self,
-        action: Union["Action", str],
-        state: "State",
+        *,
+        action: Union["Action", str] = None,
+        state: "State" = None,
         pre_event: Optional[Callable[[CharmBase], None]] = None,
         post_event: Optional[Callable[[CharmBase], None]] = None,
-    ) -> ActionOutput:
+    ) -> Union[ActionOutput, _ActionManager]:
         """Trigger a charm execution with an Action and a State.
 
         Calling this function will call ``ops.main`` and set up the context according to the
@@ -500,6 +497,7 @@ class Context:
             This argument is deprecated. Please use ``Context.action_manager`` instead.
         """
         self._warn_deprecation_if_pre_or_post_event(pre_event, post_event)
+        action, state = self._merge_ctx_args(action, state)
 
         _action = self._coalesce_action(action)
         with self._run_action(action=_action, state=state) as ops:
@@ -557,3 +555,26 @@ class Context:
             context=self,
         ) as ops:
             yield ops
+
+    def _merge_ctx_args(
+        self,
+        event_or_action: Optional[Union[Event, Action]],
+        state: Optional[State],
+    ) -> Tuple[Optional[Union[Event, Action]], Optional[State]]:
+        ctx_event_or_action, ctx_state = self._context_args
+        arg1 = event_or_action or ctx_event_or_action
+        arg2 = state or ctx_state
+
+        errors = []
+        if not arg1:
+            errors.append(
+                "you should provide a `hook` arg to Context, or pass an event/action to run/run_action",
+            )
+        if not arg2:
+            errors.append(
+                "you should pass a `state` arg to Context, or to run/run_action",
+            )
+
+        if errors:
+            raise RuntimeError(errors)
+        return arg1, arg2

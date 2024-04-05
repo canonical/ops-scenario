@@ -38,9 +38,11 @@ def test_get_secret_no_secret(mycharm):
 
 
 def test_get_secret(mycharm):
-    with Context(mycharm, meta={"name": "local"}).manager(
+    with Context(
+        mycharm,
+        meta={"name": "local"},
+        event_or_action="update_status",
         state=State(secrets=[Secret(id="foo", contents={0: {"a": "b"}}, granted=True)]),
-        event="update_status",
     ) as mgr:
         assert mgr.charm.model.get_secret(id="foo").get_content()["a"] == "b"
 
