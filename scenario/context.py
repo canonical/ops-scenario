@@ -5,7 +5,18 @@ import dataclasses
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 from ops import CharmBase, EventBase
 
@@ -352,7 +363,6 @@ class Context:
 
     def __enter__(self):
         event_or_action, state = self._context_args
-        event_or_action = event_or_action or "update_status"
 
         if isinstance(event_or_action, Action):
             _contextmanager = _ActionManager(self, event_or_action, state or State())
@@ -428,8 +438,9 @@ class Context:
 
     def run(
         self,
-        event: Union["Event", str],
-        state: "State",
+        *,
+        event: Union["Event", str] = None,
+        state: "State" = None,
         pre_event: Optional[Callable[[CharmBase], None]] = None,
         post_event: Optional[Callable[[CharmBase], None]] = None,
     ) -> Union["State", _EventManager]:
@@ -449,6 +460,7 @@ class Context:
             This argument is deprecated. Please use ``Context.manager`` instead.
         """
         self._warn_deprecation_if_pre_or_post_event(pre_event, post_event)
+        event, state = self._merge_ctx_args(event, state)
 
         with self._run_event(event=event, state=state) as ops:
             if pre_event:
@@ -463,8 +475,9 @@ class Context:
 
     def run_action(
         self,
-        action: Union["Action", str],
-        state: "State",
+        *,
+        action: Union["Action", str] = None,
+        state: "State" = None,
         pre_event: Optional[Callable[[CharmBase], None]] = None,
         post_event: Optional[Callable[[CharmBase], None]] = None,
     ) -> Union[ActionOutput, _ActionManager]:
@@ -484,6 +497,7 @@ class Context:
             This argument is deprecated. Please use ``Context.action_manager`` instead.
         """
         self._warn_deprecation_if_pre_or_post_event(pre_event, post_event)
+        action, state = self._merge_ctx_args(action, state)
 
         _action = self._coalesce_action(action)
         with self._run_action(action=_action, state=state) as ops:
@@ -541,3 +555,26 @@ class Context:
             context=self,
         ) as ops:
             yield ops
+
+    def _merge_ctx_args(
+        self,
+        event_or_action: Optional[Union[Event, Action]],
+        state: Optional[State],
+    ) -> Tuple[Optional[Union[Event, Action]], Optional[State]]:
+        ctx_event_or_action, ctx_state = self._context_args
+        arg1 = event_or_action or ctx_event_or_action
+        arg2 = state or ctx_state
+
+        errors = []
+        if not arg1:
+            errors.append(
+                "you should provide a `hook` arg to Context, or pass an event/action to run/run_action",
+            )
+        if not arg2:
+            errors.append(
+                "you should pass a `state` arg to Context, or to run/run_action",
+            )
+
+        if errors:
+            raise RuntimeError(errors)
+        return arg1, arg2
