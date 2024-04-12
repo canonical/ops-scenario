@@ -306,6 +306,7 @@ def check_storages_consistency(
     state_storage = state.storage
     meta_storage = (charm_spec.meta or {}).get("storage", {})
     errors = []
+    warnings = []
 
     if missing := {s.name for s in state.storage}.difference(
         set(meta_storage.keys()),
@@ -324,7 +325,7 @@ def check_storages_consistency(
             )
         seen.append(tag)
 
-    return Results(errors, [])
+    return Results(errors, warnings)
 
 
 def _is_secret_identifier(value: Union[str, int, float, bool]) -> bool:
@@ -344,6 +345,7 @@ def check_config_consistency(
     state_config = state.config
     meta_config = (charm_spec.config or {}).get("options", {})
     errors = []
+    warnings = []
 
     for key, value in state_config.items():
         if key not in meta_config:
@@ -389,7 +391,7 @@ def check_config_consistency(
                 f"config invalid: option {key!r} value {value!r} is not valid.",
             )
 
-    return Results(errors, [])
+    return Results(errors, warnings)
 
 
 def check_secrets_consistency(
@@ -401,8 +403,9 @@ def check_secrets_consistency(
 ) -> Results:
     """Check the consistency of Secret-related stuff."""
     errors = []
+    warnings = []
     if not event._is_secret_event:
-        return Results(errors, [])
+        return Results(errors, warnings)
 
     if not state.secrets:
         errors.append(
@@ -414,7 +417,7 @@ def check_secrets_consistency(
             f"Should be at least 3.0.",
         )
 
-    return Results(errors, [])
+    return Results(errors, warnings)
 
 
 def check_network_consistency(
@@ -425,6 +428,7 @@ def check_network_consistency(
     **_kwargs,  # noqa: U101
 ) -> Results:
     errors = []
+    warnings = []
 
     meta_bindings = set(charm_spec.meta.get("extra-bindings", ()))
     all_relations = charm_spec.get_all_relations()
@@ -446,7 +450,7 @@ def check_network_consistency(
             f"Extra bindings and integration endpoints cannot share the same name: {collisions}.",
         )
 
-    return Results(errors, [])
+    return Results(errors, warnings)
 
 
 def check_relation_consistency(
@@ -457,6 +461,7 @@ def check_relation_consistency(
     **_kwargs,  # noqa: U101
 ) -> Results:
     errors = []
+    warnings = []
 
     peer_relations_meta = charm_spec.meta.get("peers", {}).items()
     all_relations_meta = charm_spec.get_all_relations()
@@ -515,7 +520,7 @@ def check_relation_consistency(
             break
         seen_endpoints.add(endpoint)
 
-    return Results(errors, [])
+    return Results(errors, warnings)
 
 
 def check_containers_consistency(
@@ -532,6 +537,7 @@ def check_containers_consistency(
     meta_containers = list(map(normalize_name, meta.get("containers", {})))
     state_containers = [normalize_name(c.name) for c in state.containers]
     errors = []
+    warnings = []
 
     # it's fine if you have containers in meta that are not in state.containers (yet), but it's
     # not fine if:
@@ -564,4 +570,4 @@ def check_containers_consistency(
     if dupes := [n for n in names if names[n] > 1]:
         errors.append(f"Duplicate container name(s): {dupes}.")
 
-    return Results(errors, [])
+    return Results(errors, warnings)
