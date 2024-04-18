@@ -8,7 +8,7 @@ from ops.framework import Framework
 from ops.pebble import ExecError, ServiceStartup, ServiceStatus
 
 from scenario import Context
-from scenario.state import Container, ExecOutput, Mount, Port, State
+from scenario.state import Container, Exec, Mount, Port, State
 from tests.helpers import trigger
 
 
@@ -194,7 +194,7 @@ def test_exec(charm_cls, cmd, out):
         container = self.unit.get_container("foo")
         proc = container.exec([cmd])
         proc.wait()
-        assert proc.stdout.read() == "hello pebble"
+        assert proc.stdout.read() == out
 
     trigger(
         State(
@@ -202,7 +202,9 @@ def test_exec(charm_cls, cmd, out):
                 Container(
                     name="foo",
                     can_connect=True,
-                    exec_mock={(cmd,): ExecOutput(stdout="hello pebble")},
+                    execs={
+                        "cmd": Exec([cmd], stdout=out),
+                    },
                 )
             ]
         ),
@@ -309,7 +311,9 @@ def test_exec_wait_error(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                exec_mock={("foo",): ExecOutput(stdout="hello pebble", return_code=1)},
+                execs={
+                    "error": Exec(("foo",), stdout="hello pebble", return_code=1),
+                },
             )
         ]
     )
@@ -319,9 +323,9 @@ def test_exec_wait_error(charm_cls):
     ) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
-        with pytest.raises(ExecError):
+        with pytest.raises(ExecError) as exc_info:
             proc.wait()
-        assert proc.stdout.read() == "hello pebble"
+        assert exc_info.value.stdout == "hello pebble"
 
 
 def test_exec_wait_output(charm_cls):
@@ -330,8 +334,8 @@ def test_exec_wait_output(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                exec_mock={
-                    ("foo",): ExecOutput(stdout="hello pebble", stderr="oepsie")
+                execs={
+                    "waiter": Exec(("foo",), stdout="hello pebble", stderr="oepsie")
                 },
             )
         ]
@@ -353,7 +357,9 @@ def test_exec_wait_output_error(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                exec_mock={("foo",): ExecOutput(stdout="hello pebble", return_code=1)},
+                execs={
+                    "error": Exec(("foo",), stdout="hello pebble", return_code=1),
+                },
             )
         ]
     )

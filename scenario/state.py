@@ -20,6 +20,7 @@ from typing import (
     List,
     Literal,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Type,
@@ -588,19 +589,18 @@ def _generate_new_change_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class ExecOutput:
+class Exec:
+    command: Sequence[str]
     return_code: int = 0
     stdout: str = ""
     stderr: str = ""
+    stdin: Optional[str] = None
 
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
 
     def _run(self) -> int:
         return self._change_id
-
-
-_ExecMock = Dict[Tuple[str, ...], ExecOutput]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -644,7 +644,7 @@ class Container(_DCBase):
     # create a tempfile and insert its path in the mock filesystem tree
     mounts: Dict[str, Mount] = dataclasses.field(default_factory=dict)
 
-    exec_mock: _ExecMock = dataclasses.field(default_factory=dict)
+    execs: Dict[str, Exec] = dataclasses.field(default_factory=dict)
 
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
