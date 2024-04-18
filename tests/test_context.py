@@ -49,6 +49,18 @@ def test_run_action():
     assert e.action.id == expected_id
 
 
+def test_cleanup():
+    ctx = Context(MyCharm, meta={"name": "foo"})
+    state = State()
+
+    ctx.run("start", state)
+    assert ctx.emitted_events
+
+    ctx.cleanup()
+    assert not ctx.emitted_events  # and others...
+>>>>>>> b1b76c0 (Remove deprecated functionality.)
+
+
 @pytest.mark.parametrize("app_name", ("foo", "bar", "george"))
 @pytest.mark.parametrize("unit_id", (1, 2, 42))
 def test_app_name(app_name, unit_id):
