@@ -639,17 +639,19 @@ class MyCharm(ops.CharmBase):
     def _on_start(self, _):
         foo = self.unit.get_container('foo')
         proc = foo.exec(['ls', '-ll'])
-        stdout, _ = proc.wait_output()
+        stdout, _ = proc.wait_output("...")
         assert stdout == LS_LL
 
 
 def test_pebble_exec():
     container = scenario.Container(
         name='foo',
-        exec_mock={
-            ('ls', '-ll'):  # this is the command we're mocking
-                scenario.ExecOutput(return_code=0,  # this data structure contains all we need to mock the call.
-                                    stdout=LS_LL)
+        execs={
+            "list-directory": scenario.Exec(  # "list-directory" is an arbitrary tag for the command
+                ('ls', '-ll'):  # this is the command we're mocking
+                return_code=0,
+                stdout=LS_LL
+            ),
         }
     )
     state_in = scenario.State(containers={container})
@@ -661,6 +663,7 @@ def test_pebble_exec():
         ctx.on.pebble_ready(container),
         state_in,
     )
+    assert state_out.containers["foo"].execs["list-directory"].stdin = "..."
 ```
 
 ### Pebble Notices

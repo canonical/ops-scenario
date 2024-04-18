@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
+import dataclasses
 import datetime
 import random
 import shutil
@@ -53,7 +54,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from scenario.context import Context
     from scenario.state import Container as ContainerSpec
     from scenario.state import (
-        ExecOutput,
+        Exec,
         Relation,
         Secret,
         State,
@@ -73,25 +74,53 @@ class ActionMissingFromContextError(Exception):
 
 
 class _MockExecProcess:
-    def __init__(self, command: Tuple[str, ...], change_id: int, out: "ExecOutput"):
+    def __init__(
+        self,
+        command: Tuple[str, ...],
+        change_id: int,
+        out: "Exec",
+        container: "ContainerSpec",
+        exec_id: str,
+    ):
         self._command = command
         self._change_id = change_id
         self._out = out
         self._waited = False
         self.stdout = StringIO(self._out.stdout)
         self.stderr = StringIO(self._out.stderr)
+        self.stdin = StringIO(self._out.stdin)
+        self._container = container
+        self._exec_id = exec_id
 
     def wait(self):
         self._waited = True
+        self._container.execs[self._exec_id] = dataclasses.replace(
+            self._container.execs[self._exec_id],
+            stdin=self.stdin.read(),
+        )
         exit_code = self._out.return_code
         if exit_code != 0:
-            raise ExecError(list(self._command), exit_code, None, None)
+            raise ExecError(
+                list(self._command),
+                exit_code,
+                self.stdout.read(),
+                self.stderr.read(),
+            )
 
     def wait_output(self):
         out = self._out
+        self._container.execs[self._exec_id] = dataclasses.replace(
+            self._container.execs[self._exec_id],
+            stdin=self.stdin.read(),
+        )
         exit_code = out.return_code
         if exit_code != 0:
-            raise ExecError(list(self._command), exit_code, None, None)
+            raise ExecError(
+                list(self._command),
+                exit_code,
+                self.stdout.read(),
+                self.stderr.read(),
+            )
         return out.stdout, out.stderr
 
     def send_signal(self, sig: Union[int, str]):  # noqa: U100
@@ -729,19 +758,36 @@ class _MockPebbleClient(_TestingPebbleClient):
     def _service_status(self) -> Dict[str, pebble.ServiceStatus]:
         return self._container.service_status
 
-    def exec(self, *args, **kwargs):  # noqa: U100 type: ignore
-        cmd = tuple(args[0])
-        out = self._container.exec_mock.get(cmd)
+    # Based on a method of the same name from ops.testing.
+    def _find_exec_handler(self, command) -> Tuple[Optional[str], Optional["Exec"]]:
+        handlers = {
+            tuple(exc.command): (key, exc) for key, exc in self._container.execs.items()
+        }
+        for prefix_len in reversed(range(len(command) + 1)):
+            command_prefix = tuple(command[:prefix_len])
+            if command_prefix in handlers:
+                return handlers[command_prefix]
+        return None, None
+
+    def exec(self, command, **kwargs):  # noqa: U100 type: ignore
+        exec_id, out = self._find_exec_handler(command)
         if not out:
             raise RuntimeError(
-                f"mock for cmd {cmd} not found. Please pass to the Container "
-                f"{self._container.name} a scenario.ExecOutput mock for the "
+                f"mock for cmd {command} not found. Please pass to the Container "
+                f"{self._container.name} a scenario.Exec mock for the "
                 f"command your charm is attempting to run, or patch "
                 f"out whatever leads to the call.",
             )
+        assert exec_id is not None  # For the static checker.
 
         change_id = out._run()
-        return _MockExecProcess(change_id=change_id, command=cmd, out=out)
+        return _MockExecProcess(
+            change_id=change_id,
+            command=command,
+            out=out,
+            container=self._container,
+            exec_id=exec_id,
+        )
 
     def _check_connection(self):
         if not self._container.can_connect:

@@ -23,6 +23,7 @@ from typing import (
     List,
     Literal,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Type,
@@ -643,24 +644,23 @@ def _generate_new_change_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class ExecOutput(_max_posargs(0)):
+class Exec(_max_posargs(0)):
     """Mock data for simulated :meth:`ops.Container.exec` calls."""
-
+    command: Sequence[str]
     return_code: int = 0
     """The return code of the process (0 is success)."""
     stdout: str = ""
     """Any content written to stdout by the process."""
     stderr: str = ""
     """Any content written to stderr by the process."""
+    stdin: Optional[str] = None
+    """Any content written to stdin by the charm."""
 
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
 
     def _run(self) -> int:
         return self._change_id
-
-
-_ExecMock = Dict[Tuple[str, ...], ExecOutput]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -828,20 +828,20 @@ class Container(_max_posargs(1)):
         }
     """
 
-    exec_mock: _ExecMock = dataclasses.field(default_factory=dict)
+    execs: Dict[str, Exec] = dataclasses.field(default_factory=dict)
     """Simulate executing commands in the container.
 
-    Specify each command the charm might run in the container and a :class:`ExecOutput`
+    Specify each command the charm might run in the container and a :class:`Exec`
     containing its return code and any stdout/stderr.
 
     For example::
 
         container = scenario.Container(
             name='foo',
-            exec_mock={
-                ('whoami', ): scenario.ExecOutput(return_code=0, stdout='ubuntu')
+            execs={
+                ('whoami', ): scenario.Exec(return_code=0, stdout='ubuntu')
                 ('dig', '+short', 'canonical.com'):
-                    scenario.ExecOutput(return_code=0, stdout='185.125.190.20\\n185.125.190.21')
+                    scenario.Exec(return_code=0, stdout='185.125.190.20\\n185.125.190.21')
             }
         )
     """
