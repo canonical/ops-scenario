@@ -326,7 +326,7 @@ def test_exec_wait_error(charm_cls):
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         with pytest.raises(ExecError) as exc_info:
-            proc.wait()
+            proc.wait_output()
         assert exc_info.value.stdout == "hello pebble"
 
 

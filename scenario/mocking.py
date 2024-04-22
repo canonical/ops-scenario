@@ -103,8 +103,8 @@ class _MockExecProcess:
             raise ExecError(
                 list(self._command),
                 exit_code,
-                self.stdout.read(),
-                self.stderr.read(),
+                None,
+                None,
             )
 
     def wait_output(self):
