@@ -1117,57 +1117,11 @@ foo_relation = scenario.Relation('foo')
 foo_relation.changed_event.deferred(handler=MyCharm._on_foo_relation_changed)
 ```
 
-## Fine-tuning
-
-The deferred helper Scenario provides will not support out of the box all custom event subclasses, or events emitted by
-charm libraries or objects other than the main charm class.
-
-For general-purpose usage, you will need to instantiate DeferredEvent directly.
-
-```python
-import scenario
-
-my_deferred_event = scenario.DeferredEvent(
-    handle_path='MyCharm/MyCharmLib/on/database_ready[1]',
-    owner='MyCharmLib',  # the object observing the event. Could also be MyCharm.
-    observer='_on_database_ready'
-)
-```
-
 # Emitting custom events
 
-While the main use case of Scenario is to emit Juju events, i.e. the built-in `start`, `install`, `*-relation-changed`,
-etc..., it can be sometimes handy to directly trigger custom events defined on arbitrary Objects in your hierarchy.
-
 Suppose your charm uses a charm library providing an `ingress_provided` event.
-The 'proper' way to emit it is to run the event that causes that custom event to be emitted by the library, whatever
+The proper way to emit it is to run the event that causes that custom event to be emitted by the library, whatever
 that may be, for example a `foo-relation-changed`.
-
-However, that may mean that you have to set up all sorts of State and mocks so that the right preconditions are met and
-the event is emitted at all.
-
-If for whatever reason you don't want to do that and you attempt to run that event directly you will get an error:
-
-```python
-import scenario
-
-scenario.Context(...).run("ingress_provided", scenario.State())  # raises scenario.ops_main_mock.NoObserverError
-```
-
-This happens because the framework, by default, searches for an event source named `ingress_provided` in `charm.on`, but
-since the event is defined on another Object, it will fail to find it.
-
-You can prefix the event name with the path leading to its owner to tell Scenario where to find the event source:
-
-```python
-import scenario
-
-scenario.Context(...).run("my_charm_lib.on.foo", scenario.State())
-```
-
-This will instruct Scenario to emit `my_charm.my_charm_lib.on.foo`.
-
-(always omit the 'root', i.e. the charm framework key, from the path)
 
 # Live charm introspection
 
