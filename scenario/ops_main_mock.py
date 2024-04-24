@@ -20,7 +20,7 @@ from ops.main import logger as ops_logger
 
 if TYPE_CHECKING:  # pragma: no cover
     from scenario.context import Context
-    from scenario.state import Event, State, _CharmSpec
+    from scenario.state import State, _CharmSpec, _Event
 
 # pyright: reportPrivateUsage=false
 
@@ -54,7 +54,7 @@ def _get_owner(root: Any, path: Sequence[str]) -> ops.ObjectEvents:
 def _emit_charm_event(
     charm: "CharmBase",
     event_name: str,
-    event: Optional["Event"] = None,
+    event: Optional["_Event"] = None,
 ):
     """Emits a charm event based on a Juju event name.
 
@@ -71,8 +71,7 @@ def _emit_charm_event(
         ops_logger.debug("Event %s not defined for %s.", event_name, charm)
         raise NoObserverError(
             f"Cannot fire {event_name!r} on {owner}: "
-            f"invalid event (not on charm.on). "
-            f"Use Context.run_custom instead.",
+            f"invalid event (not on charm.on).",
         )
 
     args, kwargs = _get_event_args(charm, event_to_emit)
@@ -83,7 +82,7 @@ def _emit_charm_event(
 def setup_framework(
     charm_dir,
     state: "State",
-    event: "Event",
+    event: "_Event",
     context: "Context",
     charm_spec: "_CharmSpec",
 ):
@@ -154,7 +153,12 @@ def setup_charm(charm_class, framework, dispatcher):
     return charm
 
 
-def setup(state: "State", event: "Event", context: "Context", charm_spec: "_CharmSpec"):
+def setup(
+    state: "State",
+    event: "_Event",
+    context: "Context",
+    charm_spec: "_CharmSpec",
+):
     """Setup dispatcher, framework and charm objects."""
     charm_class = charm_spec.charm_type
     charm_dir = _get_charm_dir()
@@ -173,7 +177,7 @@ class Ops:
     def __init__(
         self,
         state: "State",
-        event: "Event",
+        event: "_Event",
         context: "Context",
         charm_spec: "_CharmSpec",
     ):
