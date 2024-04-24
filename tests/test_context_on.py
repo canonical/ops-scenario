@@ -228,7 +228,7 @@ def test_relation_unit_events_default_unit(event_name, event_kind):
     relation = scenario.Relation("baz", remote_units_data={1: {"x": "y"}})
     state_in = scenario.State(relations=[relation])
     # These look like:
-    #   ctx.run(ctx.on.baz_relation_changed(unit=unit_ordinal), state)
+    #   ctx.run(ctx.on.baz_relation_changed, state)
     # The relation is inferred from the event name and the unit is chosen
     # automatically.
     with ctx.manager(getattr(ctx.on, event_name), state_in) as mgr:
