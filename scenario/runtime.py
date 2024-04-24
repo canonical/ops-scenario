@@ -216,7 +216,9 @@ class Runtime:
             remote_unit_id = event.relation_remote_unit_id
 
             # don't check truthiness because remote_unit_id could be 0
-            if remote_unit_id is None:
+            if remote_unit_id is None and not event.name.endswith(
+                ("_relation_created", "relation_broken"),
+            ):
                 remote_unit_ids = relation._remote_unit_ids  # pyright: ignore
 
                 if len(remote_unit_ids) == 1:
@@ -243,7 +245,12 @@ class Runtime:
                 remote_unit = f"{remote_app_name}/{remote_unit_id}"
                 env["JUJU_REMOTE_UNIT"] = remote_unit
                 if event.name.endswith("_relation_departed"):
-                    env["JUJU_DEPARTING_UNIT"] = remote_unit
+                    if event.relation_departed_unit_id:
+                        env[
+                            "JUJU_DEPARTING_UNIT"
+                        ] = f"{remote_app_name}/{event.relation_departed_unit_id}"
+                    else:
+                        env["JUJU_DEPARTING_UNIT"] = remote_unit
 
         if container := event.container:
             env.update({"JUJU_WORKLOAD_NAME": container.name})
@@ -258,6 +265,9 @@ class Runtime:
                     "JUJU_SECRET_LABEL": secret.label or "",
                 },
             )
+            # Don't check truthiness because revision could be 0.
+            if event.secret_revision is not None:
+                env["JUJU_SECRET_REVISION"] = str(event.secret_revision)
 
         return env
 

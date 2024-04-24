@@ -1210,9 +1210,13 @@ class Event(_DCBase):
     relation: Optional["AnyRelation"] = None
     # and the name of the remote unit this relation event is about
     relation_remote_unit_id: Optional[int] = None
+    # and the name of the unit that is departing if this is -relation-departed.
+    relation_departed_unit_id: Optional[int] = None
 
     # if this is a secret event, the secret it refers to
     secret: Optional[Secret] = None
+    # if this is a secret-removed or secret-expired event, the secret revision it refers to
+    secret_revision: Optional[int] = None
 
     # if this is a workload (container) event, the container it refers to
     container: Optional[Container] = None

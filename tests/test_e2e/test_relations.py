@@ -5,6 +5,8 @@ from ops.charm import (
     CharmBase,
     CharmEvents,
     CollectStatusEvent,
+    RelationBrokenEvent,
+    RelationCreatedEvent,
     RelationDepartedEvent,
     RelationEvent,
 )
@@ -218,7 +220,11 @@ def test_relation_events_no_attrs(mycharm, evt_name, remote_app_name, caplog):
             return
 
         assert event.app  # that's always present
-        assert event.unit
+        # .unit is always None for created and broken.
+        if isinstance(event, (RelationCreatedEvent, RelationBrokenEvent)):
+            assert event.unit is None
+        else:
+            assert event.unit
         assert (evt_name == "departed") is bool(getattr(event, "departing_unit", False))
 
     mycharm._call = callback
@@ -239,9 +245,11 @@ def test_relation_events_no_attrs(mycharm, evt_name, remote_app_name, caplog):
         },
     )
 
-    assert (
-        "remote unit ID unset, and multiple remote unit IDs are present" in caplog.text
-    )
+    if evt_name not in ("created", "broken"):
+        assert (
+            "remote unit ID unset, and multiple remote unit IDs are present"
+            in caplog.text
+        )
 
 
 def test_relation_default_unit_data_regular():
@@ -297,7 +305,8 @@ def test_relation_events_no_remote_units(mycharm, evt_name, caplog):
         },
     )
 
-    assert "remote unit ID unset; no remote unit data present" in caplog.text
+    if evt_name not in ("created", "broken"):
+        assert "remote unit ID unset; no remote unit data present" in caplog.text
 
 
 @pytest.mark.parametrize("data", (set(), {}, [], (), 1, 1.0, None, b""))
