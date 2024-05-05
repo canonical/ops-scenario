@@ -9,6 +9,7 @@ import re
 import warnings
 from collections import namedtuple
 from enum import Enum
+from functools import singledispatch
 from itertools import chain
 from pathlib import Path, PurePosixPath
 from typing import (
@@ -53,6 +54,9 @@ if TYPE_CHECKING:  # pragma: no cover
     UnitID = int
 
 CharmType = TypeVar("CharmType", bound=CharmBase)
+_Remappable = TypeVar(
+    "_Remappable", bound=Union["Container", "Relation", "Secret", "StoredState"]
+)
 
 logger = scenario_logger.getChild("state")
 
@@ -1014,6 +1018,100 @@ class State(_DCBase):
             dataclasses.asdict(self),
         ).patch
         return sort_patch(patch)
+
+    def _remap(self, obj: _Remappable) -> Optional[Tuple[str, _Remappable]]:
+        """Return the attribute in which the object can be found and the object itself."""
+
+        @singledispatch
+        def _filter(x: Any):
+            raise NotImplementedError(type(x))
+
+        @_filter.register
+        def _filter(x: Relation):
+            return x.relation_id
+
+        @_filter.register
+        def _filter(x: Container):
+            return x.name
+
+        @_filter.register
+        def _filter(x: Secret):
+            return x.id
+
+        @singledispatch
+        def _getter(x: Any):
+            raise NotImplementedError(type(x))
+
+        @_getter.register
+        def _getter(x: Relation):
+            return "relations"
+
+        @_getter.register
+        def _getter(x: Container):
+            return "containers"
+
+        @_getter.register
+        def _getter(x: Secret):
+            return "secrets"
+
+        attr = _getter(obj)
+        objects = getattr(self, attr)
+        try:
+            matches = [o for o in objects if _filter(o) == _filter(obj)]
+        except NotImplementedError:
+            raise TypeError(f"cannot remap {type(obj)}")
+        if not matches:
+            return None
+        if len(matches) > 1:
+            raise RuntimeError(
+                f"too many matches for {obj} (filtered by {_filter(obj)})."
+            )
+        return attr, matches[0]
+
+    def remap(self, obj: _Remappable) -> _Remappable:
+        """Get the corresponding object from this State.
+        >>> from scenario import Relation, State, Context
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> state_in = State(leader=True, relations=[rel1, rel2])
+        >>> state_out = Context(...).run("update-status", state=state_in)
+        >>> rel1_out = state_out.remap(rel1)
+        >>> assert rel1.endpoint == "foo"
+        """
+        return self._remap(obj)[1]
+
+    def patch(self, obj_=None, /, **kwargs) -> "State":
+        """Return a copy of this state with ``obj_`` modified by ``kwargs``.
+
+        For example:
+        >>> from scenario import Relation, State
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> s = State(leader=True, relations=[rel1, rel2])
+        >>> s1 = s.patch(rel1, local_app_data = {"foo": "bar"})
+        ... # is equivalent to:
+        >>> s1_ = State(leader=True, relations=[rel1.replace(local_app_data={"foo": "bar"}), rel2])
+        """
+        obj = self.remap(obj_)
+        modified_obj = obj.replace(**kwargs)
+        return self.insert(modified_obj, replace=obj)
+
+    def insert(self, obj: Any) -> State:
+        """Insert ``obj`` in the right place in this State.
+                >>> from scenario import Relation, State
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> s = State(leader=True, relations=[rel1])
+        >>> s1 = s.insert(rel2)
+        ... # is equivalent to:
+        >>> s1_ = State(leader=True, relations=[rel1, rel2])
+        ... # and
+        >>> s1__ = s.insert(rel2.replace(endpoint="bar"))
+        ... # is equivalent to:
+        >>> s1___ = State(leader=True, relations=[rel2])
+        """
+        # if we can remap the object, we know we have to kick something out in order to insert it.
+        attr, replace = self._remap(obj)
+        current = getattr(self, attr)
+        new = [c for c in current if c != replace]
+        return self.replace(attr=new)
 
 
 def _is_valid_charmcraft_25_metadata(meta: Dict[str, Any]):
