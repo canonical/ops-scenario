@@ -804,22 +804,26 @@ Scenario has secrets. Here's how you use them.
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'public'}},
-            id='foo',
-        ),
-    },
+            current={'key': 'public'},
+            latest={'key': 'public', 'cert': 'private'},
+        )
+    ]
 )
 ```
 
-The only mandatory arguments to Secret are its secret ID (which should be unique) and its 'contents': that is, a mapping
-from revision numbers (integers) to a `str:str` dict representing the payload of the revision.
+The only mandatory arguments to Secret is the `latest` contents: that is, a `str:str` mapping
+representing the payload of the revision. If the unit that's handling the event
+is tracking a different revision of the content, then `current` should also be
+provided - if it's not, then Scenario assumes that `current` is the `latest`.
+If there are other revisions of the content, simply don't include them: the
+unit has no way of knowing about these.
 
 There are three cases:
 - the secret is owned by this app but not this unit, in which case this charm can only manage it if we are the leader
 - the secret is owned by this unit, in which case this charm can always manage it (leader or not)
-- (default) the secret is not owned by this app nor unit, which means we can't manage it but only view it
+- (default) the secret is not owned by this app nor unit, which means we can't manage it but only view it (this includes user secrets)
 
-Thus by default, the secret is not owned by **this charm**, but, implicitly, by some unknown 'other charm', and that other charm has granted us view rights.
+Thus by default, the secret is not owned by **this charm**, but, implicitly, by some unknown 'other charm' (or a user), and that other has granted us view rights.
 
 The presence of the secret in `State.secrets` entails that we have access to it, either as owners or as grantees. Therefore, if we're not owners, we must be grantees. Absence of a Secret from the known secrets list means we are not entitled to obtaining it in any way. The charm, indeed, shouldn't even know it exists.
 
@@ -833,28 +837,25 @@ To specify a secret owned by this unit (or app):
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'private'}},
-            id='foo',
+            latest={'key': 'private'},
             owner='unit',  # or 'app'
+            # The secret owner has granted access to the "remote" app over some relation with ID 0:
             remote_grants={0: {"remote"}}
-            # the secret owner has granted access to the "remote" app over some relation with ID 0
-        ),
-    },
+        )
+    }
 )
 ```
 
-To specify a secret owned by some other application and give this unit (or app) access to it:
+To specify a secret owned by some other application, or a user secret, and give this unit (or app) access to it:
 
 ```python
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'public'}},
-            id='foo',
+            latest={'key': 'public'},
             # owner=None, which is the default
-            revision=0,  # the revision that this unit (or app) is currently tracking
-        ),
-    },
+        )
+    }
 )
 ```
 

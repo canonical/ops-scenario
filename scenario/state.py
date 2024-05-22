@@ -5,7 +5,10 @@
 import dataclasses
 import datetime
 import inspect
+import random
 import re
+import string
+import warnings
 from collections import namedtuple
 from enum import Enum
 from itertools import chain
@@ -284,7 +287,7 @@ class Secret(_max_posargs(1)):
     owner: Literal["unit", "app", None] = None
 
     # what revision is currently tracked by this charm. Only meaningful if owner=False
-    revision: int = 0
+    revision: int = 1
 
     # mapping from relation IDs to remote unit/apps to which this secret has been granted.
     # Only applicable if owner
@@ -312,9 +315,8 @@ class Secret(_max_posargs(1)):
         rotate: Optional[SecretRotate] = None,
     ):
         """Update the metadata."""
-        revision = max(self.contents.keys())
         if content:
-            self.contents[revision + 1] = content
+            self.latest = content
 
         # bypass frozen dataclass
         if label:

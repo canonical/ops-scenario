@@ -2,7 +2,6 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 import datetime
-import random
 import shutil
 from io import StringIO
 from pathlib import Path
@@ -45,6 +44,7 @@ from scenario.state import (
     Storage,
     _EntityStatus,
     _port_cls_by_protocol,
+    _generate_secret_id,
     _RawPortProtocolLiteral,
     _RawStatusLiteral,
 )
@@ -212,11 +212,6 @@ class _MockModelBackend(_ModelBackend):
             # instantiation that either an id or a label are set, and raise a TypeError if not.
             raise RuntimeError("need id or label.")
 
-    @staticmethod
-    def _generate_secret_id():
-        id = "".join(map(str, [random.choice(list(range(10))) for _ in range(20)]))
-        return f"secret:{id}"
-
     def _check_app_data_access(self, is_app: bool):
         if not isinstance(is_app, bool):
             raise TypeError("is_app parameter to relation_get must be a boolean")
@@ -368,10 +363,10 @@ class _MockModelBackend(_ModelBackend):
     ) -> str:
         from scenario.state import Secret
 
-        secret_id = self._generate_secret_id()
+        secret_id = _generate_secret_id()
         secret = Secret(
             id=secret_id,
-            contents={0: content},
+            latest=content,
             label=label,
             description=description,
             expire=expire,
@@ -411,7 +406,7 @@ class _MockModelBackend(_ModelBackend):
         secret = self._get_secret(id, label)
         juju_version = self._context.juju_version
         if not (juju_version == "3.1.7" or juju_version >= "3.3.1"):
-            # in this medieval juju chapter,
+            # In this medieval Juju chapter,
             # secret owners always used to track the latest revision.
             # ref: https://bugs.launchpad.net/juju/+bug/2037120
             if secret.owner is not None:
@@ -422,8 +417,9 @@ class _MockModelBackend(_ModelBackend):
             revision = max(secret.contents.keys())
             if refresh:
                 secret._set_revision(revision)
+            return secret.latest
 
-        return secret.contents[revision]
+        return secret.current
 
     def secret_info_get(
         self,
@@ -493,13 +489,37 @@ class _MockModelBackend(_ModelBackend):
             del secret.remote_grants[relation_id]
 
     def secret_remove(self, id: str, *, revision: Optional[int] = None):
+        # If revision that is not the tracked or latest one is removed, then it
+        # doesn't make any difference to the charm, and this is not reflected
+        # in the output state. If a test needs to verify that this remove was
+        # called then it needs to mock the remove call, because this doesn't
+        # change the state *as it is visible to the unit executing the charm*.
+        # If the *tracked* revision, which is not also the latest, is removed,
+        # then the secret is still accessible in the current hook (from the
+        # input state), but afterwards the unit will always get SecretNotFound
+        # when doing secret-get, even when using refresh=True.
+        # TODO: Juju will hopefully change things to make it possible to fix this:
+        # https://bugs.launchpad.net/juju/+bug/2063519
+        # If the *latest* revision is removed, then when using secret-get with
+        # peek SecretNotFound is returned, even if there are older revisions.
+        # secret-info will still show the same revision number. If using refresh
+        # or set, a "state is changing too quickly" error is returned.
+        # TODO: Is it possible to get out of this state?
         secret = self._get_secret(id)
         self._check_can_manage_secret(secret)
 
         if revision:
-            del secret.contents[revision]
+            # This is the latest revision.
+            #            if revision == TODO:
+            #                secret.latest.clear()
+            # This is the currently tracked revision.
+            if revision == secret.revision:
+                secret.current.clear()
+            # else this is some other revision: we don't need to do anything.
         else:
-            secret.contents.clear()
+            if secret.current:
+                secret.current.clear()
+            secret.latest.clear()
 
     def relation_remote_app_name(
         self,
