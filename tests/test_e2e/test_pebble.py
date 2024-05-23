@@ -10,7 +10,7 @@ from ops.pebble import ExecError, ServiceStartup, ServiceStatus
 
 from scenario import Context
 from scenario.state import Container, ExecOutput, Mount, Port, State
-from tests.helpers import trigger
+from tests.helpers import jsonpatch_delta, trigger
 
 
 @pytest.fixture(scope="function")
@@ -157,7 +157,7 @@ def test_fs_pull(charm_cls, make_dirs):
     else:
         # nothing has changed
         out_purged = dataclasses.replace(out, stored_state=state.stored_state)
-        assert not out_purged.jsonpatch_delta(state)
+        assert not jsonpatch_delta(out_purged, state)
 
 
 LS = """

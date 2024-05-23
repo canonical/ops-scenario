@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 from pathlib import Path
 from typing import (
@@ -5,12 +6,14 @@ from typing import (
     Any,
     Callable,
     Dict,
+    List,
     Optional,
-    Sequence,
     Type,
     TypeVar,
     Union,
 )
+
+import jsonpatch
 
 from scenario.context import DEFAULT_JUJU_VERSION, Context
 
