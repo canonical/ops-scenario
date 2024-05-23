@@ -51,14 +51,14 @@ def test_run_action():
     assert a.id == expected_id
 
 
-def test_clear():
+def test_cleanup():
     ctx = Context(MyCharm, meta={"name": "foo"})
     state = State()
 
     ctx.run("start", state)
     assert ctx.emitted_events
 
-    ctx.clear()
+    ctx.cleanup()
     assert not ctx.emitted_events  # and others...
 
 
