@@ -49,21 +49,10 @@ def trigger(
         charm_root=charm_root,
         juju_version=juju_version,
     )
-    return ctx.run(
-        event,
-        state=state,
-        pre_event=pre_event,
-        post_event=post_event,
-    )
-
-
-def jsonpatch_delta(input: "State", output: "State"):
-    patch = jsonpatch.make_patch(
-        dataclasses.asdict(output),
-        dataclasses.asdict(input),
-    ).patch
-    return sort_patch(patch)
-
-
-def sort_patch(patch: List[Dict], key=lambda obj: obj["path"] + obj["op"]):
-    return sorted(patch, key=key)
+    with ctx.manager(event, state=state) as mgr:
+        if pre_event:
+            pre_event(mgr.charm)
+        state_out = mgr.run()
+        if post_event:
+            post_event(mgr.charm)
+    return state_out
