@@ -5,7 +5,7 @@ repos:
     hooks:
       - id: check-ast
       - id: check-builtin-literals
-#      - id: check-docstring-first
+      - id: check-docstring-first
       - id: check-merge-conflict
       - id: check-yaml
       - id: check-toml
