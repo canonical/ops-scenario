@@ -56,11 +56,11 @@ if TYPE_CHECKING:  # pragma: no cover
 
     from scenario import Context
 
-    PathLike = Union[str, Path]
-    AnyRelation = Union["Relation", "PeerRelation", "SubordinateRelation"]
-    AnyJson = Union[str, bool, dict, int, float, list]
-    RawSecretRevisionContents = RawDataBagContents = Dict[str, str]
-    UnitID = int
+PathLike = Union[str, Path]
+AnyRelation = Union["Relation", "PeerRelation", "SubordinateRelation"]
+AnyJson = Union[str, bool, dict, int, float, list]
+RawSecretRevisionContents = RawDataBagContents = Dict[str, str]
+UnitID = int
 
 CharmType = TypeVar("CharmType", bound=CharmBase)
 
@@ -278,14 +278,29 @@ def normalize_name(s: str):
 
 @dataclasses.dataclass(frozen=True)
 class Address(_DCBase):
+    """An address in a Juju network space."""
+
     hostname: str
+    """A host name that maps to the address in :attr:`value`."""
     value: str
+    """The IP address in the space."""
     cidr: str
-    address: str = ""  # legacy
+    """The CIDR of the address in :attr:`value`."""
+
+    @property
+    def address(self):
+        """A deprecated alias for :attr:`value`."""
+        return self.value
+
+    @address.setter
+    def address(self, value):
+        self.value = value
 
 
 @dataclasses.dataclass(frozen=True)
 class BindAddress(_DCBase):
+    """An address bound to a network interface in a Juju space."""
+
     interface_name: str
     addresses: List[Address]
     mac_address: Optional[str] = None
@@ -1183,6 +1198,11 @@ def sort_patch(patch: List[Dict], key=lambda obj: obj["path"] + obj["op"]):
 
 @dataclasses.dataclass(frozen=True)
 class DeferredEvent(_DCBase):
+    """An event that has been deferred to run prior to the next Juju event.
+
+    In most cases, the :func:`deferred` function should be used to create a
+    ``DeferredEvent`` instance."""
+
     handle_path: str
     owner: str
     observer: str
@@ -1265,27 +1285,34 @@ class _EventPath(str):
 
 @dataclasses.dataclass(frozen=True)
 class Event(_DCBase):
+    """A Juju, ops, or custom event that can be run against a charm.
+
+    Typically, for simple events, the string name (e.g. ``install``) can be used,
+    and for more complex events, an ``event`` property will be available on the
+    related object (e.g. ``relation.joined_event``).
+    """
+
     path: str
     args: Tuple[Any, ...] = ()
     kwargs: Dict[str, Any] = dataclasses.field(default_factory=dict)
 
-    # if this is a storage event, the storage it refers to
     storage: Optional["Storage"] = None
-    # if this is a relation event, the relation it refers to
+    """If this is a storage event, the storage it refers to."""
     relation: Optional["AnyRelation"] = None
-    # and the name of the remote unit this relation event is about
+    """If this is a relation event, the relation it refers to."""
     relation_remote_unit_id: Optional[int] = None
+    """If this is a relation event, the name of the remote unit the event is about."""
 
-    # if this is a secret event, the secret it refers to
     secret: Optional[Secret] = None
+    """If this is a secret event, the secret it refers to."""
 
-    # if this is a workload (container) event, the container it refers to
     container: Optional[Container] = None
+    """If this is a workload (container) event, the container it refers to."""
 
-    # if this is an action event, the Action instance
     action: Optional["Action"] = None
+    """If this is an action event, the :class:`Action` it refers to."""
 
-    # todo add other meta for
+    # TODO: add other meta for
     #  - secret events
     #  - pebble?
     #  - action?

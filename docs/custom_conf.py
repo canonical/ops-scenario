@@ -309,4 +309,5 @@ nitpick_ignore = [
     ('py:class', 'AnyJson'),
     ('py:class', '_CharmSpec'),
     ('py:class', 'scenario.state._DCBase'),
+    ('py:class', 'scenario.state._EntityStatus'),
 ]

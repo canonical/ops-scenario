@@ -268,11 +268,11 @@
 
     <span class="kn">from</span> <span class="nn">scenario</span> <span class="kn">import</span> <span class="n">Context</span>
 
-    <span class="n">PathLike</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]</span>
-    <span class="n">AnyRelation</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Relation&quot;</span><span class="p">,</span> <span class="s2">&quot;PeerRelation&quot;</span><span class="p">,</span> <span class="s2">&quot;SubordinateRelation&quot;</span><span class="p">]</span>
-    <span class="n">AnyJson</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span>
-    <span class="n">RawSecretRevisionContents</span> <span class="o">=</span> <span class="n">RawDataBagContents</span> <span class="o">=</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
-    <span class="n">UnitID</span> <span class="o">=</span> <span class="nb">int</span>
+<span class="n">PathLike</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]</span>
+<span class="n">AnyRelation</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Relation&quot;</span><span class="p">,</span> <span class="s2">&quot;PeerRelation&quot;</span><span class="p">,</span> <span class="s2">&quot;SubordinateRelation&quot;</span><span class="p">]</span>
+<span class="n">AnyJson</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bool</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span>
+<span class="n">RawSecretRevisionContents</span> <span class="o">=</span> <span class="n">RawDataBagContents</span> <span class="o">=</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+<span class="n">UnitID</span> <span class="o">=</span> <span class="nb">int</span>
 
 <span class="n">CharmType</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;CharmType&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">CharmBase</span><span class="p">)</span>
 
@@ -490,14 +490,27 @@
 
 <div class="viewcode-block" id="Address"><a class="viewcode-back" href="../../index.html#scenario.state.Address">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Address</span><span class="p">(</span><span class="n">_DCBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;An address in a Juju network space.&quot;&quot;&quot;</span>
     <span class="n">hostname</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A host name that maps to the address in :attr:`value`.&quot;&quot;&quot;</span>
     <span class="n">value</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The IP address in the space.&quot;&quot;&quot;</span>
     <span class="n">cidr</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="n">address</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>  <span class="c1"># legacy</span></div>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The CIDR of the address in :attr:`value`.&quot;&quot;&quot;</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">address</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;A deprecated alias for :attr:`value`.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span>
+
+    <span class="nd">@address</span><span class="o">.</span><span class="n">setter</span>
+    <span class="k">def</span> <span class="nf">address</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="o">=</span> <span class="n">value</span></div>
 
 
 <div class="viewcode-block" id="BindAddress"><a class="viewcode-back" href="../../index.html#scenario.state.BindAddress">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">BindAddress</span><span class="p">(</span><span class="n">_DCBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;An address bound to a network interface in a Juju space.&quot;&quot;&quot;</span>
     <span class="n">interface_name</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">addresses</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Address</span><span class="p">]</span>
     <span class="n">mac_address</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
@@ -679,6 +692,7 @@
 <div class="viewcode-block" id="Relation"><a class="viewcode-back" href="../../index.html#scenario.state.Relation">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Relation</span><span class="p">(</span><span class="n">RelationBase</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;An integration between the charm and another application.&quot;&quot;&quot;</span>
+
     <span class="n">remote_app_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;remote&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The name of the remote application, as in the charm&#39;s metadata.&quot;&quot;&quot;</span>
 
@@ -757,6 +771,7 @@
 <div class="viewcode-block" id="PeerRelation"><a class="viewcode-back" href="../../index.html#scenario.state.PeerRelation">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">PeerRelation</span><span class="p">(</span><span class="n">RelationBase</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A relation to share data between units of the charm.&quot;&quot;&quot;</span>
+
     <span class="n">peers_data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="s2">&quot;UnitID&quot;</span><span class="p">,</span> <span class="s2">&quot;RawDataBagContents&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
         <span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="p">{</span><span class="mi">0</span><span class="p">:</span> <span class="n">DEFAULT_JUJU_DATABAG</span><span class="o">.</span><span class="n">copy</span><span class="p">()},</span>
     <span class="p">)</span>
@@ -791,6 +806,7 @@
 <div class="viewcode-block" id="Model"><a class="viewcode-back" href="../../index.html#scenario.state.Model">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Model</span><span class="p">(</span><span class="n">_DCBase</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The Juju model in which the charm is deployed.&quot;&quot;&quot;</span>
+
     <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">_random_model_name</span><span class="p">)</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The name of the model.&quot;&quot;&quot;</span>
     <span class="n">uuid</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid4</span><span class="p">()))</span>
@@ -822,6 +838,7 @@
 <div class="viewcode-block" id="ExecOutput"><a class="viewcode-back" href="../../index.html#scenario.state.ExecOutput">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">ExecOutput</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Mock data for simulated :meth:`ops.Container.exec` calls.&quot;&quot;&quot;</span>
+
     <span class="n">return_code</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The return code of the process (0 is success).&quot;&quot;&quot;</span>
     <span class="n">stdout</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
@@ -842,6 +859,7 @@
 <div class="viewcode-block" id="Mount"><a class="viewcode-back" href="../../index.html#scenario.state.Mount">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Mount</span><span class="p">(</span><span class="n">_DCBase</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Maps local files to a :class:`Container` filesystem.&quot;&quot;&quot;</span>
+
     <span class="n">location</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">PurePosixPath</span><span class="p">]</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The location inside of the container.&quot;&quot;&quot;</span>
     <span class="n">src</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Path</span><span class="p">]</span>
@@ -851,6 +869,7 @@
 <div class="viewcode-block" id="Container"><a class="viewcode-back" href="../../index.html#scenario.state.Container">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Container</span><span class="p">(</span><span class="n">_DCBase</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A Kubernetes container where a charm&#39;s workload runs.&quot;&quot;&quot;</span>
+
     <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Name of the container, as found in the charm metadata.&quot;&quot;&quot;</span>
 
@@ -878,15 +897,15 @@
     <span class="c1"># create a tempfile and insert its path in the mock filesystem tree</span>
     <span class="n">mounts</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Mount</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Provides access to the contents of the simulated container filesystem.</span>
-<span class="sd">    </span>
+
 <span class="sd">    For example, suppose you want to express that your container has:</span>
 
 <span class="sd">    * ``/home/foo/bar.py``</span>
 <span class="sd">    * ``/bin/bash``</span>
 <span class="sd">    * ``/bin/baz``</span>
-<span class="sd">    </span>
+
 <span class="sd">    this becomes::</span>
-<span class="sd">    </span>
+
 <span class="sd">        mounts = {</span>
 <span class="sd">            &#39;foo&#39;: scenario.Mount(&#39;/home/foo&#39;,  Path(&#39;/path/to/local/dir/containing/bar/py/&#39;)),</span>
 <span class="sd">            &#39;bin&#39;: Mount(&#39;/bin/&#39;, Path(&#39;/path/to/local/dir/containing/bash/and/baz/&#39;)),</span>
@@ -895,10 +914,10 @@
 
     <span class="n">exec_mock</span><span class="p">:</span> <span class="n">_ExecMock</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Simulate executing commands in the container.</span>
-<span class="sd">    </span>
+
 <span class="sd">    Specify each command the charm might run in the container and a :class:`ExecOutput`</span>
 <span class="sd">    containing its return code and any stdout/stderr.</span>
-<span class="sd">    </span>
+
 <span class="sd">    For example::</span>
 
 <span class="sd">        container = scenario.Container(</span>
@@ -966,7 +985,7 @@
 
 <div class="viewcode-block" id="Container.get_filesystem"><a class="viewcode-back" href="../../index.html#scenario.state.Container.get_filesystem">[docs]</a>    <span class="k">def</span> <span class="nf">get_filesystem</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="s2">&quot;Context&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Simulated Pebble filesystem in this context.</span>
-<span class="sd">        </span>
+
 <span class="sd">        Returns:</span>
 <span class="sd">            A temporary filesystem containing any files or directories the</span>
 <span class="sd">            charm pushed to the container.</span>
@@ -1389,6 +1408,10 @@
 
 <div class="viewcode-block" id="DeferredEvent"><a class="viewcode-back" href="../../index.html#scenario.state.DeferredEvent">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">DeferredEvent</span><span class="p">(</span><span class="n">_DCBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;An event that has been deferred to run prior to the next Juju event.</span>
+<span class="sd">    </span>
+<span class="sd">    In most cases, the :func:`deferred` function should be used to create a</span>
+<span class="sd">    ``DeferredEvent`` instance.&quot;&quot;&quot;</span>
     <span class="n">handle_path</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">owner</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">observer</span><span class="p">:</span> <span class="nb">str</span>
@@ -1471,27 +1494,33 @@
 
 <div class="viewcode-block" id="Event"><a class="viewcode-back" href="../../index.html#scenario.state.Event">[docs]</a><span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">class</span> <span class="nc">Event</span><span class="p">(</span><span class="n">_DCBase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A Juju, ops, or custom event that can be run against a charm.</span>
+<span class="sd">    </span>
+<span class="sd">    Typically, for simple events, the string name (e.g. ``install``) can be used,</span>
+<span class="sd">    and for more complex events, an ``event`` property will be available on the</span>
+<span class="sd">    related object (e.g. ``relation.joined_event``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">path</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">args</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
     <span class="n">kwargs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
 
-    <span class="c1"># if this is a storage event, the storage it refers to</span>
     <span class="n">storage</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;Storage&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="c1"># if this is a relation event, the relation it refers to</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If this is a storage event, the storage it refers to.&quot;&quot;&quot;</span>
     <span class="n">relation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;AnyRelation&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="c1"># and the name of the remote unit this relation event is about</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If this is a relation event, the relation it refers to.&quot;&quot;&quot;</span>
     <span class="n">relation_remote_unit_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If this is a relation event, the name of the remote unit the event is about.&quot;&quot;&quot;</span>
 
-    <span class="c1"># if this is a secret event, the secret it refers to</span>
     <span class="n">secret</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Secret</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If this is a secret event, the secret it refers to.&quot;&quot;&quot;</span>
 
-    <span class="c1"># if this is a workload (container) event, the container it refers to</span>
     <span class="n">container</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Container</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If this is a workload (container) event, the container it refers to.&quot;&quot;&quot;</span>
 
-    <span class="c1"># if this is an action event, the Action instance</span>
     <span class="n">action</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;Action&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If this is an action event, the :class:`Action` it refers to.&quot;&quot;&quot;</span>
 
-    <span class="c1"># todo add other meta for</span>
+    <span class="c1"># TODO: add other meta for</span>
     <span class="c1">#  - secret events</span>
     <span class="c1">#  - pebble?</span>
     <span class="c1">#  - action?</span>
@@ -1718,6 +1747,7 @@
 <span class="sd">            ctx = scenario.Context(MyCharm)</span>
 <span class="sd">            out: scenario.ActionOutput = ctx.run_action(action, scenario.State())</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Juju action name, as found in the charm metadata.&quot;&quot;&quot;</span>
 
@@ -1767,7 +1797,7 @@
     </div>
 
     <div class="last-updated">
-      Last updated on Apr 09, 2024</div>
+      Last updated on May 24, 2024</div>
   </div>
   <div class="right-details">
 
