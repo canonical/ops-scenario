@@ -485,10 +485,11 @@ assert rel.relation_id == next_id
 This can be handy when using `replace` to create new relations, to avoid relation ID conflicts:
 
 ```python
+import dataclasses
 import scenario.state
 
 rel = scenario.Relation('foo')
-rel2 = rel.replace(local_app_data={"foo": "bar"}, relation_id=scenario.state.next_relation_id())
+rel2 = dataclasses.replace(rel, local_app_data={"foo": "bar"}, relation_id=scenario.state.next_relation_id())
 assert rel2.relation_id == rel.relation_id + 1 
 ``` 
 
@@ -1283,14 +1284,15 @@ state that you obtain in return is a different instance, and all parts of it hav
 This ensures that you can do delta-based comparison of states without worrying about them being mutated by Scenario.
 
 If you want to modify any of these data structures, you will need to either reinstantiate it from scratch, or use
-the `replace` api.
+the dataclasses `replace` api.
 
 ```python
+import dataclasses
 import scenario
 
 relation = scenario.Relation('foo', remote_app_data={"1": "2"})
 # make a copy of relation, but with remote_app_data set to {"3", "4"} 
-relation2 = relation.replace(remote_app_data={"3", "4"})
+relation2 = dataclasses.replace(relation, remote_app_data={"3", "4"})
 ```
 
 # Consistency checks
