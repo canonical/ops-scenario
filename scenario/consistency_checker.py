@@ -595,6 +595,6 @@ def check_storedstate_consistency(
             marshal.dumps(ss.content)
         except ValueError:
             errors.append(
-                f"{ss!r} must contain only simple types.",
+                f"The StoredState object {ss.owner_path}.{ss.name} should contain only simple types.",
             )
     return Results(errors, [])
