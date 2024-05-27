@@ -1020,7 +1020,7 @@ class State(_DCBase):
         ).patch
         return sort_patch(patch)
 
-    def _remap(self, obj: _Remappable) -> Optional[Tuple[str, _Remappable]]:
+    def _remap(self, obj: _Remappable) -> Tuple[str, Optional[_Remappable]]:
         """Return the attribute in which the object can be found and the object itself."""
 
         @singledispatch
@@ -1061,8 +1061,10 @@ class State(_DCBase):
             matches = [o for o in objects if _filter(o) == _filter(obj)]
         except NotImplementedError:
             raise TypeError(f"cannot remap {type(obj)}")
+
         if not matches:
-            return None
+            return attr, None
+
         if len(matches) > 1:
             raise RuntimeError(
                 f"too many matches for {obj} (filtered by {_filter(obj)}).",
@@ -1097,7 +1099,7 @@ class State(_DCBase):
 
     def insert(self, obj: Any) -> "State":
         """Insert ``obj`` in the right place in this State.
-                >>> from scenario import Relation, State
+        >>> from scenario import Relation, State
         >>> rel1, rel2 = Relation("foo"), Relation("bar")
         >>> s = State(leader=True, relations=[rel1])
         >>> s1 = s.insert(rel2)
@@ -1112,6 +1114,20 @@ class State(_DCBase):
         attr, replace = self._remap(obj)
         current = getattr(self, attr)
         new = [c for c in current if c != replace] + [obj]
+        return self.replace(**{attr: new})
+
+    def without(self, obj: Any) -> "State":
+        """Remove ``obj`` from this State.
+        >>> from scenario import Relation, State
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> s = State(leader=True, relations=[rel1, rel2])
+        >>> s1 = s.without(rel2)
+        ... # is equivalent to:
+        >>> s1_ = State(leader=True, relations=[rel1])
+        """
+        attr, replace = self._remap(obj)
+        current = getattr(self, attr)
+        new = [c for c in current if c != replace]
         return self.replace(**{attr: new})
 
 

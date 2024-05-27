@@ -9,6 +9,14 @@ def test_patch():
     assert patched.relations[0].local_app_data == {"baz": "qux"}
 
 
+def test_remap():
+    relation = scenario.Relation("foo", local_app_data={"foo": "bar"})
+    state = scenario.State(relations=[relation])
+
+    patched = state.patch(relation, local_app_data={"baz": "qux"})
+    assert patched.relations[0].local_app_data == {"baz": "qux"}
+
+
 def test_insert():
     relation = scenario.Relation("foo", local_app_data={"foo": "bar"})
     relation2 = scenario.Relation("foo", local_app_data={"buz": "fuz"})
@@ -17,6 +25,14 @@ def test_insert():
 
     assert relation in state.relations
     assert relation2 in state.relations
+
+
+def test_without():
+    relation = scenario.Relation("foo", local_app_data={"foo": "bar"})
+    relation2 = scenario.Relation("foo", local_app_data={"buz": "fuz"})
+
+    state = scenario.State(relations=[relation, relation2]).without(relation)
+    assert state.relations == [relation2]
 
 
 def test_insert_replace():
