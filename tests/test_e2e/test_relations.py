@@ -401,3 +401,15 @@ def test_broken_relation_not_in_model_relations(mycharm):
 
         assert charm.model.get_relation("foo") is None
         assert charm.model.relations["foo"] == []
+
+
+def test_broken_relation_not_active(mycharm):
+    rel = Relation("foo")
+
+    with Context(
+        mycharm, meta={"name": "local", "requires": {"foo": {"interface": "foo"}}}
+    ).manager(rel.broken_event, state=State(relations=[rel])) as mgr:
+        charm = mgr.charm
+
+        rel = charm.model.get_relation("foo", relation_id=rel.relation_id)
+        assert not rel.active

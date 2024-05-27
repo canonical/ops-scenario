@@ -55,7 +55,8 @@ if TYPE_CHECKING:  # pragma: no cover
 
 CharmType = TypeVar("CharmType", bound=CharmBase)
 _Remappable = TypeVar(
-    "_Remappable", bound=Union["Container", "Relation", "Secret", "StoredState"]
+    "_Remappable",
+    bound=Union["Container", "Relation", "Secret", "StoredState"],
 )
 
 logger = scenario_logger.getChild("state")
@@ -1027,15 +1028,15 @@ class State(_DCBase):
             raise NotImplementedError(type(x))
 
         @_filter.register
-        def _filter(x: Relation):
+        def _(x: Relation):
             return x.relation_id
 
         @_filter.register
-        def _filter(x: Container):
+        def _(x: Container):
             return x.name
 
         @_filter.register
-        def _filter(x: Secret):
+        def _(x: Secret):
             return x.id
 
         @singledispatch
@@ -1043,15 +1044,15 @@ class State(_DCBase):
             raise NotImplementedError(type(x))
 
         @_getter.register
-        def _getter(x: Relation):
+        def _(x: Relation):
             return "relations"
 
         @_getter.register
-        def _getter(x: Container):
+        def _(x: Container):
             return "containers"
 
         @_getter.register
-        def _getter(x: Secret):
+        def _(x: Secret):
             return "secrets"
 
         attr = _getter(obj)
@@ -1064,7 +1065,7 @@ class State(_DCBase):
             return None
         if len(matches) > 1:
             raise RuntimeError(
-                f"too many matches for {obj} (filtered by {_filter(obj)})."
+                f"too many matches for {obj} (filtered by {_filter(obj)}).",
             )
         return attr, matches[0]
 
@@ -1092,9 +1093,9 @@ class State(_DCBase):
         """
         obj = self.remap(obj_)
         modified_obj = obj.replace(**kwargs)
-        return self.insert(modified_obj, replace=obj)
+        return self.insert(modified_obj)
 
-    def insert(self, obj: Any) -> State:
+    def insert(self, obj: Any) -> "State":
         """Insert ``obj`` in the right place in this State.
                 >>> from scenario import Relation, State
         >>> rel1, rel2 = Relation("foo"), Relation("bar")
@@ -1110,8 +1111,8 @@ class State(_DCBase):
         # if we can remap the object, we know we have to kick something out in order to insert it.
         attr, replace = self._remap(obj)
         current = getattr(self, attr)
-        new = [c for c in current if c != replace]
-        return self.replace(attr=new)
+        new = [c for c in current if c != replace] + [obj]
+        return self.replace(**{attr: new})
 
 
 def _is_valid_charmcraft_25_metadata(meta: Dict[str, Any]):
