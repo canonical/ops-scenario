@@ -761,7 +761,7 @@ class _MockPebbleClient(_TestingPebbleClient):
     # Based on a method of the same name from ops.testing.
     def _find_exec_handler(self, command) -> Tuple[Optional[str], Optional["Exec"]]:
         handlers = {
-            tuple(exc.command): (key, exc) for key, exc in self._container.execs.items()
+            tuple(exec.command): (exec_id, exec) for exec_id, exec in self._container.execs.items()
         }
         for prefix_len in reversed(range(len(command) + 1)):
             command_prefix = tuple(command[:prefix_len])
