@@ -1,4 +1,4 @@
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Type
 
 import pytest
@@ -6,8 +6,8 @@ from ops.charm import CharmBase, CharmEvents, CollectStatusEvent
 from ops.framework import EventBase, Framework
 from ops.model import ActiveStatus, UnknownStatus, WaitingStatus
 
-from scenario.state import DEFAULT_JUJU_DATABAG, Container, Relation, State, sort_patch
-from tests.helpers import trigger
+from scenario.state import DEFAULT_JUJU_DATABAG, Container, Relation, State
+from tests.helpers import jsonpatch_delta, sort_patch, trigger
 
 CUSTOM_EVT_SUFFIXES = {
     "relation_created",
@@ -56,8 +56,8 @@ def state():
 
 def test_bare_event(state, mycharm):
     out = trigger(state, "start", mycharm, meta={"name": "foo"})
-    out_purged = out.replace(stored_state=state.stored_state)
-    assert state.jsonpatch_delta(out_purged) == []
+    out_purged = replace(out, stored_state=state.stored_state)
+    assert jsonpatch_delta(state, out_purged) == []
 
 
 def test_leader_get(state, mycharm):
@@ -95,8 +95,8 @@ def test_status_setting(state, mycharm):
     assert out.workload_version == ""
 
     # ignore stored state in the delta
-    out_purged = out.replace(stored_state=state.stored_state)
-    assert out_purged.jsonpatch_delta(state) == sort_patch(
+    out_purged = replace(out, stored_state=state.stored_state)
+    assert jsonpatch_delta(out_purged, state) == sort_patch(
         [
             {"op": "replace", "path": "/app_status/message", "value": "foo barz"},
             {"op": "replace", "path": "/app_status/name", "value": "waiting"},
@@ -176,7 +176,6 @@ def test_relation_set(mycharm):
 
         # this will NOT raise an exception because we're not in an event context!
         # we're right before the event context is entered in fact.
-        # todo: how do we warn against the user abusing pre/post_event to mess with an unguarded state?
         with pytest.raises(Exception):
             rel.data[rel.app]["a"] = "b"
         with pytest.raises(Exception):
@@ -190,7 +189,6 @@ def test_relation_set(mycharm):
 
         # this would NOT raise an exception because we're not in an event context!
         # we're right before the event context is entered in fact.
-        # todo: how do we warn against the user abusing pre/post_event to mess with an unguarded state?
         # with pytest.raises(Exception):
         #     rel.data[rel.app]["a"] = "b"
         # with pytest.raises(Exception):
@@ -223,7 +221,8 @@ def test_relation_set(mycharm):
     assert mycharm.called
 
     assert asdict(out.relations[0]) == asdict(
-        relation.replace(
+        replace(
+            relation,
             local_app_data={"a": "b"},
             local_unit_data={"c": "d", **DEFAULT_JUJU_DATABAG},
         )
