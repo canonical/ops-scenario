@@ -108,7 +108,7 @@ def check_resource_consistency(
     warnings = []
 
     resources_from_meta = set(charm_spec.meta.get("resources", {}))
-    resources_from_state = set(state.resources)
+    resources_from_state = {resource.name for resource in state.resources}
     if not resources_from_meta.issuperset(resources_from_state):
         errors.append(
             f"any and all resources passed to State.resources need to have been defined in "
@@ -330,11 +330,11 @@ def check_storages_consistency(
     **_kwargs,  # noqa: U101
 ) -> Results:
     """Check the consistency of the state.storages with the charm_spec.metadata (metadata.yaml)."""
-    state_storage = state.storage
+    state_storage = state.storages
     meta_storage = (charm_spec.meta or {}).get("storage", {})
     errors = []
 
-    if missing := {s.name for s in state.storage}.difference(
+    if missing := {s.name for s in state_storage}.difference(
         set(meta_storage.keys()),
     ):
         errors.append(
@@ -347,7 +347,7 @@ def check_storages_consistency(
         if tag in seen:
             errors.append(
                 f"duplicate storage in State: storage {s.name} with index {s.index} "
-                f"occurs multiple times in State.storage.",
+                f"occurs multiple times in State.storages.",
             )
         seen.append(tag)
 
@@ -628,12 +628,12 @@ def check_storedstate_consistency(
     state: "State",
     **_kwargs,  # noqa: U101
 ) -> Results:
-    """Check the internal consistency of `state.storedstate`."""
+    """Check the internal consistency of `state.stored_states`."""
     errors = []
 
     # Attribute names must be unique on each object.
     names = defaultdict(list)
-    for ss in state.stored_state:
+    for ss in state.stored_states:
         names[ss.owner_path].append(ss.name)
     for owner, owner_names in names.items():
         if len(owner_names) != len(set(owner_names)):
@@ -642,7 +642,7 @@ def check_storedstate_consistency(
             )
 
     # The content must be marshallable.
-    for ss in state.stored_state:
+    for ss in state.stored_states:
         # We don't need the marshalled state, just to know that it can be.
         # This is the same "only simple types" check that ops does.
         try:

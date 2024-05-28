@@ -15,6 +15,7 @@ from typing import (
     Callable,
     Dict,
     Final,
+    FrozenSet,
     Generic,
     List,
     Literal,
@@ -1008,6 +1009,14 @@ class Storage(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
+class Resource(_max_posargs(0)):
+    """Represents a resource made available to the charm."""
+
+    name: str
+    path: "PathLike"
+
+
+@dataclasses.dataclass(frozen=True)
 class State(_max_posargs(0)):
     """Represents the juju-owned portion of a unit's state.
 
@@ -1020,7 +1029,7 @@ class State(_max_posargs(0)):
         default_factory=dict,
     )
     """The present configuration of this charm."""
-    relations: List["AnyRelation"] = dataclasses.field(default_factory=list)
+    relations: FrozenSet["AnyRelation"] = dataclasses.field(default_factory=frozenset)
     """All relations that currently exist for this charm."""
     networks: Dict[str, Network] = dataclasses.field(default_factory=dict)
     """Manual overrides for any relation and extra bindings currently provisioned for this charm.
@@ -1030,36 +1039,38 @@ class State(_max_posargs(0)):
     support it, but use at your own risk.] If a metadata-defined extra-binding is left empty,
     it will be defaulted.
     """
-    containers: List[Container] = dataclasses.field(default_factory=list)
+    containers: FrozenSet[Container] = dataclasses.field(default_factory=frozenset)
     """All containers (whether they can connect or not) that this charm is aware of."""
-    storage: List[Storage] = dataclasses.field(default_factory=list)
+    storages: FrozenSet[Storage] = dataclasses.field(default_factory=frozenset)
     """All ATTACHED storage instances for this charm.
     If a storage is not attached, omit it from this listing."""
 
     # we don't use sets to make json serialization easier
-    opened_ports: List[_Port] = dataclasses.field(default_factory=list)
+    opened_ports: FrozenSet[_Port] = dataclasses.field(default_factory=frozenset)
     """Ports opened by juju on this charm."""
     leader: bool = False
     """Whether this charm has leadership."""
     model: Model = Model()
     """The model this charm lives in."""
-    secrets: List[Secret] = dataclasses.field(default_factory=list)
+    secrets: FrozenSet[Secret] = dataclasses.field(default_factory=frozenset)
     """The secrets this charm has access to (as an owner, or as a grantee).
     The presence of a secret in this list entails that the charm can read it.
     Whether it can manage it or not depends on the individual secret's `owner` flag."""
-    resources: Dict[str, "PathLike"] = dataclasses.field(default_factory=dict)
-    """Mapping from resource name to path at which the resource can be found."""
+    resources: FrozenSet[Resource] = dataclasses.field(default_factory=frozenset)
+    """All resources that this charm can access."""
     planned_units: int = 1
     """Number of non-dying planned units that are expected to be running this application.
     Use with caution."""
 
-    # represents the OF's event queue. These events will be emitted before the event being
+    # Represents the OF's event queue. These events will be emitted before the event being
     # dispatched, and represent the events that had been deferred during the previous run.
     # If the charm defers any events during "this execution", they will be appended
     # to this list.
     deferred: List["DeferredEvent"] = dataclasses.field(default_factory=list)
     """Events that have been deferred on this charm by some previous execution."""
-    stored_state: List["StoredState"] = dataclasses.field(default_factory=list)
+    stored_states: FrozenSet["StoredState"] = dataclasses.field(
+        default_factory=frozenset,
+    )
     """Contents of a charm's stored state."""
 
     # the current statuses. Will be cast to _EntitiyStatus in __post_init__
@@ -1079,6 +1090,23 @@ class State(_max_posargs(0)):
                 object.__setattr__(self, name, _status_to_entitystatus(val))
             else:
                 raise TypeError(f"Invalid status.{name}: {val!r}")
+        # It's convenient to pass a set, but we really want the attributes to be
+        # frozen sets to increase the immutability of State objects.
+        for name in [
+            "relations",
+            "containers",
+            "storages",
+            "opened_ports",
+            "secrets",
+            "resources",
+            "stored_states",
+        ]:
+            val = getattr(self, name)
+            # We check for "not frozenset" rather than "is set" so that you can
+            # actually pass a tuple or list or really any iterable of hashable
+            # objects, and it will end up as a frozenset.
+            if not isinstance(val, frozenset):
+                object.__setattr__(self, name, frozenset(val))
 
     def _update_workload_version(self, new_workload_version: str):
         """Update the current app version and record the previous one."""
@@ -1129,6 +1157,44 @@ class State(_max_posargs(0)):
         if not containers:
             raise ValueError(f"container: {container_name} not found in the State")
         return containers[0]
+
+    def get_secret(self, *, id: str, label: str) -> Secret:
+        """Get secret from this State, based on the secret's id or label."""
+        for secret in self.secrets:
+            if secret.id == id or secret.label == label:
+                return secret
+        if id:
+            message = f"secret: id={id} not found in the State"
+        elif label:
+            message = f"secret: label={label} not found in the State"
+        else:
+            message = "An id or label must be provided."
+        raise ValueError(message)
+
+    def get_stored_state(
+        self,
+        name: str,
+        owner_path: Optional[str] = None,
+    ) -> StoredState:
+        """Get stored state from this State, based on the stored state's name and owner_path."""
+        for stored_state in self.stored_states:
+            if stored_state.name == name and stored_state.owner_path == owner_path:
+                return stored_state
+        raise ValueError(f"stored state: {name} not found in the State")
+
+    def get_storage(self, name: str, index: int = 0) -> Storage:
+        """Get storage from this State, based on the storage's name and index."""
+        for storage in self.storages:
+            if storage.name == name and storage.index == index:
+                return storage
+        raise ValueError(f"storage: name={name}, index={index} not found in the State")
+
+    def get_relation(self, id: int) -> "AnyRelation":
+        """Get relation from this State, based on the relation's id."""
+        for relation in self.relations:
+            if relation.relation_id == id:
+                return relation
+        raise ValueError(f"relation: id={id} not found in the State")
 
     def get_relations(self, endpoint: str) -> Tuple["AnyRelation", ...]:
         """Get all relations on this endpoint from the current state."""
