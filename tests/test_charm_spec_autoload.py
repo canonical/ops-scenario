@@ -143,7 +143,7 @@ def test_relations_ok(tmp_path, legacy):
         },
     ) as charm:
         # this would fail if there were no 'cuddles' relation defined in meta
-        Context(charm).run("start", State(relations=[Relation("cuddles")]))
+        Context(charm).run("start", State(relations={Relation("cuddles")}))
 
 
 @pytest.mark.parametrize("legacy", (True, False))
