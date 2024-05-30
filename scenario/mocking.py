@@ -540,7 +540,7 @@ class _MockModelBackend(_ModelBackend):
     def storage_add(self, name: str, count: int = 1):
         if not isinstance(count, int) or isinstance(count, bool):
             raise TypeError(
-                f"storage count must be integer, got: {count} ({type(count)}",
+                f"storage count must be integer, got: {count} ({type(count)})",
             )
 
         if "/" in name:
