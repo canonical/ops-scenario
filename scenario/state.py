@@ -290,6 +290,29 @@ class Secret:
     expire: Optional[datetime.datetime] = None
     rotate: Optional[SecretRotate] = None
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __eq__(self, value: object) -> bool:
+        if value is self:
+            return True
+        if not isinstance(value, Secret):
+            return False
+        for attr in (
+            "id",
+            "owner",
+            "revision",
+            "label",
+            "description",
+            "expire",
+            "rotate",
+            "remote_grants",
+            "contents",
+        ):
+            if getattr(self, attr) != getattr(value, attr):
+                return False
+        return True
+
     def _set_revision(self, revision: int):
         """Set a new tracked revision."""
         # bypass frozen dataclass
@@ -453,6 +476,23 @@ class _RelationBase(_max_posargs(2)):
         for databag in self._databags:
             self._validate_databag(databag)
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __eq__(self, value: object) -> bool:
+        if value is self:
+            return True
+        if not isinstance(value, _RelationBase):
+            return False
+        if self.endpoint != value.endpoint or self.interface != value.interface:
+            return False
+        if (
+            self.local_app_data != value.local_app_data
+            or self.local_unit_data != value.local_unit_data
+        ):
+            return False
+        return True
+
     def _validate_databag(self, databag: dict):
         if not isinstance(databag, dict):
             raise StateValidationError(
@@ -485,6 +525,30 @@ class Relation(_RelationBase):
     remote_units_data: Dict["UnitID", "RawDataBagContents"] = dataclasses.field(
         default_factory=lambda: {0: DEFAULT_JUJU_DATABAG.copy()},  # dedup
     )
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __eq__(self, value: object) -> bool:
+        if value is self:
+            return True
+        if not isinstance(value, Relation):
+            return False
+        if (
+            self.endpoint != value.endpoint
+            or self.interface != value.interface
+            or self.limit != value.limit
+            or self.remote_app_name != value.remote_app_name
+        ):
+            return False
+        if (
+            self.local_app_data != value.local_app_data
+            or self.local_unit_data != value.local_unit_data
+            or self.remote_app_data != value.remote_app_data
+            or self.remote_units_data != value.remote_units_data
+        ):
+            return False
+        return True
 
     @property
     def _remote_app_name(self) -> str:
@@ -520,6 +584,30 @@ class SubordinateRelation(_RelationBase):
     remote_app_name: str = "remote"
     remote_unit_id: int = 0
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __eq__(self, value: object) -> bool:
+        if value is self:
+            return True
+        if not isinstance(value, SubordinateRelation):
+            return False
+        if (
+            self.endpoint != value.endpoint
+            or self.interface != value.interface
+            or self.remote_app_name != value.remote_app_name
+            or self.remote_unit_id != value.remote_unit_id
+        ):
+            return False
+        if (
+            self.local_app_data != value.local_app_data
+            or self.local_unit_data != value.local_unit_data
+            or self.remote_app_data != value.remote_app_data
+            or self.remote_unit_data != value.remote_unit_data
+        ):
+            return False
+        return True
+
     @property
     def _remote_unit_ids(self) -> Tuple[int]:
         """Ids of the units on the other end of this relation."""
@@ -554,6 +642,23 @@ class PeerRelation(_RelationBase):
     )
     # mapping from peer unit IDs to their databag contents.
     # Consistency checks will validate that *this unit*'s ID is not in here.
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    def __eq__(self, value: object) -> bool:
+        if value is self:
+            return True
+        if not isinstance(value, PeerRelation):
+            return False
+        if self.endpoint != value.endpoint or self.interface != value.interface:
+            return False
+        if (
+            self.local_app_data != value.local_app_data
+            or self.local_unit_data != value.local_unit_data
+        ):
+            return False
+        return True
 
     @property
     def _databags(self):
@@ -763,6 +868,9 @@ class Container(_max_posargs(1)):
 
     notices: List[Notice] = dataclasses.field(default_factory=list)
 
+    def __hash__(self) -> int:
+        return hash(self.name)
+
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
         services = {}  # type: Dict[str, pebble.Service]
@@ -904,6 +1012,18 @@ class StoredState(_max_posargs(1)):
     @property
     def handle_path(self):
         return f"{self.owner_path or ''}/{self._data_type_name}[{self.name}]"
+
+    def __hash__(self) -> int:
+        return hash(self.handle_path)
+
+    def __eq__(self, value: object) -> bool:
+        if value is self:
+            return True
+        if not isinstance(value, StoredState):
+            return False
+        if self.handle_path != value.handle_path:
+            return False
+        return self.content == value.content
 
 
 _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
@@ -1127,6 +1247,16 @@ class State(_max_posargs(0)):
         # bypass frozen dataclass
         object.__setattr__(self, name, _EntityStatus(new_status, new_message))
 
+    def _update_opened_ports(self, new_ports: FrozenSet[Port]):
+        """Update the current opened ports."""
+        # bypass frozen dataclass
+        object.__setattr__(self, "opened_ports", new_ports)
+
+    def _update_secrets(self, new_secrets: FrozenSet[Secret]):
+        """Update the current secrets."""
+        # bypass frozen dataclass
+        object.__setattr__(self, "secrets", new_secrets)
+
     def with_can_connect(self, container_name: str, can_connect: bool) -> "State":
         def replacer(container: Container):
             if container.name == container_name:
@@ -1158,7 +1288,12 @@ class State(_max_posargs(0)):
             raise ValueError(f"container: {container_name} not found in the State")
         return containers[0]
 
-    def get_secret(self, *, id: str, label: str) -> Secret:
+    def get_secret(
+        self,
+        *,
+        id: Optional[str] = None,
+        label: Optional[str] = None,
+    ) -> Secret:
         """Get secret from this State, based on the secret's id or label."""
         for secret in self.secrets:
             if secret.id == id or secret.label == label:
@@ -1192,7 +1327,7 @@ class State(_max_posargs(0)):
     def get_relation(self, id: int) -> "AnyRelation":
         """Get relation from this State, based on the relation's id."""
         for relation in self.relations:
-            if relation.relation_id == id:
+            if relation.id == id:
                 return relation
         raise ValueError(f"relation: id={id} not found in the State")
 
@@ -1211,9 +1346,10 @@ class State(_max_posargs(0)):
             if normalize_name(r.endpoint) == normalized_endpoint
         )
 
+    # TODO: It seems like this method has no tests.
     def get_storages(self, name: str) -> Tuple["Storage", ...]:
         """Get all storages with this name."""
-        return tuple(s for s in self.storage if s.name == name)
+        return tuple(s for s in self.storages if s.name == name)
 
 
 def _is_valid_charmcraft_25_metadata(meta: Dict[str, Any]):

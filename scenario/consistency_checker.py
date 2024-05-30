@@ -4,7 +4,7 @@
 import marshal
 import os
 import re
-from collections import Counter, defaultdict
+from collections import defaultdict
 from collections.abc import Sequence
 from numbers import Number
 from typing import TYPE_CHECKING, Iterable, List, NamedTuple, Tuple, Union
@@ -592,11 +592,6 @@ def check_containers_consistency(
             f"That's not possible. "
             f"Missing from metadata: {diff}.",
         )
-
-    # guard against duplicate container names
-    names = Counter(state_containers)
-    if dupes := [n for n in names if names[n] > 1]:
-        errors.append(f"Duplicate container name(s): {dupes}.")
 
     return Results(errors, [])
 

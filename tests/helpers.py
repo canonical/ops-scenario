@@ -67,11 +67,21 @@ def trigger(
     return state_out
 
 
-def jsonpatch_delta(input: "State", output: "State"):
-    patch = jsonpatch.make_patch(
-        dataclasses.asdict(output),
-        dataclasses.asdict(input),
-    ).patch
+def jsonpatch_delta(self, other: "State"):
+    dict_other = dataclasses.asdict(other)
+    dict_self = dataclasses.asdict(self)
+    for attr in (
+        "relations",
+        "containers",
+        "storages",
+        "opened_ports",
+        "secrets",
+        "resources",
+        "stored_states",
+    ):
+        dict_other[attr] = [dataclasses.asdict(o) for o in dict_other[attr]]
+        dict_self[attr] = [dataclasses.asdict(o) for o in dict_self[attr]]
+    patch = jsonpatch.make_patch(dict_other, dict_self).patch
     return sort_patch(patch)
 
 
