@@ -293,26 +293,6 @@ class Secret:
     def __hash__(self) -> int:
         return hash(self.id)
 
-    def __eq__(self, value: object) -> bool:
-        if value is self:
-            return True
-        if not isinstance(value, Secret):
-            return False
-        for attr in (
-            "id",
-            "owner",
-            "revision",
-            "label",
-            "description",
-            "expire",
-            "rotate",
-            "remote_grants",
-            "contents",
-        ):
-            if getattr(self, attr) != getattr(value, attr):
-                return False
-        return True
-
     def _set_revision(self, revision: int):
         """Set a new tracked revision."""
         # bypass frozen dataclass
@@ -479,20 +459,6 @@ class _RelationBase(_max_posargs(2)):
     def __hash__(self) -> int:
         return hash(self.id)
 
-    def __eq__(self, value: object) -> bool:
-        if value is self:
-            return True
-        if not isinstance(value, _RelationBase):
-            return False
-        if self.endpoint != value.endpoint or self.interface != value.interface:
-            return False
-        if (
-            self.local_app_data != value.local_app_data
-            or self.local_unit_data != value.local_unit_data
-        ):
-            return False
-        return True
-
     def _validate_databag(self, databag: dict):
         if not isinstance(databag, dict):
             raise StateValidationError(
@@ -528,27 +494,6 @@ class Relation(_RelationBase):
 
     def __hash__(self) -> int:
         return hash(self.id)
-
-    def __eq__(self, value: object) -> bool:
-        if value is self:
-            return True
-        if not isinstance(value, Relation):
-            return False
-        if (
-            self.endpoint != value.endpoint
-            or self.interface != value.interface
-            or self.limit != value.limit
-            or self.remote_app_name != value.remote_app_name
-        ):
-            return False
-        if (
-            self.local_app_data != value.local_app_data
-            or self.local_unit_data != value.local_unit_data
-            or self.remote_app_data != value.remote_app_data
-            or self.remote_units_data != value.remote_units_data
-        ):
-            return False
-        return True
 
     @property
     def _remote_app_name(self) -> str:
@@ -587,27 +532,6 @@ class SubordinateRelation(_RelationBase):
     def __hash__(self) -> int:
         return hash(self.id)
 
-    def __eq__(self, value: object) -> bool:
-        if value is self:
-            return True
-        if not isinstance(value, SubordinateRelation):
-            return False
-        if (
-            self.endpoint != value.endpoint
-            or self.interface != value.interface
-            or self.remote_app_name != value.remote_app_name
-            or self.remote_unit_id != value.remote_unit_id
-        ):
-            return False
-        if (
-            self.local_app_data != value.local_app_data
-            or self.local_unit_data != value.local_unit_data
-            or self.remote_app_data != value.remote_app_data
-            or self.remote_unit_data != value.remote_unit_data
-        ):
-            return False
-        return True
-
     @property
     def _remote_unit_ids(self) -> Tuple[int]:
         """Ids of the units on the other end of this relation."""
@@ -645,20 +569,6 @@ class PeerRelation(_RelationBase):
 
     def __hash__(self) -> int:
         return hash(self.id)
-
-    def __eq__(self, value: object) -> bool:
-        if value is self:
-            return True
-        if not isinstance(value, PeerRelation):
-            return False
-        if self.endpoint != value.endpoint or self.interface != value.interface:
-            return False
-        if (
-            self.local_app_data != value.local_app_data
-            or self.local_unit_data != value.local_unit_data
-        ):
-            return False
-        return True
 
     @property
     def _databags(self):
@@ -1015,15 +925,6 @@ class StoredState(_max_posargs(1)):
 
     def __hash__(self) -> int:
         return hash(self.handle_path)
-
-    def __eq__(self, value: object) -> bool:
-        if value is self:
-            return True
-        if not isinstance(value, StoredState):
-            return False
-        if self.handle_path != value.handle_path:
-            return False
-        return self.content == value.content
 
 
 _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
