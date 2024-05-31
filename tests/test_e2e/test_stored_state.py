@@ -32,11 +32,11 @@ def mycharm():
 
 def test_stored_state_default(mycharm):
     out = trigger(State(), "start", mycharm, meta=mycharm.META)
-    assert out.get_stored_state("_stored", "MyCharm").content == {
+    assert out.get_stored_state("_stored", owner_path="MyCharm").content == {
         "foo": "bar",
         "baz": {12: 142},
     }
-    assert out.get_stored_state("_stored2", "MyCharm").content == {
+    assert out.get_stored_state("_stored2", owner_path="MyCharm").content == {
         "foo": "bar",
         "baz": {12: 142},
     }
@@ -55,11 +55,11 @@ def test_stored_state_initialized(mycharm):
         mycharm,
         meta=mycharm.META,
     )
-    assert out.get_stored_state("_stored", "MyCharm").content == {
+    assert out.get_stored_state("_stored", owner_path="MyCharm").content == {
         "foo": "FOOX",
         "baz": {12: 142},
     }
-    assert out.get_stored_state("_stored2", "MyCharm").content == {
+    assert out.get_stored_state("_stored2", owner_path="MyCharm").content == {
         "foo": "bar",
         "baz": {12: 142},
     }

@@ -154,7 +154,7 @@ class _MockModelBackend(_ModelBackend):
         container_root = self._context._get_container_root(container_name)
         try:
             mounts = self._state.get_container(container_name).mounts
-        except ValueError:
+        except KeyError:
             # container not defined in state.
             mounts = {}
 

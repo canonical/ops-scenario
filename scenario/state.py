@@ -1179,58 +1179,96 @@ class State(_max_posargs(0)):
             ),
         )
 
-    def get_container(self, container: Union[str, Container]) -> Container:
+    def get_container(self, container: Union[str, Container], /) -> Container:
         """Get container from this State, based on an input container or its name."""
         container_name = (
             container.name if isinstance(container, Container) else container
         )
-        containers = [c for c in self.containers if c.name == container_name]
-        if not containers:
-            raise ValueError(f"container: {container_name} not found in the State")
-        return containers[0]
+        for state_container in self.containers:
+            if state_container.name == container_name:
+                return state_container
+        raise KeyError(f"container: {container_name} not found in the State")
 
     def get_secret(
         self,
         *,
         id: Optional[str] = None,
         label: Optional[str] = None,
+        secret: Optional[Secret] = None,
     ) -> Secret:
-        """Get secret from this State, based on the secret's id or label."""
+        """Get secret from this State, based on an input secret or the secret's id or label."""
+        if id is None and label is None and secret is None:
+            raise ValueError("An id or label or Secret must be provided.")
+        if id is not None and secret is not None and secret.id != id:
+            raise ValueError("id and secret.id must match.")
+        if label is not None and secret is not None and secret.label != label:
+            raise ValueError("label and secret.label must match.")
+
+        if secret:
+            if secret.id is not None:
+                id = secret.id
+            if secret.label is not None:
+                label = secret.label
         for secret in self.secrets:
-            if secret.id == id or secret.label == label:
+            if (
+                (id and label and secret.id == id and secret.label == label)
+                or (id and label is None and secret.id == id)
+                or (id is None and label and secret.label == label)
+            ):
                 return secret
-        if id:
-            message = f"secret: id={id} not found in the State"
-        elif label:
-            message = f"secret: label={label} not found in the State"
-        else:
-            message = "An id or label must be provided."
-        raise ValueError(message)
+        raise KeyError("secret: not found in the State")
 
     def get_stored_state(
         self,
-        name: str,
+        stored_state: Union[str, StoredState],
+        /,
+        *,
         owner_path: Optional[str] = None,
     ) -> StoredState:
-        """Get stored state from this State, based on the stored state's name and owner_path."""
+        """Get stored state from this State, based on an input StoredState or the stored state's name and owner_path."""
+        if (
+            isinstance(stored_state, StoredState)
+            and owner_path is not None
+            and stored_state.owner_path != owner_path
+        ):
+            raise ValueError("owner_path and stored_state.owner_path must match.")
+
+        name = (
+            stored_state.name if isinstance(stored_state, StoredState) else stored_state
+        )
         for stored_state in self.stored_states:
             if stored_state.name == name and stored_state.owner_path == owner_path:
                 return stored_state
         raise ValueError(f"stored state: {name} not found in the State")
 
-    def get_storage(self, name: str, index: int = 0) -> Storage:
-        """Get storage from this State, based on the storage's name and index."""
-        for storage in self.storages:
-            if storage.name == name and storage.index == index:
-                return storage
+    def get_storage(
+        self,
+        storage: Union[str, Storage],
+        /,
+        *,
+        index: Optional[int] = 0,
+    ) -> Storage:
+        """Get storage from this State, based on an input storage or the storage's name and index."""
+        if (
+            isinstance(storage, Storage)
+            and index is not None
+            and storage.index != index
+        ):
+            raise ValueError("index and storage.index must match.")
+
+        name = storage.name if isinstance(storage, Storage) else storage
+        for state_storage in self.storages:
+            if state_storage.name == name and storage.index == index:
+                return state_storage
         raise ValueError(f"storage: name={name}, index={index} not found in the State")
 
-    def get_relation(self, id: int) -> "AnyRelation":
-        """Get relation from this State, based on the relation's id."""
-        for relation in self.relations:
-            if relation.id == id:
-                return relation
-        raise ValueError(f"relation: id={id} not found in the State")
+    def get_relation(self, relation: Union[int, Relation]) -> "AnyRelation":
+        """Get relation from this State, based on an input relation or the relation's id."""
+        relation_id = relation.id if isinstance(relation, Relation) else relation
+        for state_relation in self.relations:
+            if state_relation.id == relation_id:
+                return state_relation
+        raise KeyError(f"relation: id={relation_id} not found in the State")
 
     def get_relations(self, endpoint: str) -> Tuple["AnyRelation", ...]:
         """Get all relations on this endpoint from the current state."""
