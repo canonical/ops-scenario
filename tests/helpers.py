@@ -56,3 +56,15 @@ def trigger(
         if post_event:
             post_event(mgr.charm)
     return state_out
+
+
+def sort_patch(patch: List[Dict], key=lambda obj: obj["path"] + obj["op"]):
+    return sorted(patch, key=key)
+
+
+def jsonpatch_delta(self, other: "State"):
+    patch = jsonpatch.make_patch(
+        dataclasses.asdict(other),
+        dataclasses.asdict(self),
+    ).patch
+    return sort_patch(patch)

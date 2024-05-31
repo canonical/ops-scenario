@@ -14,7 +14,9 @@ from typing import (
     Any,
     Callable,
     Dict,
+    FrozenSet,
     Generic,
+    Iterable,
     List,
     Literal,
     Optional,
@@ -547,7 +549,7 @@ def _generate_new_change_id():
 
 @dataclasses.dataclass(frozen=True)
 class Exec:
-    command: Sequence[str]
+    command_prefix: Sequence[str]
     return_code: int = 0
     stdout: str = ""
     stderr: str = ""
@@ -601,7 +603,7 @@ class Container:
     # create a tempfile and insert its path in the mock filesystem tree
     mounts: Dict[str, Mount] = dataclasses.field(default_factory=dict)
 
-    execs: Dict[str, Exec] = dataclasses.field(default_factory=dict)
+    execs: FrozenSet[Exec] = frozenset()
 
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
@@ -659,6 +661,17 @@ class Container:
     def get_filesystem(self, ctx: "Context") -> Path:
         """Simulated pebble filesystem in this context."""
         return ctx._get_container_root(self.name)
+
+    def get_exec(self, command_prefix: Sequence[str]):
+        """Get the Exec object from the container with the given command prefix."""
+        for exec in self.execs:
+            if exec.command_prefix == command_prefix:
+                return exec
+        raise KeyError(f"no exec found with command prefix {command_prefix}")
+
+    def _update_execs(self, execs: Iterable[Exec]):
+        # bypass frozen dataclass
+        object.__setattr__(self, "execs", frozenset(execs))
 
     @property
     def pebble_ready_event(self):

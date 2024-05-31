@@ -699,8 +699,8 @@ def test_pebble_exec():
     container = scenario.Container(
         name='foo',
         execs={
-            "list-directory": scenario.Exec(  # "list-directory" is an arbitrary tag for the command
-                ('ls', '-ll'):  # this is the command we're mocking
+            scenario.Exec(
+                ('ls', '-ll'),  # this is the command we're mocking
                 return_code=0,
                 stdout=LS_LL
             ),
@@ -715,7 +715,7 @@ def test_pebble_exec():
         container.pebble_ready_event,
         state_in,
     )
-    assert state_out.containers["foo"].execs["list-directory"].stdin = "..."
+    assert state_out.containers["foo"].get_exec(('ls', '-ll')).stdin = "..."
 ```
 
 ## Storage
