@@ -1365,8 +1365,10 @@ class State(_max_posargs(0)):
         # bypass frozen dataclass
         object.__setattr__(self, "secrets", new_secrets)
 
-    def _update_secrets():
-        pass
+    def _update_secrets(self, new_secrets: List[Secret]):
+        """Update the current secrets."""
+        # bypass frozen dataclass
+        object.__setattr__(self, "secrets", new_secrets)
 
     def with_can_connect(self, container_name: str, can_connect: bool) -> "State":
         def replacer(container: Container):
