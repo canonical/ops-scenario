@@ -605,6 +605,11 @@ class Container:
 
     execs: FrozenSet[Exec] = frozenset()
 
+    def __post_init__(self):
+        if not isinstance(self.execs, frozenset):
+            # Allow passing a regular set (or other iterable) of Execs.
+            super().__setattr__("execs", frozenset(self.execs))
+
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
         services = {}  # type: Dict[str, pebble.Service]
