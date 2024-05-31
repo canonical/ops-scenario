@@ -190,6 +190,12 @@ def _check_workload_event(
             f"workload event should start with container name. {event.name} does "
             f"not start with {event.container.name}.",
         )
+    else:
+        command_prefixes = [exec.command_prefix for exec in event.container.execs]
+        if len(command_prefixes) != len(set(command_prefixes)):
+            errors.append(
+                f"container {event.container.name} has multiple execs with the same command prefix.",
+            )
 
 
 def _check_action_event(
