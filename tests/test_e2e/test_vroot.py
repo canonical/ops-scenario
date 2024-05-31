@@ -55,7 +55,7 @@ def test_charm_virtual_root_cleanup_if_exists(charm_virtual_root):
     raw_ori_meta = yaml.safe_dump({"name": "karl"})
     meta_file.write_text(raw_ori_meta)
 
-    with Context(MyCharm, meta=MyCharm.META, charm_root=charm_virtual_root).manager(
+    with Context(MyCharm, meta=MyCharm.META, charm_root=charm_virtual_root).event(
         "start",
         State(),
     ) as mgr:
@@ -77,7 +77,7 @@ def test_charm_virtual_root_cleanup_if_not_exists(charm_virtual_root):
 
     assert not meta_file.exists()
 
-    with Context(MyCharm, meta=MyCharm.META, charm_root=charm_virtual_root).manager(
+    with Context(MyCharm, meta=MyCharm.META, charm_root=charm_virtual_root).event(
         "start",
         State(),
     ) as mgr:

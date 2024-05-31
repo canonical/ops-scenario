@@ -317,7 +317,7 @@ def test_exec_wait_error(charm_cls):
         ]
     )
 
-    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
+    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).event(
         "start", state
     ) as mgr:
         container = mgr.charm.unit.get_container("foo")
@@ -340,7 +340,7 @@ def test_exec_wait_output(charm_cls):
         ]
     )
 
-    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
+    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).event(
         "start", state
     ) as mgr:
         container = mgr.charm.unit.get_container("foo")
@@ -361,7 +361,7 @@ def test_exec_wait_output_error(charm_cls):
         ]
     )
 
-    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
+    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).event(
         "start", state
     ) as mgr:
         container = mgr.charm.unit.get_container("foo")

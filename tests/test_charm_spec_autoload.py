@@ -160,6 +160,6 @@ def test_config_defaults(tmp_path, legacy):
         config={"options": {"foo": {"type": "bool", "default": True}}},
     ) as charm:
         # this would fail if there were no 'cuddles' relation defined in meta
-        with Context(charm).manager("start", State()) as mgr:
+        with Context(charm).event("start", State()) as mgr:
             mgr.run()
             assert mgr.charm.config["foo"] is True

@@ -731,7 +731,7 @@ storage = scenario.Storage("foo")
 # Setup storage with some content:
 (storage.get_filesystem(ctx) / "myfile.txt").write_text("helloworld")
 
-with ctx.manager("update-status", scenario.State(storage=[storage])) as mgr:
+with ctx.event("update-status", scenario.State(storage=[storage])) as mgr:
     foo = mgr.charm.model.storages["foo"][0]
     loc = foo.location
     path = loc / "myfile.txt"
@@ -1176,7 +1176,7 @@ Scenario is a black-box, state-transition testing framework. It makes it trivial
 B, but not to assert that, in the context of this charm execution, with this state, a certain charm-internal method was called and returned a
 given piece of data, or would return this and that _if_ it had been called.
 
-Scenario offers a cheekily-named context manager for this use case specifically:
+Scenario offers a context manager for this use case specifically:
 
 ```python
 import ops
@@ -1201,8 +1201,8 @@ class MyCharm(ops.CharmBase):
 
 def test_live_charm_introspection(mycharm):
     ctx = scenario.Context(mycharm, meta=mycharm.META)
-    # If you want to do this with actions, you can use `Context.action_manager` instead.
-    with ctx.manager("start", scenario.State()) as manager:
+    # If you want to do this with actions, you can use `Context.action` instead.
+    with ctx.event("start", scenario.State()) as manager:
         # This is your charm instance, after ops has set it up:
         charm: MyCharm = manager.charm
         

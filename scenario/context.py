@@ -109,7 +109,7 @@ class _Manager:
         This can only be done once.
         """
         if self._emitted:
-            raise AlreadyEmittedError("Can only context.manager.run() once.")
+            raise AlreadyEmittedError("Can only context.event.run() once.")
         self._emitted = True
 
         # wrap up Runtime.exec() so that we can gather the output state
@@ -353,7 +353,7 @@ class Context:
             )
         return event
 
-    def manager(
+    def event(
         self,
         event: Union["Event", str],
         state: "State",
@@ -361,7 +361,7 @@ class Context:
         """Context manager to introspect live charm object before and after the event is emitted.
 
         Usage:
-        >>> with Context().manager("start", State()) as manager:
+        >>> with Context().event("start", State()) as manager:
         >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
         >>>     manager.run()  # this will fire the event
         >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
@@ -372,7 +372,7 @@ class Context:
         """
         return _EventManager(self, event, state)
 
-    def action_manager(
+    def action(
         self,
         action: Union["Action", str],
         state: "State",
@@ -380,7 +380,7 @@ class Context:
         """Context manager to introspect live charm object before and after the event is emitted.
 
         Usage:
-        >>> with Context().action_manager("foo-action", State()) as manager:
+        >>> with Context().action("foo-action", State()) as manager:
         >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
         >>>     manager.run()  # this will fire the event
         >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
