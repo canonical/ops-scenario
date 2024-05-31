@@ -208,6 +208,11 @@ def _check_workload_event(
                 "you **can** fire fire pebble-ready while the container cannot connect, "
                 "but that's most likely not what you want.",
             )
+    command_prefixes = [exec.command_prefix for exec in event.container.execs]
+    if len(command_prefixes) != len(set(command_prefixes)):
+        errors.append(
+            f"container {event.container.name} has multiple execs with the same command prefix.",
+        )
 
 
 def _check_action_event(
