@@ -78,27 +78,32 @@ class _MockExecProcess:
         self,
         command: Tuple[str, ...],
         change_id: int,
-        out: "Exec",
+        exec: "Exec",
         container: "ContainerSpec",
-        exec_id: str,
     ):
         self._command = command
         self._change_id = change_id
-        self._out = out
+        self._exec = exec
         self._waited = False
-        self.stdout = StringIO(self._out.stdout)
-        self.stderr = StringIO(self._out.stderr)
-        self.stdin = StringIO(self._out.stdin)
+        self.stdout = StringIO(self._exec.stdout)
+        self.stderr = StringIO(self._exec.stderr)
+        self.stdin = StringIO(self._exec.stdin)
         self._container = container
-        self._exec_id = exec_id
+
+    def _store_stdin(self):
+        execs = {
+            e
+            for e in self._container.execs
+            if e.command_prefix != self._exec.command_prefix
+        }
+        exec = dataclasses.replace(self._exec, stdin=self.stdin.read())
+        execs.add(exec)
+        self._container._update_execs(execs)
 
     def wait(self):
         self._waited = True
-        self._container.execs[self._exec_id] = dataclasses.replace(
-            self._container.execs[self._exec_id],
-            stdin=self.stdin.read(),
-        )
-        exit_code = self._out.return_code
+        self._store_stdin()
+        exit_code = self._exec.return_code
         if exit_code != 0:
             raise ExecError(
                 list(self._command),
@@ -108,12 +113,9 @@ class _MockExecProcess:
             )
 
     def wait_output(self):
-        out = self._out
-        self._container.execs[self._exec_id] = dataclasses.replace(
-            self._container.execs[self._exec_id],
-            stdin=self.stdin.read(),
-        )
-        exit_code = out.return_code
+        exec = self._exec
+        self._store_stdin()
+        exit_code = exec.return_code
         if exit_code != 0:
             raise ExecError(
                 list(self._command),
@@ -121,7 +123,7 @@ class _MockExecProcess:
                 self.stdout.read(),
                 self.stderr.read(),
             )
-        return out.stdout, out.stderr
+        return exec.stdout, exec.stderr
 
     def send_signal(self, sig: Union[int, str]):  # noqa: U100
         raise NotImplementedError()
@@ -759,34 +761,30 @@ class _MockPebbleClient(_TestingPebbleClient):
         return self._container.service_status
 
     # Based on a method of the same name from ops.testing.
-    def _find_exec_handler(self, command) -> Tuple[Optional[str], Optional["Exec"]]:
-        handlers = {
-            tuple(exec.command): (exec_id, exec) for exec_id, exec in self._container.execs.items()
-        }
+    def _find_exec_handler(self, command) -> Optional["Exec"]:
+        handlers = {exec.command_prefix: exec for exec in self._container.execs}
         for prefix_len in reversed(range(len(command) + 1)):
             command_prefix = tuple(command[:prefix_len])
             if command_prefix in handlers:
                 return handlers[command_prefix]
-        return None, None
+        return None
 
     def exec(self, command, **kwargs):  # noqa: U100 type: ignore
-        exec_id, out = self._find_exec_handler(command)
-        if not out:
+        handler = self._find_exec_handler(command)
+        if not handler:
             raise RuntimeError(
                 f"mock for cmd {command} not found. Please pass to the Container "
                 f"{self._container.name} a scenario.Exec mock for the "
                 f"command your charm is attempting to run, or patch "
                 f"out whatever leads to the call.",
             )
-        assert exec_id is not None  # For the static checker.
 
-        change_id = out._run()
+        change_id = handler._run()
         return _MockExecProcess(
             change_id=change_id,
             command=command,
-            out=out,
+            exec=handler,
             container=self._container,
-            exec_id=exec_id,
         )
 
     def _check_connection(self):

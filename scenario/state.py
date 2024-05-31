@@ -646,7 +646,7 @@ def _generate_new_change_id():
 @dataclasses.dataclass(frozen=True)
 class Exec(_max_posargs(0)):
     """Mock data for simulated :meth:`ops.Container.exec` calls."""
-    command: Sequence[str]
+    command_prefix: Sequence[str]
     return_code: int = 0
     """The return code of the process (0 is success)."""
     stdout: str = ""
@@ -828,7 +828,7 @@ class Container(_max_posargs(1)):
         }
     """
 
-    execs: Dict[str, Exec] = dataclasses.field(default_factory=dict)
+    execs: FrozenSet[Exec] = frozenset()
     """Simulate executing commands in the container.
 
     Specify each command the charm might run in the container and a :class:`Exec`
@@ -914,6 +914,17 @@ class Container(_max_posargs(1)):
             charm pushed to the container.
         """
         return ctx._get_container_root(self.name)
+
+    def get_exec(self, command_prefix: Sequence[str]):
+        """Get the Exec object from the container with the given command prefix."""
+        for exec in self.execs:
+            if exec.command_prefix == command_prefix:
+                return exec
+        raise KeyError(f"no exec found with command prefix {command_prefix}")
+
+    def _update_execs(self, execs: Iterable[Exec]):
+        # bypass frozen dataclass
+        object.__setattr__(self, "execs", frozenset(execs))
 
 
 _RawStatusLiteral = Literal[

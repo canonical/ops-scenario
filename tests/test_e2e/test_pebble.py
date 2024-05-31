@@ -202,7 +202,7 @@ def test_exec(charm_cls, cmd, out):
                     name="foo",
                     can_connect=True,
                     execs={
-                        "cmd": Exec([cmd], stdout=out),
+                        Exec((cmd,), stdout=out),
                     },
                 )
             }
@@ -315,7 +315,7 @@ def test_exec_wait_error(charm_cls):
                 name="foo",
                 can_connect=True,
                 execs={
-                    "error": Exec(("foo",), stdout="hello pebble", return_code=1),
+                    Exec(("foo",), stdout="hello pebble", return_code=1),
                 },
             )
         }
@@ -336,9 +336,7 @@ def test_exec_wait_output(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                execs={
-                    "waiter": Exec(("foo",), stdout="hello pebble", stderr="oepsie")
-                },
+                execs={Exec(("foo",), stdout="hello pebble", stderr="oepsie")},
             )
         }
     )
@@ -359,7 +357,7 @@ def test_exec_wait_output_error(charm_cls):
                 name="foo",
                 can_connect=True,
                 execs={
-                    "error": Exec(("foo",), stdout="hello pebble", return_code=1),
+                    Exec(("foo",), stdout="hello pebble", return_code=1),
                 },
             )
         }
