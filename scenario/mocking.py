@@ -105,12 +105,7 @@ class _MockExecProcess:
         self._store_stdin()
         exit_code = self._exec.return_code
         if exit_code != 0:
-            raise ExecError(
-                list(self._command),
-                exit_code,
-                None,
-                None,
-            )
+            raise ExecError(list(self._command), exit_code, None, None)
 
     def wait_output(self):
         exec = self._exec
