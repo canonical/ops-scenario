@@ -497,33 +497,6 @@ class Context:
         storage_root.mkdir(parents=True, exist_ok=True)
         return storage_root
 
-    def clear(self):
-        """Deprecated.
-
-        Use cleanup instead.
-        """
-        logger.warning(
-            "Context.clear() is deprecated and will be nuked in v6. "
-            "Use Context.cleanup() instead.",
-        )
-        self.cleanup()
-
-    def cleanup(self):
-        """Cleanup side effects histories and reset the simulated filesystem state."""
-        self.juju_log = []
-        self.app_status_history = []
-        self.unit_status_history = []
-        self.workload_version_history = []
-        self.emitted_events = []
-        self.requested_storages = {}
-        self._action_logs = []
-        self._action_results = None
-        self._action_failure = None
-        self._output_state = None
-
-        self._tmp.cleanup()
-        self._tmp = tempfile.TemporaryDirectory()
-
     def _record_status(self, state: "State", is_app: bool):
         """Record the previous status before a status change."""
         if is_app:
@@ -640,20 +613,6 @@ class Context:
             )
         return event
 
-    @staticmethod
-    def _warn_deprecation_if_pre_or_post_event(
-        pre_event: Optional[Callable],
-        post_event: Optional[Callable],
-    ):
-        # warn if pre/post event arguments are passed
-        legacy_mode = pre_event or post_event
-        if legacy_mode:
-            logger.warning(
-                "The [pre/post]_event syntax is deprecated and "
-                "will be removed in a future release. "
-                "Please use the ``Context.[action_]manager`` context manager.",
-            )
-
     def manager(
         self,
         event: Union["Event", str],
@@ -711,8 +670,6 @@ class Context:
         self,
         event: Union["_EventSource", "Event", str],
         state: "State",
-        pre_event: Optional[Callable[[CharmBase], None]] = None,
-        post_event: Optional[Callable[[CharmBase], None]] = None,
     ) -> "State":
         """Trigger a charm execution with an Event and a State.
 
@@ -723,32 +680,15 @@ class Context:
             or an _EventSource.
         :arg state: the State instance to use as data source for the hook tool calls that the
             charm will invoke when handling the Event.
-        :arg pre_event: callback to be invoked right before emitting the event on the newly
-            instantiated charm. Will receive the charm instance as only positional argument.
-            This argument is deprecated. Please use ``Context.manager`` instead.
-        :arg post_event: callback to be invoked right after emitting the event on the charm.
-            Will receive the charm instance as only positional argument.
-            This argument is deprecated. Please use ``Context.manager`` instead.
         """
-        self._warn_deprecation_if_pre_or_post_event(pre_event, post_event)
-
         with self._run_event(event=event, state=state) as ops:
-            if pre_event:
-                pre_event(cast(CharmBase, ops.charm))
-
             ops.emit()
-
-            if post_event:
-                post_event(cast(CharmBase, ops.charm))
-
         return self.output_state
 
     def run_action(
         self,
         action: Union["_ActionEventSource", "Action", str],
         state: "State",
-        pre_event: Optional[Callable[[CharmBase], None]] = None,
-        post_event: Optional[Callable[[CharmBase], None]] = None,
     ) -> ActionOutput:
         """Trigger a charm execution with an Action and a State.
 
@@ -758,25 +698,10 @@ class Context:
         :arg action: the Action that the charm will execute. Can be a string or an Action instance.
         :arg state: the State instance to use as data source for the hook tool calls that the
             charm will invoke when handling the Action (event).
-        :arg pre_event: callback to be invoked right before emitting the event on the newly
-            instantiated charm. Will receive the charm instance as only positional argument.
-            This argument is deprecated. Please use ``Context.action_manager`` instead.
-        :arg post_event: callback to be invoked right after emitting the event on the charm.
-            Will receive the charm instance as only positional argument.
-            This argument is deprecated. Please use ``Context.action_manager`` instead.
         """
-        self._warn_deprecation_if_pre_or_post_event(pre_event, post_event)
-
         _action = self._coalesce_action(action)
         with self._run_action(action=_action, state=state) as ops:
-            if pre_event:
-                pre_event(cast(CharmBase, ops.charm))
-
             ops.emit()
-
-            if post_event:
-                post_event(cast(CharmBase, ops.charm))
-
         return self._finalize_action(self.output_state)
 
     def _finalize_action(self, state_out: "State"):

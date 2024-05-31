@@ -3,6 +3,7 @@
 # See LICENSE file for licensing details.
 import inspect
 import os
+import sys
 from typing import TYPE_CHECKING, Any, Optional, Sequence, cast
 
 import ops.charm
@@ -96,6 +97,9 @@ def setup_framework(
     )
     debug = "JUJU_DEBUG" in os.environ
     setup_root_logging(model_backend, debug=debug)
+    # ops sets sys.excepthook to go to Juju's debug-log, but that's not useful
+    # in a testing context, so reset it.
+    sys.excepthook = sys.__excepthook__
     ops_logger.debug(
         "Operator Framework %s up and running.",
         ops.__version__,
@@ -115,7 +119,7 @@ def setup_framework(
         # If we are in a RelationBroken event, we want to know which relation is
         # broken within the model, not only in the event's `.relation` attribute.
         broken_relation_id = (
-            event.relation.relation_id  # type: ignore
+            event.relation.id  # type: ignore
             if event.name.endswith("_relation_broken")
             else None
         )

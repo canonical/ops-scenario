@@ -17,10 +17,10 @@ from scenario.state import (
     DEFAULT_JUJU_DATABAG,
     PeerRelation,
     Relation,
-    RelationBase,
     State,
     StateValidationError,
     SubordinateRelation,
+    _RelationBase,
 )
 from tests.helpers import trigger
 
@@ -388,7 +388,7 @@ def test_trigger_sub_relation(mycharm):
 
 def test_cannot_instantiate_relationbase():
     with pytest.raises(RuntimeError):
-        RelationBase("")
+        _RelationBase("")
 
 
 def test_relation_ids():
@@ -397,7 +397,7 @@ def test_relation_ids():
     initial_id = _next_relation_id_counter
     for i in range(10):
         rel = Relation("foo")
-        assert rel.relation_id == initial_id + i
+        assert rel.id == initial_id + i
 
 
 def test_broken_relation_not_in_model_relations(mycharm):

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
+import marshal
 import os
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Sequence
 from numbers import Number
 from typing import TYPE_CHECKING, Iterable, List, NamedTuple, Tuple, Union
@@ -70,6 +71,7 @@ def check_consistency(
         check_storages_consistency,
         check_relation_consistency,
         check_network_consistency,
+        check_storedstate_consistency,
     ):
         results = check(
             state=state,
@@ -486,13 +488,13 @@ def check_relation_consistency(
         expected_sub = relation_meta.get("scope", "") == "container"
         relations = _get_relations(endpoint)
         for relation in relations:
-            if relation.relation_id in seen_ids:
+            if relation.id in seen_ids:
                 errors.append(
-                    f"duplicate relation ID: {relation.relation_id} is claimed "
+                    f"duplicate relation ID: {relation.id} is claimed "
                     f"by multiple Relation instances",
                 )
 
-            seen_ids.add(relation.relation_id)
+            seen_ids.add(relation.id)
             is_sub = isinstance(relation, SubordinateRelation)
             if is_sub and not expected_sub:
                 errors.append(
@@ -564,4 +566,35 @@ def check_containers_consistency(
     if dupes := [n for n in names if names[n] > 1]:
         errors.append(f"Duplicate container name(s): {dupes}.")
 
+    return Results(errors, [])
+
+
+def check_storedstate_consistency(
+    *,
+    state: "State",
+    **_kwargs,  # noqa: U101
+) -> Results:
+    """Check the internal consistency of `state.storedstate`."""
+    errors = []
+
+    # Attribute names must be unique on each object.
+    names = defaultdict(list)
+    for ss in state.stored_state:
+        names[ss.owner_path].append(ss.name)
+    for owner, owner_names in names.items():
+        if len(owner_names) != len(set(owner_names)):
+            errors.append(
+                f"{owner} has multiple StoredState objects with the same name.",
+            )
+
+    # The content must be marshallable.
+    for ss in state.stored_state:
+        # We don't need the marshalled state, just to know that it can be.
+        # This is the same "only simple types" check that ops does.
+        try:
+            marshal.dumps(ss.content)
+        except ValueError:
+            errors.append(
+                f"The StoredState object {ss.owner_path}.{ss.name} should contain only simple types.",
+            )
     return Results(errors, [])

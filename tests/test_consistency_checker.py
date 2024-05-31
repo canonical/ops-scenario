@@ -1,3 +1,5 @@
+import dataclasses
+
 import pytest
 from ops.charm import CharmBase
 
@@ -14,6 +16,7 @@ from scenario.state import (
     Secret,
     State,
     Storage,
+    StoredState,
     SubordinateRelation,
     _CharmSpec,
 )
@@ -401,9 +404,7 @@ def test_action_params_type(ptype, good, bad):
 
 def test_duplicate_relation_ids():
     assert_inconsistent(
-        State(
-            relations=[Relation("foo", relation_id=1), Relation("bar", relation_id=1)]
-        ),
+        State(relations=[Relation("foo", id=1), Relation("bar", id=1)]),
         Event("start"),
         _CharmSpec(
             MyCharm,
@@ -416,17 +417,13 @@ def test_duplicate_relation_ids():
 
 def test_relation_without_endpoint():
     assert_inconsistent(
-        State(
-            relations=[Relation("foo", relation_id=1), Relation("bar", relation_id=1)]
-        ),
+        State(relations=[Relation("foo", id=1), Relation("bar", id=1)]),
         Event("start"),
         _CharmSpec(MyCharm, meta={"name": "charlemagne"}),
     )
 
     assert_consistent(
-        State(
-            relations=[Relation("foo", relation_id=1), Relation("bar", relation_id=2)]
-        ),
+        State(relations=[Relation("foo", id=1), Relation("bar", id=2)]),
         Event("start"),
         _CharmSpec(
             MyCharm,
@@ -470,14 +467,14 @@ def test_storage_states():
         _CharmSpec(MyCharm, meta={"name": "everett"}),
     )
     assert_consistent(
-        State(storage=[storage1, storage2.replace(index=2)]),
+        State(storage=[storage1, dataclasses.replace(storage2, index=2)]),
         Event("start"),
         _CharmSpec(
             MyCharm, meta={"name": "frank", "storage": {"foo": {"type": "filesystem"}}}
         ),
     )
     assert_consistent(
-        State(storage=[storage1, storage2.replace(name="marx")]),
+        State(storage=[storage1, dataclasses.replace(storage2, name="marx")]),
         Event("start"),
         _CharmSpec(
             MyCharm,
@@ -565,6 +562,51 @@ def test_networks_consistency():
                 "name": "pinky",
                 "extra-bindings": {"foo": {}},
                 "requires": {"bar": {"interface": "bar"}},
+            },
+        ),
+    )
+
+
+def test_storedstate_consistency():
+    assert_consistent(
+        State(
+            stored_state=[
+                StoredState(None, content={"foo": "bar"}),
+                StoredState(None, "my_stored_state", content={"foo": 1}),
+                StoredState("MyCharmLib", content={"foo": None}),
+                StoredState("OtherCharmLib", content={"foo": (1, 2, 3)}),
+            ]
+        ),
+        Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={
+                "name": "foo",
+            },
+        ),
+    )
+    assert_inconsistent(
+        State(
+            stored_state=[
+                StoredState(None, content={"foo": "bar"}),
+                StoredState(None, "_stored", content={"foo": "bar"}),
+            ]
+        ),
+        Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={
+                "name": "foo",
+            },
+        ),
+    )
+    assert_inconsistent(
+        State(stored_state=[StoredState(None, content={"secret": Secret("foo", {})})]),
+        Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={
+                "name": "foo",
             },
         ),
     )

@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 from pathlib import Path
 from typing import (
@@ -5,12 +6,14 @@ from typing import (
     Any,
     Callable,
     Dict,
+    List,
     Optional,
-    Sequence,
     Type,
     TypeVar,
     Union,
 )
+
+import jsonpatch
 
 from scenario.context import DEFAULT_JUJU_VERSION, Context
 
@@ -46,9 +49,22 @@ def trigger(
         charm_root=charm_root,
         juju_version=juju_version,
     )
-    return ctx.run(
-        event,
-        state=state,
-        pre_event=pre_event,
-        post_event=post_event,
-    )
+    with ctx.manager(event, state=state) as mgr:
+        if pre_event:
+            pre_event(mgr.charm)
+        state_out = mgr.run()
+        if post_event:
+            post_event(mgr.charm)
+    return state_out
+
+
+def sort_patch(patch: List[Dict], key=lambda obj: obj["path"] + obj["op"]):
+    return sorted(patch, key=key)
+
+
+def jsonpatch_delta(self, other: "State"):
+    patch = jsonpatch.make_patch(
+        dataclasses.asdict(other),
+        dataclasses.asdict(self),
+    ).patch
+    return sort_patch(patch)

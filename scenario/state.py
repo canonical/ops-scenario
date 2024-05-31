@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
-import copy
 import dataclasses
 import datetime
 import inspect
 import re
-import warnings
 from collections import namedtuple
 from enum import Enum
 from itertools import chain
@@ -39,11 +37,6 @@ from scenario.logger import logger as scenario_logger
 JujuLogLine = namedtuple("JujuLogLine", ("level", "message"))
 
 if TYPE_CHECKING:  # pragma: no cover
-    try:
-        from typing import Self  # type: ignore
-    except ImportError:
-        from typing_extensions import Self
-
     from scenario import Context
 
     PathLike = Union[str, Path]
@@ -130,18 +123,7 @@ class BindFailedError(RuntimeError):
 
 
 @dataclasses.dataclass(frozen=True)
-class _DCBase:
-    def replace(self, *args, **kwargs):
-        """Produce a deep copy of this class, with some arguments replaced with new ones."""
-        return dataclasses.replace(self.copy(), *args, **kwargs)
-
-    def copy(self) -> "Self":
-        """Produce a deep copy of this object."""
-        return copy.deepcopy(self)
-
-
-@dataclasses.dataclass(frozen=True)
-class Secret(_DCBase):
+class Secret:
     id: str
     # CAUTION: ops-created Secrets (via .add_secret()) will have a canonicalized
     #  secret id (`secret:` prefix)
@@ -155,10 +137,6 @@ class Secret(_DCBase):
     # if None, the implication is that the secret has been granted to this unit.
     owner: Literal["unit", "app", None] = None
 
-    # deprecated! if a secret is not granted to this unit, omit it from State.secrets altogether.
-    # this attribute will be removed in Scenario 7+
-    granted: Any = "<DEPRECATED>"  # noqa
-
     # what revision is currently tracked by this charm. Only meaningful if owner=False
     revision: int = 0
 
@@ -170,27 +148,6 @@ class Secret(_DCBase):
     description: Optional[str] = None
     expire: Optional[datetime.datetime] = None
     rotate: Optional[SecretRotate] = None
-
-    def __post_init__(self):
-        if self.granted != "<DEPRECATED>":
-            msg = (
-                "``state.Secret.granted`` is deprecated and will be removed in Scenario 7+. "
-                "If a Secret is not owned by the app/unit you are testing, nor has been granted to "
-                "it by the (remote) owner, then omit it from ``State.secrets`` altogether."
-            )
-            logger.warning(msg)
-            warnings.warn(msg, DeprecationWarning, stacklevel=2)
-
-        if self.owner == "application":
-            msg = (
-                "Secret.owner='application' is deprecated in favour of 'app' "
-                "and will be removed in Scenario 7+."
-            )
-            logger.warning(msg)
-            warnings.warn(msg, DeprecationWarning, stacklevel=2)
-
-            # bypass frozen dataclass
-            object.__setattr__(self, "owner", "app")
 
     # consumer-only events
     @property
@@ -267,7 +224,7 @@ def normalize_name(s: str):
 
 
 @dataclasses.dataclass(frozen=True)
-class Address(_DCBase):
+class Address:
     hostname: str
     value: str
     cidr: str
@@ -275,7 +232,7 @@ class Address(_DCBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class BindAddress(_DCBase):
+class BindAddress:
     interface_name: str
     addresses: List[Address]
     mac_address: Optional[str] = None
@@ -293,7 +250,7 @@ class BindAddress(_DCBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class Network(_DCBase):
+class Network:
     bind_addresses: List[BindAddress]
     ingress_addresses: List[str]
     egress_subnets: List[str]
@@ -345,7 +302,7 @@ def next_relation_id(update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class RelationBase(_DCBase):
+class _RelationBase:
     endpoint: str
     """Relation endpoint name. Must match some endpoint name defined in metadata.yaml."""
 
@@ -353,7 +310,7 @@ class RelationBase(_DCBase):
     """Interface name. Must match the interface name attached to this endpoint in metadata.yaml.
     If left empty, it will be automatically derived from metadata.yaml."""
 
-    relation_id: int = dataclasses.field(default_factory=next_relation_id)
+    id: int = dataclasses.field(default_factory=next_relation_id)
     """Juju relation ID. Every new Relation instance gets a unique one,
     if there's trouble, override."""
 
@@ -384,9 +341,9 @@ class RelationBase(_DCBase):
         raise NotImplementedError()
 
     def __post_init__(self):
-        if type(self) is RelationBase:
+        if type(self) is _RelationBase:
             raise RuntimeError(
-                "RelationBase cannot be instantiated directly; "
+                "_RelationBase cannot be instantiated directly; "
                 "please use Relation, PeerRelation, or SubordinateRelation",
             )
 
@@ -455,7 +412,7 @@ DEFAULT_JUJU_DATABAG = {
 
 
 @dataclasses.dataclass(frozen=True)
-class Relation(RelationBase):
+class Relation(_RelationBase):
     remote_app_name: str = "remote"
 
     # local limit
@@ -490,7 +447,7 @@ class Relation(RelationBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class SubordinateRelation(RelationBase):
+class SubordinateRelation(_RelationBase):
     remote_app_data: "RawDataBagContents" = dataclasses.field(default_factory=dict)
     remote_unit_data: "RawDataBagContents" = dataclasses.field(
         default_factory=lambda: DEFAULT_JUJU_DATABAG.copy(),
@@ -528,7 +485,7 @@ class SubordinateRelation(RelationBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class PeerRelation(RelationBase):
+class PeerRelation(_RelationBase):
     peers_data: Dict["UnitID", "RawDataBagContents"] = dataclasses.field(
         default_factory=lambda: {0: DEFAULT_JUJU_DATABAG.copy()},
     )
@@ -561,7 +518,7 @@ def _random_model_name():
 
 
 @dataclasses.dataclass(frozen=True)
-class Model(_DCBase):
+class Model:
     name: str = dataclasses.field(default_factory=_random_model_name)
     uuid: str = dataclasses.field(default_factory=lambda: str(uuid4()))
 
@@ -604,13 +561,13 @@ _ExecMock = Dict[Tuple[str, ...], ExecOutput]
 
 
 @dataclasses.dataclass(frozen=True)
-class Mount(_DCBase):
+class Mount:
     location: Union[str, PurePosixPath]
     src: Union[str, Path]
 
 
 @dataclasses.dataclass(frozen=True)
-class Container(_DCBase):
+class Container:
     name: str
     can_connect: bool = False
 
@@ -725,7 +682,7 @@ _RawStatusLiteral = Literal[
 
 
 @dataclasses.dataclass(frozen=True)
-class _EntityStatus(_DCBase):
+class _EntityStatus:
     """This class represents StatusBase and should not be interacted with directly."""
 
     # Why not use StatusBase directly? Because that's not json-serializable.
@@ -734,11 +691,6 @@ class _EntityStatus(_DCBase):
     message: str = ""
 
     def __eq__(self, other):
-        if isinstance(other, Tuple):
-            logger.warning(
-                "Comparing Status with Tuples is deprecated and will be removed soon.",
-            )
-            return (self.name, self.message) == other
         if isinstance(other, (StatusBase, _EntityStatus)):
             return (self.name, self.message) == (other.name, other.message)
         logger.warning(
@@ -767,26 +719,30 @@ def _status_to_entitystatus(obj: StatusBase) -> _EntityStatus:
 
 
 @dataclasses.dataclass(frozen=True)
-class StoredState(_DCBase):
+class StoredState:
     # /-separated Object names. E.g. MyCharm/MyCharmLib.
     # if None, this StoredState instance is owned by the Framework.
     owner_path: Optional[str]
 
     name: str = "_stored"
+    # Ideally, the type here would be only marshallable types, rather than Any.
+    # However, it's complex to describe those types, since it's a recursive
+    # definition - even in TypeShed the _Marshallable type includes containers
+    # like list[Any], which seems to defeat the point.
     content: Dict[str, Any] = dataclasses.field(default_factory=dict)
 
-    data_type_name: str = "StoredStateData"
+    _data_type_name: str = "StoredStateData"
 
     @property
     def handle_path(self):
-        return f"{self.owner_path or ''}/{self.data_type_name}[{self.name}]"
+        return f"{self.owner_path or ''}/{self._data_type_name}[{self.name}]"
 
 
 _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
 
 
 @dataclasses.dataclass(frozen=True)
-class Port(_DCBase):
+class Port:
     """Represents a port on the charm host."""
 
     protocol: _RawPortProtocolLiteral
@@ -828,7 +784,7 @@ def next_storage_index(update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Storage(_DCBase):
+class Storage:
     """Represents an (attached!) storage made available to the charm container."""
 
     name: str
@@ -858,7 +814,7 @@ class Storage(_DCBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class State(_DCBase):
+class State:
     """Represents the juju-owned portion of a unit's state.
 
     Roughly speaking, it wraps all hook-tool- and pebble-mediated data a charm can access in its
@@ -952,17 +908,18 @@ class State(_DCBase):
     def with_can_connect(self, container_name: str, can_connect: bool) -> "State":
         def replacer(container: Container):
             if container.name == container_name:
-                return container.replace(can_connect=can_connect)
+                return dataclasses.replace(container, can_connect=can_connect)
             return container
 
         ctrs = tuple(map(replacer, self.containers))
-        return self.replace(containers=ctrs)
+        return dataclasses.replace(self, containers=ctrs)
 
     def with_leadership(self, leader: bool) -> "State":
-        return self.replace(leader=leader)
+        return dataclasses.replace(self, leader=leader)
 
     def with_unit_status(self, status: StatusBase) -> "State":
-        return self.replace(
+        return dataclasses.replace(
+            self,
             status=dataclasses.replace(
                 cast(_EntityStatus, self.unit_status),
                 unit=_status_to_entitystatus(status),
@@ -998,23 +955,6 @@ class State(_DCBase):
         """Get all storages with this name."""
         return tuple(s for s in self.storage if s.name == name)
 
-    # FIXME: not a great way to obtain a delta, but is "complete". todo figure out a better way.
-    def jsonpatch_delta(self, other: "State"):
-        try:
-            import jsonpatch  # type: ignore
-        except ModuleNotFoundError:
-            logger.error(
-                "cannot import jsonpatch: using the .delta() "
-                "extension requires jsonpatch to be installed."
-                "Fetch it with pip install jsonpatch.",
-            )
-            return NotImplemented
-        patch = jsonpatch.make_patch(
-            dataclasses.asdict(other),
-            dataclasses.asdict(self),
-        ).patch
-        return sort_patch(patch)
-
 
 def _is_valid_charmcraft_25_metadata(meta: Dict[str, Any]):
     # Check whether this dict has the expected mandatory metadata fields according to the
@@ -1031,7 +971,7 @@ def _is_valid_charmcraft_25_metadata(meta: Dict[str, Any]):
 
 
 @dataclasses.dataclass(frozen=True)
-class _CharmSpec(_DCBase, Generic[CharmType]):
+class _CharmSpec(Generic[CharmType]):
     """Charm spec."""
 
     charm_type: Type[CharmBase]
@@ -1112,12 +1052,8 @@ class _CharmSpec(_DCBase, Generic[CharmType]):
         )
 
 
-def sort_patch(patch: List[Dict], key=lambda obj: obj["path"] + obj["op"]):
-    return sorted(patch, key=key)
-
-
 @dataclasses.dataclass(frozen=True)
-class DeferredEvent(_DCBase):
+class DeferredEvent:
     handle_path: str
     owner: str
     observer: str
@@ -1199,7 +1135,7 @@ class _EventPath(str):
 
 
 @dataclasses.dataclass(frozen=True)
-class Event(_DCBase):
+class Event:
     path: str
     args: Tuple[Any, ...] = ()
     kwargs: Dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -1237,7 +1173,7 @@ class Event(_DCBase):
                 "cannot pass param `remote_unit_id` to a "
                 "non-relation event constructor.",
             )
-        return self.replace(relation_remote_unit_id=remote_unit_id)
+        return dataclasses.replace(self, relation_remote_unit_id=remote_unit_id)
 
     def __post_init__(self):
         path = _EventPath(self.path)
@@ -1333,7 +1269,7 @@ class Event(_DCBase):
                 container = state.get_container(entity_name)
             except ValueError:
                 raise BindFailedError(f"no container found with name {entity_name}")
-            return self.replace(container=container)
+            return dataclasses.replace(self, container=container)
 
         if self._is_secret_event and not self.secret:
             if len(state.secrets) < 1:
@@ -1342,7 +1278,7 @@ class Event(_DCBase):
                 raise BindFailedError(
                     f"too many secrets found in state: cannot automatically bind {self}",
                 )
-            return self.replace(secret=state.secrets[0])
+            return dataclasses.replace(self, secret=state.secrets[0])
 
         if self._is_storage_event and not self.storage:
             storages = state.get_storages(entity_name)
@@ -1355,7 +1291,7 @@ class Event(_DCBase):
                     f"too many storages called {entity_name}: binding to first one",
                 )
             storage = storages[0]
-            return self.replace(storage=storage)
+            return dataclasses.replace(self, storage=storage)
 
         if self._is_relation_event and not self.relation:
             ep_name = entity_name
@@ -1364,7 +1300,7 @@ class Event(_DCBase):
                 raise BindFailedError(f"no relations on {ep_name} found in state")
             if len(relations) > 1:
                 logger.warning(f"too many relations on {ep_name}: binding to first one")
-            return self.replace(relation=relations[0])
+            return dataclasses.replace(self, relation=relations[0])
 
         if self._is_action_event and not self.action:
             raise BindFailedError(
@@ -1414,7 +1350,7 @@ class Event(_DCBase):
 
             snapshot_data = {
                 "relation_name": relation.endpoint,
-                "relation_id": relation.relation_id,
+                "relation_id": relation.id,
                 "app_name": remote_app,
                 "unit_name": f"{remote_app}/{self.relation_remote_unit_id}",
             }
@@ -1441,7 +1377,7 @@ def next_action_id(update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Action(_DCBase):
+class Action:
     name: str
 
     params: Dict[str, "AnyJson"] = dataclasses.field(default_factory=dict)
