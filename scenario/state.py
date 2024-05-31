@@ -853,6 +853,11 @@ class Container(_max_posargs(1)):
     def __hash__(self) -> int:
         return hash(self.name)
 
+    def __post_init__(self):
+        if not isinstance(self.execs, frozenset):
+            # Allow passing a regular set (or other iterable) of Execs.
+            super().__setattr__("execs", frozenset(self.execs))
+
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
         services = {}  # type: Dict[str, pebble.Service]
