@@ -44,7 +44,6 @@ from scenario.state import (
     Storage,
     _EntityStatus,
     _port_cls_by_protocol,
-    _generate_secret_id,
     _RawPortProtocolLiteral,
     _RawStatusLiteral,
 )
@@ -363,9 +362,7 @@ class _MockModelBackend(_ModelBackend):
     ) -> str:
         from scenario.state import Secret
 
-        secret_id = _generate_secret_id()
         secret = Secret(
-            id=secret_id,
             latest=content,
             label=label,
             description=description,
@@ -374,7 +371,7 @@ class _MockModelBackend(_ModelBackend):
             owner=owner,
         )
         secrets = set(self._state.secrets)
-        secrets.add(secret)
+        secret_id = secrets.add(secret)
         self._state._update_secrets(frozenset(secrets))
         return secret_id
 
@@ -412,11 +409,9 @@ class _MockModelBackend(_ModelBackend):
             if secret.owner is not None:
                 refresh = True
 
-        revision = secret.revision
         if peek or refresh:
-            revision = max(secret.contents.keys())
             if refresh:
-                secret._set_revision(revision)
+                secret._track_latest_revision()
             return secret.latest
 
         return secret.current
@@ -435,7 +430,7 @@ class _MockModelBackend(_ModelBackend):
         return SecretInfo(
             id=secret.id,
             label=secret.label,
-            revision=max(secret.contents),
+            revision=secret.latest_revision,
             expires=secret.expire,
             rotation=secret.rotate,
             rotates=None,  # not implemented yet.
@@ -453,6 +448,11 @@ class _MockModelBackend(_ModelBackend):
     ):
         secret = self._get_secret(id, label)
         self._check_can_manage_secret(secret)
+
+        if content == secret.latest:
+            logger.warning(
+                f"secret {id} contents set to the existing value: new revision created but not needed",
+            )
 
         secret._update_metadata(
             content=content,
@@ -489,11 +489,18 @@ class _MockModelBackend(_ModelBackend):
             del secret.remote_grants[relation_id]
 
     def secret_remove(self, id: str, *, revision: Optional[int] = None):
+        secret = self._get_secret(id)
+        self._check_can_manage_secret(secret)
+        # Removing all revisions is modelled as no content.
+
         # If revision that is not the tracked or latest one is removed, then it
         # doesn't make any difference to the charm, and this is not reflected
         # in the output state. If a test needs to verify that this remove was
         # called then it needs to mock the remove call, because this doesn't
         # change the state *as it is visible to the unit executing the charm*.
+        if revision not in (secret.tracked_revision, secret.latest_revision):
+            return
+
         # If the *tracked* revision, which is not also the latest, is removed,
         # then the secret is still accessible in the current hook (from the
         # input state), but afterwards the unit will always get SecretNotFound
@@ -505,16 +512,18 @@ class _MockModelBackend(_ModelBackend):
         # secret-info will still show the same revision number. If using refresh
         # or set, a "state is changing too quickly" error is returned.
         # TODO: Is it possible to get out of this state?
-        secret = self._get_secret(id)
-        self._check_can_manage_secret(secret)
 
         if revision:
+            if revision == secret.tracked_revision:
+                # TODO We really need to remove the secret from the state somehow.
+                pass
             # This is the latest revision.
             #            if revision == TODO:
             #                secret.latest.clear()
             # This is the currently tracked revision.
-            if revision == secret.revision:
-                secret.current.clear()
+            if revision == secret.tracked_revision:
+                # TODO: figure out what to do here.
+                pass
             # else this is some other revision: we don't need to do anything.
         else:
             if secret.current:

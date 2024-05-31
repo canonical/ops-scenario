@@ -8,7 +8,6 @@ import inspect
 import random
 import re
 import string
-import warnings
 from collections import namedtuple
 from enum import Enum
 from itertools import chain
@@ -271,12 +270,21 @@ class CloudSpec(_max_posargs(1)):
         )
 
 
+def _generate_secret_id():
+    # This doesn't account for collisions, but the odds are so low that it
+    # should not be possible in any realistic test run.
+    secret_id = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(20)
+    )
+    return f"secret:{secret_id}"
+
+
 @dataclasses.dataclass(frozen=True)
 class Secret(_max_posargs(1)):
-    # mapping from revision IDs to each revision's contents
-    contents: Dict[int, "RawSecretRevisionContents"]
+    latest: "RawSecretRevisionContents"
+    current: Optional["RawSecretRevisionContents"] = None
 
-    id: str
+    id: str = dataclasses.field(default_factory=_generate_secret_id)
     # CAUTION: ops-created Secrets (via .add_secret()) will have a canonicalized
     #  secret id (`secret:` prefix)
     #  but user-created ones will not. Using post-init to patch it in feels bad, but requiring the user to
@@ -287,7 +295,11 @@ class Secret(_max_posargs(1)):
     owner: Literal["unit", "app", None] = None
 
     # what revision is currently tracked by this charm. Only meaningful if owner=False
-    revision: int = 1
+    tracked_revision: int = 1
+
+    # TODO: enforce that latest_revision >= tracked_revision
+    # what revision is the latest for this secret.
+    latest_revision: int = 1
 
     # mapping from relation IDs to remote unit/apps to which this secret has been granted.
     # Only applicable if owner
@@ -301,10 +313,15 @@ class Secret(_max_posargs(1)):
     def __hash__(self) -> int:
         return hash(self.id)
 
-    def _set_revision(self, revision: int):
-        """Set a new tracked revision."""
+    def __post_init__(self):
+        if self.current is None:
+            # bypass frozen dataclass
+            object.__setattr__(self, "current", self.latest)
+
+    def _track_latest_revision(self):
+        """Set the current revision to the tracked revision."""
         # bypass frozen dataclass
-        object.__setattr__(self, "revision", revision)
+        object.__setattr__(self, "tracked_revision", self.latest_revision)
 
     def _update_metadata(
         self,
@@ -315,10 +332,10 @@ class Secret(_max_posargs(1)):
         rotate: Optional[SecretRotate] = None,
     ):
         """Update the metadata."""
-        if content:
-            self.latest = content
-
         # bypass frozen dataclass
+        object.__setattr__(self, "latest_revision", self.latest_revision + 1)
+        if content:
+            object.__setattr__(self, "latest", content)
         if label:
             object.__setattr__(self, "label", label)
         if description:
@@ -1347,6 +1364,9 @@ class State(_max_posargs(0)):
         """Update the current secrets."""
         # bypass frozen dataclass
         object.__setattr__(self, "secrets", new_secrets)
+
+    def _update_secrets():
+        pass
 
     def with_can_connect(self, container_name: str, can_connect: bool) -> "State":
         def replacer(container: Container):
