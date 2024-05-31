@@ -648,9 +648,9 @@ def test_pebble_exec():
         name='foo',
         execs={
             scenario.Exec(
-                ('ls', '-ll'),  # this is the command we're mocking
+                command_prefix=('ls', '-ll'),
                 return_code=0,
-                stdout=LS_LL
+                stdout=LS_LL,
             ),
         }
     )
@@ -665,6 +665,14 @@ def test_pebble_exec():
     )
     assert state_out.containers["foo"].get_exec(('ls', '-ll')).stdin = "..."
 ```
+
+Scenario will attempt to find the right `Exec` object by matching the provided
+command prefix against the command used in the ops `container.exec()` call. For
+example, if the command is `['ls', '-ll']` then Scenario will look for an `Exec`
+with exactly the same as command prefix, `('ls', '-ll')`, and if not found will
+look for an `Exec` with the command prefix `('ls', )`, and if not found will
+look for an `Exec` with the command prefix `()`, and if not found will raise
+a `RuntimeError`.
 
 ### Pebble Notices
 
