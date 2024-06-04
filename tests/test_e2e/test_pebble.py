@@ -214,6 +214,24 @@ def test_exec(charm_cls, cmd, out):
     )
 
 
+def test_get_exec():
+    class MyCharm(CharmBase):
+        def __init__(self, framework: Framework):
+            super().__init__(framework)
+            self.framework.observe(self.on.foo_pebble_ready, self._on_ready)
+
+        def _on_ready(self, _):
+            proc = self.unit.get_container("foo").exec(["ls"])
+            proc.stdin.write("hello world!")
+            proc.wait_output()
+
+    ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
+    exec = Exec((), stdout=LS)
+    container = Container(name="foo", can_connect=True, execs={exec})
+    state_out = ctx.run(container.pebble_ready_event, State(containers=[container]))
+    assert state_out.get_container(container).get_exec(()).stdin == "hello world!"
+
+
 def test_pebble_ready(charm_cls):
     def callback(self: CharmBase):
         foo = self.unit.get_container("foo")
