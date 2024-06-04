@@ -120,30 +120,38 @@ def test_get_secret_owner_peek_update(mycharm, owner):
 
 @pytest.mark.parametrize("owner", ("app", "unit"))
 def test_secret_changed_owner_evt_fails(mycharm, owner):
+    ctx = Context(mycharm, meta={"name": "local"})
+    secret = Secret(
+        id="foo",
+        contents={
+            0: {"a": "b"},
+            1: {"a": "c"},
+        },
+        owner=owner,
+    )
     with pytest.raises(ValueError):
-        _ = Secret(
-            id="foo",
-            contents={
-                0: {"a": "b"},
-                1: {"a": "c"},
-            },
-            owner=owner,
-        ).changed_event
+        _ = ctx.on.secret_changed(secret)
 
 
-@pytest.mark.parametrize("evt_prefix", ("rotate", "expired", "remove"))
-def test_consumer_events_failures(mycharm, evt_prefix):
+@pytest.mark.parametrize("evt_suffix,revision", [
+    ("rotate", None),
+    ("expired", 1),
+    ("remove", 1),
+    ])
+def test_consumer_events_failures(mycharm, evt_suffix, revision):
+    ctx = Context(mycharm, meta={"name": "local"})
+    secret = Secret(
+        id="foo",
+        contents={
+            0: {"a": "b"},
+            1: {"a": "c"},
+        },
+    )
+    kwargs = {"secret": secret}
+    if revision is not None:
+        kwargs["revision"] = revision
     with pytest.raises(ValueError):
-        _ = getattr(
-            Secret(
-                id="foo",
-                contents={
-                    0: {"a": "b"},
-                    1: {"a": "c"},
-                },
-            ),
-            evt_prefix + "_event",
-        )
+        _ = getattr(ctx.on, f"secret_{evt_suffix}")(**kwargs)
 
 
 @pytest.mark.parametrize("app", (True, False))

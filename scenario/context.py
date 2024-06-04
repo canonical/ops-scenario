@@ -222,19 +222,35 @@ class _CharmEvents:
 
     @staticmethod
     def secret_changed(secret: Secret):
+        if secret.owner:
+            raise ValueError(
+                "This unit will never receive secret-changed for a secret it owns.",
+            )
         return _Event("secret_changed", secret=secret)
 
     @staticmethod
     def secret_expired(secret: Secret, *, revision: int):
+        if not secret.owner:
+            raise ValueError(
+                "This unit will never receive secret-expire for a secret it does not own.",
+            )
         # TODO: Could we have a default revision?
         return _Event("secret_expired", secret=secret, secret_revision=revision)
 
     @staticmethod
     def secret_rotate(secret: Secret = None):
+        if not secret.owner:
+            raise ValueError(
+                "This unit will never receive secret-rotate for a secret it does not own.",
+            )
         return _Event("secret_rotate", secret=secret)
 
     @staticmethod
     def secret_remove(secret: Secret, *, revision: int):
+        if not secret.owner:
+            raise ValueError(
+                "This unit will never receive secret-removed for a secret it does not own.",
+            )
         # TODO: Could we have a default revision?
         return _Event("secret_remove", secret=secret, secret_revision=revision)
 

@@ -145,44 +145,6 @@ class Secret:
     expire: Optional[datetime.datetime] = None
     rotate: Optional[SecretRotate] = None
 
-    # consumer-only events
-    @property
-    def changed_event(self):
-        """Sugar to generate a secret-changed event."""
-        if self.owner:
-            raise ValueError(
-                "This unit will never receive secret-changed for a secret it owns.",
-            )
-        return _Event("secret_changed", secret=self)
-
-    # owner-only events
-    @property
-    def rotate_event(self):
-        """Sugar to generate a secret-rotate event."""
-        if not self.owner:
-            raise ValueError(
-                "This unit will never receive secret-rotate for a secret it does not own.",
-            )
-        return _Event("secret_rotate", secret=self)
-
-    @property
-    def expired_event(self):
-        """Sugar to generate a secret-expired event."""
-        if not self.owner:
-            raise ValueError(
-                "This unit will never receive secret-expire for a secret it does not own.",
-            )
-        return _Event("secret_expire", secret=self)
-
-    @property
-    def remove_event(self):
-        """Sugar to generate a secret-remove event."""
-        if not self.owner:
-            raise ValueError(
-                "This unit will never receive secret-removed for a secret it does not own.",
-            )
-        return _Event("secret_removed", secret=self)
-
     def _set_revision(self, revision: int):
         """Set a new tracked revision."""
         # bypass frozen dataclass
