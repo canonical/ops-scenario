@@ -53,6 +53,9 @@ def trigger(
         if event.startswith("relation_"):
             assert len(state.relations) == 1, "shortcut only works with one relation"
             event = getattr(ctx.on, event)(state.relations[0])
+        elif event.startswith("pebble_"):
+            assert len(state.containers) == 1, "shortcut only works with one container"
+            event = getattr(ctx.on, event)(state.containers[0])
         else:
             event = getattr(ctx.on, event)()
     with ctx.manager(event, state=state) as mgr:

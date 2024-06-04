@@ -358,46 +358,6 @@ class _RelationBase:
                     f"found a value of type {type(v)}",
                 )
 
-    @property
-    def changed_event(self) -> "_Event":
-        """Sugar to generate a <this relation>-relation-changed event."""
-        return _Event(
-            path=normalize_name(self.endpoint + "-relation-changed"),
-            relation=cast("AnyRelation", self),
-        )
-
-    @property
-    def joined_event(self) -> "_Event":
-        """Sugar to generate a <this relation>-relation-joined event."""
-        return _Event(
-            path=normalize_name(self.endpoint + "-relation-joined"),
-            relation=cast("AnyRelation", self),
-        )
-
-    @property
-    def created_event(self) -> "_Event":
-        """Sugar to generate a <this relation>-relation-created event."""
-        return _Event(
-            path=normalize_name(self.endpoint + "-relation-created"),
-            relation=cast("AnyRelation", self),
-        )
-
-    @property
-    def departed_event(self) -> "_Event":
-        """Sugar to generate a <this relation>-relation-departed event."""
-        return _Event(
-            path=normalize_name(self.endpoint + "-relation-departed"),
-            relation=cast("AnyRelation", self),
-        )
-
-    @property
-    def broken_event(self) -> "_Event":
-        """Sugar to generate a <this relation>-relation-broken event."""
-        return _Event(
-            path=normalize_name(self.endpoint + "-relation-broken"),
-            relation=cast("AnyRelation", self),
-        )
-
 
 _DEFAULT_IP = " 192.0.2.0"
 DEFAULT_JUJU_DATABAG = {
@@ -656,16 +616,6 @@ class Container:
         """Simulated pebble filesystem in this context."""
         return ctx._get_container_root(self.name)
 
-    @property
-    def pebble_ready_event(self):
-        """Sugar to generate a <this container's name>-pebble-ready event."""
-        if not self.can_connect:
-            logger.warning(
-                "you **can** fire pebble-ready while the container cannot connect, "
-                "but that's most likely not what you want.",
-            )
-        return _Event(path=normalize_name(self.name + "-pebble-ready"), container=self)
-
 
 _RawStatusLiteral = Literal[
     "waiting",
@@ -791,22 +741,6 @@ class Storage:
     def get_filesystem(self, ctx: "Context") -> Path:
         """Simulated filesystem root in this context."""
         return ctx._get_storage_root(self.name, self.index)
-
-    @property
-    def attached_event(self) -> "_Event":
-        """Sugar to generate a <this storage>-storage-attached event."""
-        return _Event(
-            path=normalize_name(self.name + "-storage-attached"),
-            storage=self,
-        )
-
-    @property
-    def detaching_event(self) -> "_Event":
-        """Sugar to generate a <this storage>-storage-detached event."""
-        return _Event(
-            path=normalize_name(self.name + "-storage-detaching"),
-            storage=self,
-        )
 
 
 @dataclasses.dataclass(frozen=True)

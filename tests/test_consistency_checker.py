@@ -319,15 +319,6 @@ def test_dupe_containers_inconsistent():
     )
 
 
-def test_container_pebble_evt_consistent():
-    container = Container("foo-bar-baz")
-    assert_consistent(
-        State(containers=[container]),
-        container.pebble_ready_event,
-        _CharmSpec(MyCharm, {"containers": {"foo-bar-baz": {}}}),
-    )
-
-
 def test_action_not_in_meta_inconsistent():
     action = Action("foo", params={"bar": "baz"})
     assert_inconsistent(
@@ -444,13 +435,6 @@ def test_storage_event():
     assert_inconsistent(
         State(storage=[storage]),
         _Event("foo-storage-attached"),
-        _CharmSpec(
-            MyCharm, meta={"name": "rupert", "storage": {"foo": {"type": "filesystem"}}}
-        ),
-    )
-    assert_consistent(
-        State(storage=[storage]),
-        storage.attached_event,
         _CharmSpec(
             MyCharm, meta={"name": "rupert", "storage": {"foo": {"type": "filesystem"}}}
         ),
