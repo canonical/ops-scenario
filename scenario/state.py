@@ -1005,7 +1005,6 @@ class Storage(_max_posargs(1)):
         """Simulated filesystem root in this context."""
         return ctx._get_storage_root(self.name, self.index)
 
-
 @dataclasses.dataclass(frozen=True)
 class State(_max_posargs(0)):
     """Represents the juju-owned portion of a unit's state.
