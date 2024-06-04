@@ -431,10 +431,10 @@ def test_grant_after_add(leader):
             secret.grant(self.model.relations["bar"][0])
 
     state = State(leader=leader, relations=[Relation("bar")])
-    context = Context(
+    ctx = Context(
         GrantingCharm, meta={"name": "foo", "provides": {"bar": {"interface": "bar"}}}
     )
-    context.run("start", state)
+    ctx.run(ctx.on.start(), state)
 
 
 def test_grant_nonowner(mycharm):

@@ -196,10 +196,10 @@ def test_defer_reemit_lifecycle_event(mycharm):
     ctx = Context(mycharm, meta=mycharm.META, capture_deferred_events=True)
 
     mycharm.defer_next = 1
-    state_1 = ctx.run("update-status", State())
+    state_1 = ctx.run(ctx.on.update_status(), State())
 
     mycharm.defer_next = 0
-    state_2 = ctx.run("start", state_1)
+    state_2 = ctx.run(ctx.on.start(), state_1)
 
     assert [type(e).__name__ for e in ctx.emitted_events] == [
         "UpdateStatusEvent",
@@ -215,10 +215,10 @@ def test_defer_reemit_relation_event(mycharm):
 
     rel = Relation("foo")
     mycharm.defer_next = 1
-    state_1 = ctx.run(rel.created_event, State(relations=[rel]))
+    state_1 = ctx.run(ctx.on.relation_created(rel), State(relations=[rel]))
 
     mycharm.defer_next = 0
-    state_2 = ctx.run("start", state_1)
+    state_2 = ctx.run(ctx.on.start(), state_1)
 
     assert [type(e).__name__ for e in ctx.emitted_events] == [
         "RelationCreatedEvent",

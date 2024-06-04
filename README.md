@@ -92,7 +92,7 @@ class MyCharm(ops.CharmBase):
 
 def test_scenario_base():
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
-    out = ctx.run(scenario.Event("start"), scenario.State())
+    out = ctx.run(ctx.on.start(), scenario.State())
     assert out.unit_status == ops.UnknownStatus()
 ```
 
@@ -119,7 +119,7 @@ class MyCharm(ops.CharmBase):
 @pytest.mark.parametrize('leader', (True, False))
 def test_status_leader(leader):
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
-    out = ctx.run('start', scenario.State(leader=leader))
+    out = ctx.run(ctx.on.start(), scenario.State(leader=leader))
     assert out.unit_status == ops.ActiveStatus('I rule' if leader else 'I am ruled')
 ```
 
@@ -181,7 +181,7 @@ from charm import MyCharm
 
 def test_statuses():
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
-    out = ctx.run('start', scenario.State(leader=False))
+    out = ctx.run(ctx.on.start(), scenario.State(leader=False))
     assert ctx.unit_status_history == [
         ops.UnknownStatus(),
         ops.MaintenanceStatus('determining who the ruler is...'),
@@ -210,7 +210,7 @@ import ops
 import scenario
 
 # ...
-ctx.run('start', scenario.State(unit_status=ops.ActiveStatus('foo')))
+ctx.run(ctx.start(), scenario.State(unit_status=ops.ActiveStatus('foo')))
 assert ctx.unit_status_history == [
     ops.ActiveStatus('foo'),  # now the first status is active: 'foo'!
     # ...
@@ -247,7 +247,7 @@ import scenario
 
 def test_foo():
     ctx = scenario.Context(...)
-    ctx.run('start', ...)
+    ctx.run(ctx.on.start(), ...)
 
     assert len(ctx.emitted_events) == 1
     assert isinstance(ctx.emitted_events[0], ops.StartEvent)
@@ -267,7 +267,7 @@ def test_emitted_full():
         capture_deferred_events=True,
         capture_framework_events=True,
     )
-    ctx.run("start", scenario.State(deferred=[scenario.Event("update-status").deferred(MyCharm._foo)]))
+    ctx.run(ctx.on.start(), scenario.State(deferred=[scenario.Event("update-status").deferred(MyCharm._foo)]))
 
     assert len(ctx.emitted_events) == 5
     assert [e.handle.kind for e in ctx.emitted_events] == [
@@ -294,7 +294,7 @@ import scenario
 with capture_events() as emitted:
     ctx = scenario.Context(...)
     state_out = ctx.run(
-        "update-status",
+        ctx.on.update_status(),
         scenario.State(deferred=[scenario.DeferredEvent("start", ...)])
     )
 
@@ -357,7 +357,7 @@ def test_relation_data():
     ])
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
 
-    state_out = ctx.run('start', state_in)
+    state_out = ctx.run(ctx.on.start(), state_in)
 
     assert state_out.relations[0].local_unit_data == {"abc": "baz!"}
     # you can do this to check that there are no other differences:
@@ -415,7 +415,7 @@ state_in = scenario.State(relations=[
         peers_data={1: {}, 2: {}, 42: {'foo': 'bar'}},
     )])
 
-scenario.Context(..., unit_id=1).run("start", state_in)  # invalid: this unit's id cannot be the ID of a peer.
+scenario.Context(..., unit_id=1).run(ctx.on.start(), state_in)  # invalid: this unit's id cannot be the ID of a peer.
 
 
 ```
@@ -623,7 +623,7 @@ def test_pebble_push():
             meta={"name": "foo", "containers": {"foo": {}}}
         )
         ctx.run(
-            container.pebble_ready_event(),
+            ctx.on.pebble_ready(container),
             state_in,
         )
         assert local_file.read().decode() == "TEST"
@@ -661,7 +661,7 @@ def test_pebble_push():
         meta={"name": "foo", "containers": {"foo": {}}}
     )
     
-    ctx.run("start", state_in)
+    ctx.run(ctx.on.start(), state_in)
 
     # This is the root of the simulated container filesystem. Any mounts will be symlinks in it.
     container_root_fs = container.get_filesystem(ctx)
@@ -710,7 +710,7 @@ def test_pebble_exec():
         meta={"name": "foo", "containers": {"foo": {}}},
     )
     state_out = ctx.run(
-        container.pebble_ready_event,
+        ctx.on.pebble_ready(container),
         state_in,
     )
 ```
@@ -765,7 +765,7 @@ From test code, you can inspect that:
 import scenario
 
 ctx = scenario.Context(MyCharm)
-ctx.run('some-event-that-will-cause_on_foo-to-be-called', scenario.State())
+ctx.run(ctx.on.some_event_that_will_cause_on_foo_to_be_called(), scenario.State())
 
 # the charm has requested two 'foo' storages to be provisioned:
 assert ctx.requested_storages['foo'] == 2
@@ -780,11 +780,11 @@ import scenario
 ctx = scenario.Context(MyCharm)
 foo_0 = scenario.Storage('foo')
 # The charm is notified that one of the storages it has requested is ready:
-ctx.run(foo_0.attached_event, State(storage=[foo_0]))
+ctx.run(ctx.on.storage_sttached(foo_0), State(storage=[foo_0]))
 
 foo_1 = scenario.Storage('foo')
 # The charm is notified that the other storage is also ready:
-ctx.run(foo_1.attached_event, State(storage=[foo_0, foo_1]))
+ctx.run(ctx.on.storage_attached(foo_1), State(storage=[foo_0, foo_1]))
 ```
 
 ## Ports
@@ -796,17 +796,17 @@ Since `ops 2.6.0`, charms can invoke the `open-port`, `close-port`, and `opened-
 import scenario
 
 ctx = scenario.Context(MyCharm)
-ctx.run("start", scenario.State(opened_ports=[scenario.Port("tcp", 42)]))
+ctx.run(ctx.on.start(), scenario.State(opened_ports=[scenario.Port("tcp", 42)]))
 ```
 - assert that a charm has called `open-port` or `close-port`:
 ```python
 import scenario
 
 ctx = scenario.Context(MyCharm)
-state1 = ctx.run("start", scenario.State())
+state1 = ctx.run(ctx.on.start(), scenario.State())
 assert state1.opened_ports == [scenario.Port("tcp", 42)]
 
-state2 = ctx.run("stop", state1)
+state2 = ctx.run(ctx.on.stop(), state1)
 assert state2.opened_ports == []
 ```
 
@@ -944,7 +944,7 @@ class MyCharm(ops.CharmBase):
 
 ctx = scenario.Context(MyCharm, meta={"name": "foo"})
 state_in = scenario.State(model=scenario.Model(name="my-model"))
-out = ctx.run("start", state_in)
+out = ctx.run(ctx.on.start(), state_in)
 assert out.model.name == "my-model"
 assert out.model.uuid == state_in.model.uuid
 ```
@@ -1035,7 +1035,7 @@ def test_start_on_deferred_update_status(MyCharm):
             scenario.deferred('update_status', handler=MyCharm._on_update_status)
         ]
     )
-    state_out = scenario.Context(MyCharm).run('start', state_in)
+    state_out = scenario.Context(MyCharm).run(ctx.on.start(), state_in)
     assert len(state_out.deferred) == 1
     assert state_out.deferred[0].name == 'start'
 ```
@@ -1070,7 +1070,7 @@ class MyCharm(...):
 
 
 def test_defer(MyCharm):
-    out = scenario.Context(MyCharm).run('start', scenario.State())
+    out = scenario.Context(MyCharm).run(ctx.on.start(), scenario.State())
     assert len(out.deferred) == 1
     assert out.deferred[0].name == 'start'
 ```
@@ -1198,7 +1198,7 @@ class MyCharmType(ops.CharmBase):
 
 
 ctx = scenario.Context(charm_type=MyCharmType, meta={'name': 'my-charm-name'})
-ctx.run('start', State())
+ctx.run(ctx.on.start(), State())
 ```
 
 A consequence of this fact is that you have no direct control over the temporary directory that we are creating to put the metadata
@@ -1220,7 +1220,7 @@ state = scenario.Context(
     charm_type=MyCharmType,
     meta={'name': 'my-charm-name'},
     charm_root=td.name
-).run('start', scenario.State())
+).run(ctx.on.start(), scenario.State())
 ```
 
 Do this, and you will be able to set up said directory as you like before the charm is run, as well as verify its

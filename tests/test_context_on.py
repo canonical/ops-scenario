@@ -61,22 +61,23 @@ class ContextCharm(ops.CharmBase):
 def test_simple_events(event_name, event_kind):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     # These look like:
-    #   ctx.run(ctx.on.install, state)
-    with ctx.manager(getattr(ctx.on, event_name), scenario.State()) as mgr:
+    #   ctx.run(ctx.on.install(), state)
+    with ctx.manager(getattr(ctx.on, event_name)(), scenario.State()) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
         assert isinstance(mgr.charm.observed[0], event_kind)
 
 
+@pytest.mark.parametrize("as_kwarg", [True, False])
 @pytest.mark.parametrize(
-    "event_name, event_kind",
+    "event_name,event_kind",
     [
         ("secret_changed", ops.SecretChangedEvent),
         ("secret_rotate", ops.SecretRotateEvent),
     ],
 )
-def test_simple_secret_events(event_name, event_kind):
+def test_simple_secret_events(as_kwarg, event_name, event_kind):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     secret = scenario.Secret("secret:123", {0: {"password": "xxxx"}}, owner=None)
     state_in = scenario.State(secrets=[secret])
@@ -84,7 +85,13 @@ def test_simple_secret_events(event_name, event_kind):
     #   ctx.run(ctx.on.secret_changed(secret=secret), state)
     # The secret must always be passed because the same event name is used for
     # all secrets.
-    with ctx.manager(getattr(ctx.on, event_name)(secret=secret), state_in) as mgr:
+    if as_kwarg:
+        args = ()
+        kwargs = {"secret": secret}
+    else:
+        args = (secret,)
+        kwargs = {}
+    with ctx.manager(getattr(ctx.on, event_name)(*args, **kwargs), state_in) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
@@ -111,7 +118,7 @@ def test_revision_secret_events(event_name, event_kind):
     # The secret and revision must always be passed because the same event name
     # is used for all secrets.
     with ctx.manager(
-        getattr(ctx.on, event_name)(secret=secret, revision=42), state_in
+        getattr(ctx.on, event_name)(secret, revision=42), state_in
     ) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
@@ -122,36 +129,69 @@ def test_revision_secret_events(event_name, event_kind):
         assert event.revision == 42
 
 
+@pytest.mark.parametrize("event_name", ["secret_expired", "secret_remove"])
+def test_revision_secret_events_as_positional_arg(event_name):
+    ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
+    secret = scenario.Secret(
+        "secret:123", {42: {"password": "yyyy"}, 43: {"password": "xxxx"}}, owner=None
+    )
+    state_in = scenario.State(secrets=[secret])
+    with pytest.assertRaises(ValueError):
+        ctx.run(getattr(ctx.on, event_name)(secret, 42), state_in)
+
+
+@pytest.mark.parametrize("as_kwarg", [True, False])
+@pytest.mark.parametrize("storage_index", [0, 1, None])
 @pytest.mark.parametrize(
     "event_name, event_kind",
     [
-        ("foo_storage_attached", ops.StorageAttachedEvent),
-        ("foo_storage_detaching", ops.StorageDetachingEvent),
+        ("storage_attached", ops.StorageAttachedEvent),
+        ("storage_detaching", ops.StorageDetachingEvent),
     ],
 )
-def test_storage_events(event_name, event_kind):
+def test_storage_events(as_kwarg, storage_index, event_name, event_kind):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
-    storage = scenario.Storage("foo")
-    state_in = scenario.State(storage=[storage])
+    storages = [scenario.Storage("foo", index) for index in range((storage_index or 0) + 1)]
+    state_in = scenario.State(storage=storages)
     # These look like:
-    #   ctx.run(ctx.on.foo_storage_attached, state)
-    # The storage is inferred from the event name.
-    with ctx.manager(getattr(ctx.on, event_name), state_in) as mgr:
+    #   ctx.run(ctx.on.storage_attached(storage), state)
+    if as_kwarg:
+        args = ()
+        if storage_index is None:
+            kwargs = {"storage": storages[-1]}
+        else:
+            kwargs = {"storage": storages[-1], "index": storages[-1].index}
+    else:
+        args = (storages[-1],)
+        if storage_index is None:
+            kwargs = {}
+        else:
+            kwargs = {"index": storages[-1].index}
+    with ctx.manager(getattr(ctx.on, event_name)(*args, **kwargs), state_in) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
         event = mgr.charm.observed[0]
         assert isinstance(event, event_kind)
-        assert event.storage.name == storage.name
-        assert event.storage.index == storage.index
+        assert event.storage.name == storages[-1].name
+        assert event.storage.index == storages[-1].index
+
+
+@pytest.mark.parametrize("event_name", ["storage_attached", "storage_detaching"])
+def test_storage_events_as_positional_arg(event_name):
+    ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
+    storage = scenario.Storage("foo")
+    state_in = scenario.State(storage=[storage])
+    with pytest.assertRaises(ValueError):
+        ctx.run(getattr(ctx.on, event_name)(storage, 0), state_in)
 
 
 def test_action_event_no_params():
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     # These look like:
-    #   ctx.run_action(ctx.on.act_action, state)
-    # The action is inferred from the event name.
-    with ctx.action_manager(ctx.on.act_action, scenario.State()) as mgr:
+    #   ctx.run_action(ctx.on.action(action), state)
+    action = scenario.Action("act")
+    with ctx.action_manager(ctx.on.action(action), scenario.State()) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
@@ -180,9 +220,8 @@ def test_pebble_ready_event():
     container = scenario.Container("bar", can_connect=True)
     state_in = scenario.State(containers=[container])
     # These look like:
-    #   ctx.run(ctx.on.bar_pebble_ready, state)
-    # The container/workload is inferred from the event name.
-    with ctx.manager(ctx.on.bar_pebble_ready, state_in) as mgr:
+    #   ctx.run(ctx.on.pebble_ready(container), state)
+    with ctx.manager(ctx.on.pebble_ready(container), state_in) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
@@ -191,21 +230,27 @@ def test_pebble_ready_event():
         assert event.workload.name == container.name
 
 
+@pytest.mark.parametrize("as_kwarg", [True, False])
 @pytest.mark.parametrize(
     "event_name, event_kind",
     [
-        ("baz_relation_created", ops.RelationCreatedEvent),
-        ("baz_relation_broken", ops.RelationBrokenEvent),
+        ("relation_created", ops.RelationCreatedEvent),
+        ("relation_broken", ops.RelationBrokenEvent),
     ],
 )
-def test_relation_app_events(event_name, event_kind):
+def test_relation_app_events(as_kwarg, event_name, event_kind):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     relation = scenario.Relation("baz")
     state_in = scenario.State(relations=[relation])
     # These look like:
-    #   ctx.run(ctx.on.baz_relation_created, state)
-    # The relation is inferred from the event name.
-    with ctx.manager(getattr(ctx.on, event_name), state_in) as mgr:
+    #   ctx.run(ctx.on.relation_created(relation), state)
+    if as_kwarg:
+        args = ()
+        kwargs = {"relation": relation}
+    else:
+        args = (relation,)
+        kwargs = {}
+    with ctx.manager(getattr(ctx.on, event_name)(*args, **kwargs), state_in) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
@@ -216,11 +261,20 @@ def test_relation_app_events(event_name, event_kind):
         assert event.unit is None
 
 
+@pytest.mark.parametrize("event_name", ["relation_created", "relation_broken"])
+def test_relation_events_as_positional_arg(event_name):
+    ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
+    relation = scenario.Relation("baz")
+    state_in = scenario.State(relations=[relation])
+    with pytest.assertRaises(ValueError):
+        ctx.run(getattr(ctx.on, event_name)(relation, 0), state_in)
+
+
 @pytest.mark.parametrize(
     "event_name, event_kind",
     [
-        ("baz_relation_joined", ops.RelationJoinedEvent),
-        ("baz_relation_changed", ops.RelationChangedEvent),
+        ("relation_joined", ops.RelationJoinedEvent),
+        ("relation_changed", ops.RelationChangedEvent),
     ],
 )
 def test_relation_unit_events_default_unit(event_name, event_kind):
@@ -229,9 +283,8 @@ def test_relation_unit_events_default_unit(event_name, event_kind):
     state_in = scenario.State(relations=[relation])
     # These look like:
     #   ctx.run(ctx.on.baz_relation_changed, state)
-    # The relation is inferred from the event name and the unit is chosen
-    # automatically.
-    with ctx.manager(getattr(ctx.on, event_name), state_in) as mgr:
+    # The unit is chosen automatically.
+    with ctx.manager(getattr(ctx.on, event_name)(relation), state_in) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
@@ -245,8 +298,8 @@ def test_relation_unit_events_default_unit(event_name, event_kind):
 @pytest.mark.parametrize(
     "event_name, event_kind",
     [
-        ("baz_relation_joined", ops.RelationJoinedEvent),
-        ("baz_relation_changed", ops.RelationChangedEvent),
+        ("relation_joined", ops.RelationJoinedEvent),
+        ("relation_changed", ops.RelationChangedEvent),
     ],
 )
 def test_relation_unit_events(event_name, event_kind):
@@ -257,8 +310,7 @@ def test_relation_unit_events(event_name, event_kind):
     state_in = scenario.State(relations=[relation])
     # These look like:
     #   ctx.run(ctx.on.baz_relation_changed(unit=unit_ordinal), state)
-    # The relation is inferred from the event name, and an explicit unit choice is provided.
-    with ctx.manager(getattr(ctx.on, event_name)(unit=2), state_in) as mgr:
+    with ctx.manager(getattr(ctx.on, event_name)(relation, unit=2), state_in) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
@@ -275,10 +327,8 @@ def test_relation_departed_event():
     state_in = scenario.State(relations=[relation])
     # These look like:
     #   ctx.run(ctx.on.baz_relation_departed(unit=unit_ordinal, departing_unit=unit_ordinal), state)
-    # The relation is inferred from the event name, and an explicit unit choice is provided for
-    # both the triggering unit and the departing unit.
     with ctx.manager(
-        ctx.on.baz_relation_departed(unit=2, departing_unit=1), state_in
+        ctx.on.relation_departed(relation, unit=2, departing_unit=1), state_in
     ) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2

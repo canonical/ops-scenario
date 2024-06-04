@@ -83,9 +83,9 @@ def test_storage_usage(storage_ctx):
 
 def test_storage_attached_event(storage_ctx):
     storage = Storage("foo")
-    storage_ctx.run(storage.attached_event, State(storage=[storage]))
+    storage_ctx.run(storage_ctx.on.storage_attached(storage), State(storage=[storage]))
 
 
 def test_storage_detaching_event(storage_ctx):
     storage = Storage("foo")
-    storage_ctx.run(storage.detaching_event, State(storage=[storage]))
+    storage_ctx.run(storage_ctx.on.storage_detaching(storage), State(storage=[storage]))

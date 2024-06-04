@@ -61,7 +61,7 @@ def test_emitted_framework():
         META = {"name": "joop"}
 
     ctx = Context(MyCharm, meta=MyCharm.META, capture_framework_events=True)
-    ctx.run("update-status", State())
+    ctx.run(ctx.on.update_status(), State())
     assert len(ctx.emitted_events) == 4
     assert list(map(type, ctx.emitted_events)) == [
         ops.UpdateStatusEvent,
@@ -84,7 +84,7 @@ def test_emitted_deferred():
         capture_deferred_events=True,
         capture_framework_events=True,
     )
-    ctx.run("start", State(deferred=[Event("update-status").deferred(MyCharm._foo)]))
+    ctx.run(ctx.on.start(), State(deferred=[Event("update-status").deferred(MyCharm._foo)]))
 
     assert len(ctx.emitted_events) == 5
     assert [e.handle.kind for e in ctx.emitted_events] == [

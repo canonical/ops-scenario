@@ -115,7 +115,7 @@ def test_meta_autoload(tmp_path, legacy):
         meta={"type": "charm", "name": "foo", "summary": "foo", "description": "foo"},
     ) as charm:
         ctx = Context(charm)
-        ctx.run("start", State())
+        ctx.run(ctx.on.start(), State())
 
 
 @pytest.mark.parametrize("legacy", (True, False))
@@ -143,7 +143,7 @@ def test_relations_ok(tmp_path, legacy):
         },
     ) as charm:
         # this would fail if there were no 'cuddles' relation defined in meta
-        Context(charm).run("start", State(relations=[Relation("cuddles")]))
+        Context(charm).run(ctx.on.start(), State(relations=[Relation("cuddles")]))
 
 
 @pytest.mark.parametrize("legacy", (True, False))
