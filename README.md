@@ -744,7 +744,7 @@ Since `ops 2.6.0`, charms can invoke the `open-port`, `close-port`, and `opened-
 
 - simulate a charm run with a port opened by some previous execution
 ctx = scenario.Context(MyCharm, meta=MyCharm.META)
-ctx.run("start", scenario.State(opened_ports=[scenario.Port("tcp", 42)]))
+ctx.run(ctx.on.start(), scenario.State(opened_ports=[scenario.Port("tcp", 42)]))
 ```
 - assert that a charm has called `open-port` or `close-port`:
 ```python
