@@ -153,12 +153,10 @@ def test_revision_secret_events_as_positional_arg(event_name):
         ("storage_detaching", ops.StorageDetachingEvent),
     ],
 )
-def test_storage_events(as_kwarg, storage_index, event_name, event_kind):
+def test_storage_events(event_name, event_kind):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
-    storages = [
-        scenario.Storage("foo", index) for index in range((storage_index or 0) + 1)
-    ]
-    state_in = scenario.State(storage=storages)
+    storage = scenario.Storage("foo")
+    state_in = scenario.State(storage=[storage])
     # These look like:
     #   ctx.run(ctx.on.storage_attached(storage), state)
     with ctx.manager(getattr(ctx.on, event_name)(storage), state_in) as mgr:
@@ -167,17 +165,8 @@ def test_storage_events(as_kwarg, storage_index, event_name, event_kind):
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
         event = mgr.charm.observed[0]
         assert isinstance(event, event_kind)
-        assert event.storage.name == storages[-1].name
-        assert event.storage.index == storages[-1].index
-
-
-@pytest.mark.parametrize("event_name", ["storage_attached", "storage_detaching"])
-def test_storage_events_as_positional_arg(event_name):
-    ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
-    storage = scenario.Storage("foo")
-    state_in = scenario.State(storage=[storage])
-    with pytest.assertRaises(ValueError):
-        ctx.run(getattr(ctx.on, event_name)(storage, 0), state_in)
+        assert event.storage.name == storage.name
+        assert event.storage.index == storage.index
 
 
 def test_action_event_no_params():

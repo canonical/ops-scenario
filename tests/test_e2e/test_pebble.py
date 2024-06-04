@@ -128,7 +128,7 @@ def test_fs_pull(charm_cls, make_dirs):
         charm_type=charm_cls,
         meta={"name": "foo", "containers": {"foo": {}}},
     )
-    with ctx.manager("start", state=state) as mgr:
+    with ctx.manager(ctx.on.start(), state=state) as mgr:
         out = mgr.run()
         callback(mgr.charm)
 
@@ -316,9 +316,8 @@ def test_exec_wait_error(charm_cls):
         ]
     )
 
-    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
-        "start", state
-    ) as mgr:
+    ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
+    with ctx.manager(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         with pytest.raises(ExecError):
@@ -339,9 +338,8 @@ def test_exec_wait_output(charm_cls):
         ]
     )
 
-    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
-        "start", state
-    ) as mgr:
+    ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
+    with ctx.manager(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         out, err = proc.wait_output()
@@ -360,9 +358,8 @@ def test_exec_wait_output_error(charm_cls):
         ]
     )
 
-    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
-        "start", state
-    ) as mgr:
+    ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
+    with ctx.manager(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         with pytest.raises(ExecError):
