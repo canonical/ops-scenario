@@ -131,7 +131,7 @@ def test_workload_history(mycharm):
         meta={"name": "local"},
     )
 
-    out = ctx.run(ctx.ȯn.install(), State(leader=True))
+    out = ctx.run(ctx.on.install(), State(leader=True))
     out = ctx.run(ctx.on.start(), out)
     out = ctx.run(ctx.on.update_status(), out)
 

@@ -131,13 +131,16 @@ def test_deferred_relation_event(mycharm):
 
 
 def test_deferred_relation_event_from_relation(mycharm):
+    ctx = Context(mycharm, meta=mycharm.META)
     mycharm.defer_next = 2
     rel = Relation(endpoint="foo", remote_app_name="remote")
     out = trigger(
         State(
             relations=[rel],
             deferred=[
-                rel.changed_event(remote_unit_id=1).deferred(handler=mycharm._on_event)
+                ctx.on.relation_changed(rel, remote_unit=1).deferred(
+                    handler=mycharm._on_event
+                )
             ],
         ),
         "start",

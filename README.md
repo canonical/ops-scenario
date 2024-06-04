@@ -1118,12 +1118,6 @@ foo_relation = scenario.Relation('foo')
 foo_relation.changed_event.deferred(handler=MyCharm._on_foo_relation_changed)
 ```
 
-# Emitting custom events
-
-Suppose your charm uses a charm library providing an `ingress_provided` event.
-The proper way to emit it is to run the event that causes that custom event to be emitted by the library, whatever
-that may be, for example a `foo-relation-changed`.
-
 # Live charm introspection
 
 Scenario is a black-box, state-transition testing framework. It makes it trivial to assert that a status went from A to

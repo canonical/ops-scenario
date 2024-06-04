@@ -20,7 +20,7 @@ from scenario.state import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover
-    from scenario.state import Event, State
+    from scenario.state import State, _Event
 
 logger = scenario_logger.getChild("consistency_checker")
 
@@ -34,7 +34,7 @@ class Results(NamedTuple):
 
 def check_consistency(
     state: "State",
-    event: "Event",
+    event: "_Event",
     charm_spec: "_CharmSpec",
     juju_version: str,
 ):
@@ -119,7 +119,7 @@ def check_resource_consistency(
 
 def check_event_consistency(
     *,
-    event: "Event",
+    event: "_Event",
     charm_spec: "_CharmSpec",
     **_kwargs,  # noqa: U101
 ) -> Results:
@@ -157,7 +157,7 @@ def check_event_consistency(
 
 def _check_relation_event(
     charm_spec: _CharmSpec,  # noqa: U100
-    event: "Event",
+    event: "_Event",
     errors: List[str],
     warnings: List[str],  # noqa: U100
 ):
@@ -176,7 +176,7 @@ def _check_relation_event(
 
 def _check_workload_event(
     charm_spec: _CharmSpec,  # noqa: U100
-    event: "Event",
+    event: "_Event",
     errors: List[str],
     warnings: List[str],  # noqa: U100
 ):
@@ -194,7 +194,7 @@ def _check_workload_event(
 
 def _check_action_event(
     charm_spec: _CharmSpec,
-    event: "Event",
+    event: "_Event",
     errors: List[str],
     warnings: List[str],
 ):
@@ -223,7 +223,7 @@ def _check_action_event(
 
 def _check_storage_event(
     charm_spec: _CharmSpec,
-    event: "Event",
+    event: "_Event",
     errors: List[str],
     warnings: List[str],  # noqa: U100
 ):
@@ -396,7 +396,7 @@ def check_config_consistency(
 
 def check_secrets_consistency(
     *,
-    event: "Event",
+    event: "_Event",
     state: "State",
     juju_version: Tuple[int, ...],
     **_kwargs,  # noqa: U101
@@ -422,7 +422,7 @@ def check_secrets_consistency(
 def check_network_consistency(
     *,
     state: "State",
-    event: "Event",  # noqa: U100
+    event: "_Event",  # noqa: U100
     charm_spec: "_CharmSpec",
     **_kwargs,  # noqa: U101
 ) -> Results:
@@ -454,7 +454,7 @@ def check_network_consistency(
 def check_relation_consistency(
     *,
     state: "State",
-    event: "Event",  # noqa: U100
+    event: "_Event",  # noqa: U100
     charm_spec: "_CharmSpec",
     **_kwargs,  # noqa: U101
 ) -> Results:
@@ -523,7 +523,7 @@ def check_relation_consistency(
 def check_containers_consistency(
     *,
     state: "State",
-    event: "Event",
+    event: "_Event",
     charm_spec: "_CharmSpec",
     **_kwargs,  # noqa: U101
 ) -> Results:

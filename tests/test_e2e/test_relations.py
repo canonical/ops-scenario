@@ -82,6 +82,7 @@ def test_get_relation(mycharm):
             },
         },
         config={"options": {"foo": {"type": "string"}}},
+        pre_event=pre_event,
     )
 
 
@@ -99,7 +100,7 @@ def test_relation_events(mycharm, evt_name):
                 relation,
             ],
         ),
-        getattr(relation, f"{evt_name}_event"),
+        f"relation_{evt_name}",
         mycharm,
         meta={
             "name": "local",
@@ -143,7 +144,7 @@ def test_relation_events(mycharm, evt_name, remote_app_name):
                 relation,
             ],
         ),
-        getattr(relation, f"{evt_name}_event"),
+        f"relation_{evt_name}",
         mycharm,
         meta={
             "name": "local",
@@ -182,14 +183,8 @@ def test_relation_events_attrs(mycharm, evt_name, remote_app_name, remote_unit_i
 
     mycharm._call = callback
 
-    trigger(
-        State(
-            relations=[
-                relation,
-            ],
-        ),
-        getattr(relation, f"{evt_name}_event")(remote_unit_id=remote_unit_id),
-        mycharm,
+    ctx = Context(
+        charm_type=mycharm,
         meta={
             "name": "local",
             "requires": {
@@ -197,6 +192,11 @@ def test_relation_events_attrs(mycharm, evt_name, remote_app_name, remote_unit_i
             },
         },
     )
+    state = State(relations=[relation])
+    event = getattr(ctx.on, f"relation_{evt_name}")(
+        relation, remote_unit=remote_unit_id
+    )
+    ctx.run(event, state=state)
 
 
 @pytest.mark.parametrize(
@@ -235,7 +235,7 @@ def test_relation_events_no_attrs(mycharm, evt_name, remote_app_name, caplog):
                 relation,
             ],
         ),
-        getattr(relation, f"{evt_name}_event"),
+        f"relation_{evt_name}",
         mycharm,
         meta={
             "name": "local",
@@ -295,7 +295,7 @@ def test_relation_events_no_remote_units(mycharm, evt_name, caplog):
                 relation,
             ],
         ),
-        getattr(relation, f"{evt_name}_event"),
+        f"relation_{evt_name}",
         mycharm,
         meta={
             "name": "local",
@@ -346,7 +346,7 @@ def test_relation_event_trigger(relation, evt_name, mycharm):
     }
     state = trigger(
         State(relations=[relation]),
-        getattr(relation, evt_name + "_event"),
+        f"relation_{evt_name}",
         mycharm,
         meta=meta,
     )
@@ -379,7 +379,7 @@ def test_trigger_sub_relation(mycharm):
 
     trigger(
         State(relations=[sub1, sub2]),
-        "update-status",
+        "update_status",
         mycharm,
         meta=meta,
         post_event=post_event,
@@ -403,9 +403,10 @@ def test_relation_ids():
 def test_broken_relation_not_in_model_relations(mycharm):
     rel = Relation("foo")
 
-    with Context(
+    ctx = Context(
         mycharm, meta={"name": "local", "requires": {"foo": {"interface": "foo"}}}
-    ).manager(rel.broken_event, state=State(relations=[rel])) as mgr:
+    )
+    with ctx.manager(ctx.on.relation_broken(rel), state=State(relations=[rel])) as mgr:
         charm = mgr.charm
 
         assert charm.model.get_relation("foo") is None

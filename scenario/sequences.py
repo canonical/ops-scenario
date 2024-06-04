@@ -14,8 +14,8 @@ from scenario.state import (
     BREAK_ALL_RELATIONS,
     CREATE_ALL_RELATIONS,
     DETACH_ALL_STORAGES,
-    Event,
     State,
+    _Event,
 )
 
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -25,7 +25,7 @@ CharmMeta = Optional[Union[str, TextIO, dict]]
 logger = scenario_logger.getChild("scenario")
 
 
-def decompose_meta_event(meta_event: Event, state: State):
+def decompose_meta_event(meta_event: _Event, state: State):
     # decompose the meta event
 
     if meta_event.name in [ATTACH_ALL_STORAGES, DETACH_ALL_STORAGES]:
@@ -50,15 +50,18 @@ def decompose_meta_event(meta_event: Event, state: State):
 
 def generate_startup_sequence(state_template: State):
     yield from chain(
-        decompose_meta_event(Event(ATTACH_ALL_STORAGES), copy.deepcopy(state_template)),
-        ((Event("start"), copy.deepcopy(state_template)),),
         decompose_meta_event(
-            Event(CREATE_ALL_RELATIONS),
+            _Event(ATTACH_ALL_STORAGES),
+            copy.deepcopy(state_template),
+        ),
+        ((_Event("start"), copy.deepcopy(state_template)),),
+        decompose_meta_event(
+            _Event(CREATE_ALL_RELATIONS),
             copy.deepcopy(state_template),
         ),
         (
             (
-                Event(
+                _Event(
                     (
                         "leader_elected"
                         if state_template.leader
@@ -67,19 +70,25 @@ def generate_startup_sequence(state_template: State):
                 ),
                 copy.deepcopy(state_template),
             ),
-            (Event("config_changed"), copy.deepcopy(state_template)),
-            (Event("install"), copy.deepcopy(state_template)),
+            (_Event("config_changed"), copy.deepcopy(state_template)),
+            (_Event("install"), copy.deepcopy(state_template)),
         ),
     )
 
 
 def generate_teardown_sequence(state_template: State):
     yield from chain(
-        decompose_meta_event(Event(BREAK_ALL_RELATIONS), copy.deepcopy(state_template)),
-        decompose_meta_event(Event(DETACH_ALL_STORAGES), copy.deepcopy(state_template)),
+        decompose_meta_event(
+            _Event(BREAK_ALL_RELATIONS),
+            copy.deepcopy(state_template),
+        ),
+        decompose_meta_event(
+            _Event(DETACH_ALL_STORAGES),
+            copy.deepcopy(state_template),
+        ),
         (
-            (Event("stop"), copy.deepcopy(state_template)),
-            (Event("remove"), copy.deepcopy(state_template)),
+            (_Event("stop"), copy.deepcopy(state_template)),
+            (_Event("remove"), copy.deepcopy(state_template)),
         ),
     )
 

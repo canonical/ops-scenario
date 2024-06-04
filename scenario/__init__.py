@@ -8,7 +8,6 @@ from scenario.state import (
     BindAddress,
     Container,
     DeferredEvent,
-    Event,
     ExecOutput,
     Model,
     Mount,
@@ -47,5 +46,4 @@ __all__ = [
     "StoredState",
     "State",
     "DeferredEvent",
-    "Event",
 ]

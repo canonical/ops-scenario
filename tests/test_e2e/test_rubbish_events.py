@@ -5,7 +5,7 @@ from ops.charm import CharmBase, CharmEvents
 from ops.framework import EventBase, EventSource, Framework, Object
 
 from scenario.ops_main_mock import NoObserverError
-from scenario.state import Container, Event, State, _CharmSpec
+from scenario.state import Container, State, _CharmSpec, _Event
 from tests.helpers import trigger
 
 
@@ -86,4 +86,4 @@ def test_is_custom_event(mycharm, evt_name, expected):
     spec = _CharmSpec(
         charm_type=mycharm, meta={"name": "mycharm", "requires": {"foo": {}}}
     )
-    assert Event(evt_name)._is_builtin_event(spec) is expected
+    assert _Event(evt_name)._is_builtin_event(spec) is expected

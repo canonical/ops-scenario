@@ -5,7 +5,6 @@ from ops.charm import CharmBase, CollectStatusEvent
 
 from scenario import Context
 from scenario.state import JujuLogLine, State
-from tests.helpers import trigger
 
 logger = logging.getLogger("testing logger")
 

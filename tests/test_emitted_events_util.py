@@ -2,8 +2,9 @@ import pytest
 from ops.charm import CharmBase, CharmEvents, CollectStatusEvent, StartEvent
 from ops.framework import CommitEvent, EventBase, EventSource, PreCommitEvent
 
-from scenario import Event, State
+from scenario import State
 from scenario.capture_events import capture_events
+from scenario.state import _Event
 from tests.helpers import trigger
 
 
@@ -71,7 +72,7 @@ def test_capture_deferred_evt():
     # todo: this test should pass with ops < 2.1 as well
     with capture_events() as emitted:
         trigger(
-            State(deferred=[Event("foo").deferred(handler=MyCharm._on_foo)]),
+            State(deferred=[_Event("foo").deferred(handler=MyCharm._on_foo)]),
             "start",
             MyCharm,
             meta=MyCharm.META,
@@ -87,7 +88,7 @@ def test_capture_no_deferred_evt():
     # todo: this test should pass with ops < 2.1 as well
     with capture_events(include_deferred=False) as emitted:
         trigger(
-            State(deferred=[Event("foo").deferred(handler=MyCharm._on_foo)]),
+            State(deferred=[_Event("foo").deferred(handler=MyCharm._on_foo)]),
             "start",
             MyCharm,
             meta=MyCharm.META,

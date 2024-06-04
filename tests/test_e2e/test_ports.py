@@ -27,7 +27,7 @@ def ctx():
 
 
 def test_open_port(ctx):
-    out = ctx.run(ctx.start(), State())
+    out = ctx.run(ctx.on.start(), State())
     port = out.opened_ports.pop()
 
     assert port.protocol == "tcp"

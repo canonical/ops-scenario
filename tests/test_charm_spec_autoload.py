@@ -143,7 +143,8 @@ def test_relations_ok(tmp_path, legacy):
         },
     ) as charm:
         # this would fail if there were no 'cuddles' relation defined in meta
-        Context(charm).run(ctx.on.start(), State(relations=[Relation("cuddles")]))
+        ctx = Context(charm)
+        ctx.run(ctx.on.start(), State(relations=[Relation("cuddles")]))
 
 
 @pytest.mark.parametrize("legacy", (True, False))
@@ -160,6 +161,7 @@ def test_config_defaults(tmp_path, legacy):
         config={"options": {"foo": {"type": "bool", "default": True}}},
     ) as charm:
         # this would fail if there were no 'cuddles' relation defined in meta
-        with Context(charm).manager("start", State()) as mgr:
+        ctx = Context(charm)
+        with ctx.manager(ctx.on.start(), State()) as mgr:
             mgr.run()
             assert mgr.charm.config["foo"] is True

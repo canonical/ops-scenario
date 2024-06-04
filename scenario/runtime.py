@@ -25,7 +25,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ops.testing import CharmType
 
     from scenario.context import Context
-    from scenario.state import Event, State, _CharmSpec
+    from scenario.state import State, _CharmSpec, _Event
 
     PathLike = Union[str, Path]
 
@@ -180,7 +180,7 @@ class Runtime:
             # os.unsetenv does not always seem to work !?
             del os.environ[key]
 
-    def _get_event_env(self, state: "State", event: "Event", charm_root: Path):
+    def _get_event_env(self, state: "State", event: "_Event", charm_root: Path):
         """Build the simulated environment the operator framework expects."""
         env = {
             "JUJU_VERSION": self._juju_version,
@@ -392,7 +392,7 @@ class Runtime:
     def exec(
         self,
         state: "State",
-        event: "Event",
+        event: "_Event",
         context: "Context",
     ):
         """Runs an event with this state as initial state on a charm.
