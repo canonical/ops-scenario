@@ -12,7 +12,7 @@ from ops.charm import (
 from ops.framework import Framework
 
 from scenario import Context
-from scenario.state import Container, _Event, Relation, State, deferred
+from scenario.state import Container, Relation, State, _Event, deferred
 from tests.helpers import trigger
 
 CHARM_CALLED = 0
@@ -79,7 +79,9 @@ def test_deferred_relation_event_without_relation_raises(mycharm):
 
 def test_deferred_relation_evt(mycharm):
     rel = Relation(endpoint="foo", remote_app_name="remote")
-    evt1 = _Event("foo_relation_changed", relation=rel).deferred(handler=mycharm._on_event)
+    evt1 = _Event("foo_relation_changed", relation=rel).deferred(
+        handler=mycharm._on_event
+    )
     evt2 = deferred(
         event="foo_relation_changed",
         handler=mycharm._on_event,
@@ -175,7 +177,11 @@ def test_deferred_workload_event(mycharm):
     out = trigger(
         State(
             containers=[ctr],
-            deferred=[_Event("foo_pebble_ready", container=ctr).deferred(handler=mycharm._on_event)],
+            deferred=[
+                _Event("foo_pebble_ready", container=ctr).deferred(
+                    handler=mycharm._on_event
+                )
+            ],
         ),
         "start",
         mycharm,

@@ -133,11 +133,14 @@ def test_secret_changed_owner_evt_fails(mycharm, owner):
         _ = ctx.on.secret_changed(secret)
 
 
-@pytest.mark.parametrize("evt_suffix,revision", [
-    ("rotate", None),
-    ("expired", 1),
-    ("remove", 1),
-    ])
+@pytest.mark.parametrize(
+    "evt_suffix,revision",
+    [
+        ("rotate", None),
+        ("expired", 1),
+        ("remove", 1),
+    ],
+)
 def test_consumer_events_failures(mycharm, evt_suffix, revision):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(

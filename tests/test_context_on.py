@@ -110,7 +110,9 @@ def test_simple_secret_events(as_kwarg, event_name, event_kind, owner):
 def test_revision_secret_events(event_name, event_kind):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     secret = scenario.Secret(
-        "secret:123", {42: {"password": "yyyy"}, 43: {"password": "xxxx"}}, owner="app",
+        "secret:123",
+        {42: {"password": "yyyy"}, 43: {"password": "xxxx"}},
+        owner="app",
     )
     state_in = scenario.State(secrets=[secret])
     # These look like:
