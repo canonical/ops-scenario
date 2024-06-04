@@ -117,9 +117,7 @@ def test_revision_secret_events(event_name, event_kind):
     #   ctx.run(ctx.on.secret_expired(secret=secret, revision=revision), state)
     # The secret and revision must always be passed because the same event name
     # is used for all secrets.
-    with ctx.manager(
-        getattr(ctx.on, event_name)(secret, revision=42), state_in
-    ) as mgr:
+    with ctx.manager(getattr(ctx.on, event_name)(secret, revision=42), state_in) as mgr:
         mgr.run()
         assert len(mgr.charm.observed) == 2
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
@@ -151,7 +149,9 @@ def test_revision_secret_events_as_positional_arg(event_name):
 )
 def test_storage_events(as_kwarg, storage_index, event_name, event_kind):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
-    storages = [scenario.Storage("foo", index) for index in range((storage_index or 0) + 1)]
+    storages = [
+        scenario.Storage("foo", index) for index in range((storage_index or 0) + 1)
+    ]
     state_in = scenario.State(storage=storages)
     # These look like:
     #   ctx.run(ctx.on.storage_attached(storage), state)
