@@ -222,7 +222,7 @@ def test_pebble_ready(charm_cls):
         State(containers=[container]),
         charm_type=charm_cls,
         meta={"name": "foo", "containers": {"foo": {}}},
-        event=container.pebble_ready_event,
+        event="pebble_ready",
         post_event=callback,
     )
 
@@ -289,7 +289,7 @@ def test_pebble_plan(charm_cls, starting_service_status):
         State(containers=[container]),
         charm_type=PlanCharm,
         meta={"name": "foo", "containers": {"foo": {}}},
-        event=container.pebble_ready_event,
+        event="pebble_ready",
     )
 
     serv = lambda name, obj: pebble.Service(name, raw=obj)
