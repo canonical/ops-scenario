@@ -1189,7 +1189,6 @@ class Storage(_max_posargs(1)):
         """Simulated filesystem root in this context."""
         return ctx._get_storage_root(self.name, self.index)
 
-
 @dataclasses.dataclass(frozen=True)
 class Resource(_max_posargs(0)):
     """Represents a resource made available to the charm."""
