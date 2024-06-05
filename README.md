@@ -668,11 +668,11 @@ def test_pebble_exec():
 
 Scenario will attempt to find the right `Exec` object by matching the provided
 command prefix against the command used in the ops `container.exec()` call. For
-example, if the command is `['ls', '-ll']` then Scenario will look for an `Exec`
-with exactly the same as command prefix, `('ls', '-ll')`, and if not found will
-look for an `Exec` with the command prefix `('ls', )`, and if not found will
-look for an `Exec` with the command prefix `()`, and if not found will raise
-a `RuntimeError`.
+example if the command is `['ls', '-ll']` then the searching will be:
+ 1. an `Exec` with exactly the same as command prefix, `('ls', '-ll')`
+ 2. an `Exec` with the command prefix `('ls', )`
+ 3. an `Exec` with the command prefix `()`
+If none of these are found Scenario will raise a `RuntimeError`.
 
 ### Pebble Notices
 

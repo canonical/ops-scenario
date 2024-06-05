@@ -4,7 +4,7 @@
 import marshal
 import os
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Sequence
 from numbers import Number
 from typing import TYPE_CHECKING, Iterable, List, NamedTuple, Tuple, Union
@@ -208,10 +208,10 @@ def _check_workload_event(
                 "you **can** fire fire pebble-ready while the container cannot connect, "
                 "but that's most likely not what you want.",
             )
-    command_prefixes = [exec.command_prefix for exec in event.container.execs]
-    if len(command_prefixes) != len(set(command_prefixes)):
+    names = Counter(exec.command_prefix for exec in event.container.execs)
+    if dupes := [n for n in names if names[n] > 1]:
         errors.append(
-            f"container {event.container.name} has multiple execs with the same command prefix.",
+            f"container {event.container.name} has duplicate command prefixes: {dupes}",
         )
 
 
