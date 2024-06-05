@@ -415,7 +415,8 @@ state_in = scenario.State(relations=[
         peers_data={1: {}, 2: {}, 42: {'foo': 'bar'}},
     )])
 
-scenario.Context(..., unit_id=1).run(ctx.on.start(), state_in)  # invalid: this unit's id cannot be the ID of a peer.
+ctx = scenario.Context(..., unit_id=1)
+ctx.run(ctx.on.start(), state_in)  # invalid: this unit's id cannot be the ID of a peer.
 
 
 ```
@@ -780,7 +781,7 @@ import scenario
 ctx = scenario.Context(MyCharm)
 foo_0 = scenario.Storage('foo')
 # The charm is notified that one of the storages it has requested is ready:
-ctx.run(ctx.on.storage_sttached(foo_0), State(storage=[foo_0]))
+ctx.run(ctx.on.storage_attached(foo_0), State(storage=[foo_0]))
 
 foo_1 = scenario.Storage('foo')
 # The charm is notified that the other storage is also ready:

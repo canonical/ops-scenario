@@ -178,8 +178,6 @@ class _CharmEvents:
     arguments).
     """
 
-    # TODO: There are lots of suffix definitions in state - we should be able to re-use those.
-
     @staticmethod
     def install():
         return _Event("install")
@@ -234,7 +232,6 @@ class _CharmEvents:
             raise ValueError(
                 "This unit will never receive secret-expire for a secret it does not own.",
             )
-        # TODO: Could we have a default revision?
         return _Event("secret_expired", secret=secret, secret_revision=revision)
 
     @staticmethod
@@ -251,7 +248,6 @@ class _CharmEvents:
             raise ValueError(
                 "This unit will never receive secret-removed for a secret it does not own.",
             )
-        # TODO: Could we have a default revision?
         return _Event("secret_remove", secret=secret, secret_revision=revision)
 
     @staticmethod
@@ -263,13 +259,8 @@ class _CharmEvents:
         return _Event("collect_unit_status")
 
     @staticmethod
-    def relation_created(relation: "AnyRelation", *, remote_unit: Optional[int] = None):
-        # TODO: Does remote_unit make sense here? The old Scenario API had it.
-        return _Event(
-            f"{relation.endpoint}_relation_created",
-            relation=relation,
-            relation_remote_unit_id=remote_unit,
-        )
+    def relation_created(relation: "AnyRelation"):
+        return _Event(f"{relation.endpoint}_relation_created", relation=relation)
 
     @staticmethod
     def relation_joined(relation: "AnyRelation", *, remote_unit: Optional[int] = None):
@@ -302,13 +293,8 @@ class _CharmEvents:
         )
 
     @staticmethod
-    def relation_broken(relation: "AnyRelation", *, remote_unit: Optional[int] = None):
-        # TODO: Does remote_unit make sense here? The old Scenario API had it.
-        return _Event(
-            f"{relation.endpoint}_relation_broken",
-            relation=relation,
-            relation_remote_unit_id=remote_unit,
-        )
+    def relation_broken(relation: "AnyRelation"):
+        return _Event(f"{relation.endpoint}_relation_broken", relation=relation)
 
     @staticmethod
     def storage_attached(storage: Storage):

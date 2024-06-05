@@ -204,7 +204,8 @@ def _check_workload_event(
             )
         if not event.container.can_connect:
             warnings.append(
-                "it's strange to have a workload event when can_connect is False",
+                "you **can** fire fire pebble-ready while the container cannot connect, "
+                "but that's most likely not what you want.",
             )
 
 
