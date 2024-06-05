@@ -191,10 +191,10 @@ def _check_workload_event(
             f"not start with {event.container.name}.",
         )
     else:
-        command_prefixes = [exec.command_prefix for exec in event.container.execs]
-        if len(command_prefixes) != len(set(command_prefixes)):
+        names = Counter(exec.command_prefix for exec in event.container.execs)
+        if dupes := [n for n in names if names[n] > 1]:
             errors.append(
-                f"container {event.container.name} has multiple execs with the same command prefix.",
+                f"container {event.container.name} has duplicate command prefixes: {dupes}",
             )
 
 
