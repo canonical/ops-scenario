@@ -28,12 +28,13 @@ def ctx():
 
 def test_open_port(ctx):
     out = ctx.run("start", State())
-    port = out.opened_ports.pop()
+    assert len(out.opened_ports) == 1
+    port = tuple(out.opened_ports)[0]
 
     assert port.protocol == "tcp"
     assert port.port == 12
 
 
 def test_close_port(ctx):
-    out = ctx.run("stop", State(opened_ports=[Port("tcp", 42)]))
+    out = ctx.run("stop", State(opened_ports={Port("tcp", 42)}))
     assert not out.opened_ports

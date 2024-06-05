@@ -104,7 +104,7 @@ def test_deferred_relation_event(mycharm):
 
     out = trigger(
         State(
-            relations=[rel],
+            relations={rel},
             deferred=[
                 deferred(
                     event="foo_relation_changed",
@@ -135,7 +135,7 @@ def test_deferred_relation_event_from_relation(mycharm):
     rel = Relation(endpoint="foo", remote_app_name="remote")
     out = trigger(
         State(
-            relations=[rel],
+            relations={rel},
             deferred=[
                 rel.changed_event(remote_unit_id=1).deferred(handler=mycharm._on_event)
             ],
@@ -171,7 +171,7 @@ def test_deferred_workload_event(mycharm):
 
     out = trigger(
         State(
-            containers=[ctr],
+            containers={ctr},
             deferred=[ctr.pebble_ready_event.deferred(handler=mycharm._on_event)],
         ),
         "start",
@@ -215,7 +215,7 @@ def test_defer_reemit_relation_event(mycharm):
 
     rel = Relation("foo")
     mycharm.defer_next = 1
-    state_1 = ctx.run(rel.created_event, State(relations=[rel]))
+    state_1 = ctx.run(rel.created_event, State(relations={rel}))
 
     mycharm.defer_next = 0
     state_2 = ctx.run("start", state_1)

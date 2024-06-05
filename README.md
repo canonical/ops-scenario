@@ -346,22 +346,21 @@ class MyCharm(ops.CharmBase):
 
 
 def test_relation_data():
-    state_in = scenario.State(relations=[
-        scenario.Relation(
-            endpoint="foo",
-            interface="bar",
-            remote_app_name="remote",
-            local_unit_data={"abc": "foo"},
-            remote_app_data={"cde": "baz!"},
-        ),
-    ])
+    rel = scenario.Relation(
+        endpoint="foo",
+        interface="bar",
+        remote_app_name="remote",
+        local_unit_data={"abc": "foo"},
+        remote_app_data={"cde": "baz!"},
+    )
+    state_in = scenario.State(relations={rel})
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
 
     state_out = ctx.run('start', state_in)
 
-    assert state_out.relations[0].local_unit_data == {"abc": "baz!"}
-    # you can do this to check that there are no other differences:
-    assert state_out.relations == [
+    assert state_out.get_relation(rel.id).local_unit_data == {"abc": "baz!"}
+    # You can do this to check that there are no other differences:
+    assert state_out.relations == {
         scenario.Relation(
             endpoint="foo",
             interface="bar",
@@ -369,7 +368,7 @@ def test_relation_data():
             local_unit_data={"abc": "baz!"},
             remote_app_data={"cde": "baz!"},
         ),
-    ]
+    }
 
 # which is very idiomatic and superbly explicit. Noice.
 ```
@@ -409,11 +408,11 @@ be flagged by the Consistency Checker:
 ```python
 import scenario
 
-state_in = scenario.State(relations=[
+state_in = scenario.State(relations={
     scenario.PeerRelation(
         endpoint="peers",
         peers_data={1: {}, 2: {}, 42: {'foo': 'bar'}},
-    )])
+    )})
 
 scenario.Context(..., unit_id=1).run("start", state_in)  # invalid: this unit's id cannot be the ID of a peer.
 
@@ -546,17 +545,17 @@ When testing a Kubernetes charm, you can mock container interactions. When using
 be no containers. So if the charm were to `self.unit.containers`, it would get back an empty dict.
 
 To give the charm access to some containers, you need to pass them to the input state, like so:
-`State(containers=[...])`
+`State(containers={...})`
 
 An example of a state including some containers:
 
 ```python
 import scenario
 
-state = scenario.State(containers=[
+state = scenario.State(containers={
     scenario.Container(name="foo", can_connect=True),
     scenario.Container(name="bar", can_connect=False)
-])
+})
 ```
 
 In this case, `self.unit.get_container('foo').can_connect()` would return `True`, while for 'bar' it would give `False`.
@@ -577,7 +576,7 @@ container = scenario.Container(
     can_connect=True,
     mounts={'local': Mount('/local/share/config.yaml', local_file)}
     )
-state = scenario.State(containers=[container])
+state = scenario.State(containers={container})
 ```
 
 In this case, if the charm were to:
@@ -612,12 +611,12 @@ class MyCharm(ops.CharmBase):
 
 def test_pebble_push():
     with tempfile.NamedTemporaryFile() as local_file:
-        container = scenario,Container(
+        container = scenario.Container(
             name='foo',
             can_connect=True,
             mounts={'local': Mount('/local/share/config.yaml', local_file.name)}
         )
-        state_in = State(containers=[container])
+        state_in = State(containers={container})
         ctx = Context(
             MyCharm,
             meta={"name": "foo", "containers": {"foo": {}}}
@@ -655,7 +654,7 @@ class MyCharm(ops.CharmBase):
 
 def test_pebble_push():
     container = scenario.Container(name='foo', can_connect=True)
-    state_in = scenario.State(containers=[container])
+    state_in = scenario.State(containers={container})
     ctx = scenario.Context(
         MyCharm,
         meta={"name": "foo", "containers": {"foo": {}}}
@@ -704,7 +703,7 @@ def test_pebble_exec():
                                     stdout=LS_LL)
         }
     )
-    state_in = scenario.State(containers=[container])
+    state_in = scenario.State(containers={container})
     ctx = scenario.Context(
         MyCharm,
         meta={"name": "foo", "containers": {"foo": {}}},
@@ -731,7 +730,7 @@ storage = scenario.Storage("foo")
 # Setup storage with some content:
 (storage.get_filesystem(ctx) / "myfile.txt").write_text("helloworld")
 
-with ctx.manager("update-status", scenario.State(storage=[storage])) as mgr:
+with ctx.manager("update-status", scenario.State(storages={storage})) as mgr:
     foo = mgr.charm.model.storages["foo"][0]
     loc = foo.location
     path = loc / "myfile.txt"
@@ -780,11 +779,11 @@ import scenario
 ctx = scenario.Context(MyCharm)
 foo_0 = scenario.Storage('foo')
 # The charm is notified that one of the storages it has requested is ready:
-ctx.run(foo_0.attached_event, State(storage=[foo_0]))
+ctx.run(foo_0.attached_event, State(storage={foo_0}))
 
 foo_1 = scenario.Storage('foo')
 # The charm is notified that the other storage is also ready:
-ctx.run(foo_1.attached_event, State(storage=[foo_0, foo_1]))
+ctx.run(foo_1.attached_event, State(storage={foo_0, foo_1}))
 ```
 
 ## Ports
@@ -796,7 +795,7 @@ Since `ops 2.6.0`, charms can invoke the `open-port`, `close-port`, and `opened-
 import scenario
 
 ctx = scenario.Context(MyCharm)
-ctx.run("start", scenario.State(opened_ports=[scenario.Port("tcp", 42)]))
+ctx.run("start", scenario.State(opened_ports={scenario.Port("tcp", 42)}))
 ```
 - assert that a charm has called `open-port` or `close-port`:
 ```python
@@ -804,10 +803,10 @@ import scenario
 
 ctx = scenario.Context(MyCharm)
 state1 = ctx.run("start", scenario.State())
-assert state1.opened_ports == [scenario.Port("tcp", 42)]
+assert state1.opened_ports == {scenario.Port("tcp", 42)}
 
 state2 = ctx.run("stop", state1)
-assert state2.opened_ports == []
+assert state2.opened_ports == {}
 ```
 
 ## Secrets
@@ -818,12 +817,12 @@ Scenario has secrets. Here's how you use them.
 import scenario
 
 state = scenario.State(
-    secrets=[
+    secrets={
         scenario.Secret(
             id='foo',
             contents={0: {'key': 'public'}}
-        )
-    ]
+        ),
+    },
 )
 ```
 
@@ -849,15 +848,15 @@ To specify a secret owned by this unit (or app):
 import scenario
 
 state = scenario.State(
-    secrets=[
+    secrets={
         scenario.Secret(
             id='foo',
             contents={0: {'key': 'private'}},
             owner='unit',  # or 'app'
             remote_grants={0: {"remote"}}
             # the secret owner has granted access to the "remote" app over some relation with ID 0
-        )
-    ]
+        ),
+    },
 )
 ```
 
@@ -867,14 +866,14 @@ To specify a secret owned by some other application and give this unit (or app) 
 import scenario
 
 state = scenario.State(
-    secrets=[
+    secrets={
         scenario.Secret(
             id='foo',
             contents={0: {'key': 'public'}},
             # owner=None, which is the default
             revision=0,  # the revision that this unit (or app) is currently tracking
-        )
-    ]
+        ),
+    },
 )
 ```
 
@@ -897,15 +896,16 @@ class MyCharmType(ops.CharmBase):
         assert self.my_stored_state.foo == 'bar'  # this will pass!
 
 
-state = scenario.State(stored_state=[
+state = scenario.State(stored_states={
     scenario.StoredState(
         owner_path="MyCharmType",
         name="my_stored_state",
         content={
             'foo': 'bar',
             'baz': {42: 42},
-        })
-])
+        }),
+    },
+)
 ```
 
 And the charm's runtime will see `self.my_stored_state.foo` and `.baz` as expected. Also, you can run assertions on it on
@@ -923,7 +923,8 @@ So, the only consistency-level check we enforce in Scenario when it comes to res
 import scenario
 
 ctx = scenario.Context(MyCharm, meta={'name': 'juliette', "resources": {"foo": {"type": "oci-image"}}})
-with ctx.manager("start", scenario.State(resources={'foo': '/path/to/resource.tar'})) as mgr:
+resource = scenario.Resource('foo', '/path/to/resource.tar')
+with ctx.manager("start", scenario.State(resources={resource})) as mgr:
     # If the charm, at runtime, were to call self.model.resources.fetch("foo"), it would get '/path/to/resource.tar' back.
     path = mgr.charm.model.resources.fetch('foo')
     assert path == '/path/to/resource.tar'
@@ -1095,7 +1096,7 @@ class MyCharm(...):
 def test_start_on_deferred_update_status(MyCharm):
     foo_relation = scenario.Relation('foo')
     scenario.State(
-        relations=[foo_relation],
+        relations={foo_relation},
         deferred=[
             scenario.deferred('foo_relation_changed',
                               handler=MyCharm._on_foo_relation_changed,

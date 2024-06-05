@@ -63,8 +63,18 @@ def sort_patch(patch: List[Dict], key=lambda obj: obj["path"] + obj["op"]):
 
 
 def jsonpatch_delta(self, other: "State"):
-    patch = jsonpatch.make_patch(
-        dataclasses.asdict(other),
-        dataclasses.asdict(self),
-    ).patch
+    dict_other = dataclasses.asdict(other)
+    dict_self = dataclasses.asdict(self)
+    for attr in (
+        "relations",
+        "containers",
+        "storages",
+        "opened_ports",
+        "secrets",
+        "resources",
+        "stored_states",
+    ):
+        dict_other[attr] = [dataclasses.asdict(o) for o in dict_other[attr]]
+        dict_self[attr] = [dataclasses.asdict(o) for o in dict_self[attr]]
+    patch = jsonpatch.make_patch(dict_other, dict_self).patch
     return sort_patch(patch)
