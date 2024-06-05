@@ -414,6 +414,7 @@ def test_relation_sub_inconsistent():
         _CharmSpec(MyCharm, {"requires": {"foo": {"interface": "bar"}}}),
     )
 
+
 def test_relation_not_in_state():
     relation = Relation("foo")
     assert_inconsistent(
