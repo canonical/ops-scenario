@@ -38,6 +38,22 @@ classifiers = [
 "Homepage" = "https://github.com/canonical/ops-scenario"
 "Bug Tracker" = "https://github.com/canonical/ops-scenario/issues"
 
+[project.optional-dependencies]
+docs = [
+    "canonical-sphinx-extensions",
+    "furo",
+    "linkify-it-py",
+    "myst-parser",
+    "pyspelling",
+    "sphinx==6.2.1",
+    "sphinx-autobuild",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "sphinx-notfound-page",
+    "sphinx-tabs",
+    "sphinxcontrib-jquery",
+    "sphinxext-opengraph"
+]
 
 [tool.setuptools.package-dir]
 scenario = "scenario"
