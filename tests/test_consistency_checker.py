@@ -282,7 +282,7 @@ def test_secret_not_in_state():
         _Event("secret_changed", secret=secret),
         _CharmSpec(MyCharm, {}),
     )
-    
+
 
 def test_peer_relation_consistency():
     assert_inconsistent(
@@ -337,6 +337,7 @@ def test_relation_sub_inconsistent():
         _Event("bar"),
         _CharmSpec(MyCharm, {"requires": {"foo": {"interface": "bar"}}}),
     )
+
 
 def test_relation_not_in_state():
     relation = Relation("foo")
