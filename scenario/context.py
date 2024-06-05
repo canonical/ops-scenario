@@ -238,7 +238,7 @@ class _CharmEvents:
         return _Event("secret_expired", secret=secret, secret_revision=revision)
 
     @staticmethod
-    def secret_rotate(secret: Secret = None):
+    def secret_rotate(secret: Secret):
         if not secret.owner:
             raise ValueError(
                 "This unit will never receive secret-rotate for a secret it does not own.",

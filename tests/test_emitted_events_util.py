@@ -32,31 +32,16 @@ class MyCharm(CharmBase):
         pass
 
 
-def test_capture_custom_evt():
-    with capture_events(Foo) as emitted:
-        trigger(State(), "foo", MyCharm, meta=MyCharm.META)
-
-    assert len(emitted) == 1
-    assert isinstance(emitted[0], Foo)
-
-
-def test_capture_custom_evt_nonspecific_capture():
-    with capture_events() as emitted:
-        trigger(State(), "foo", MyCharm, meta=MyCharm.META)
-
-    assert len(emitted) == 1
-    assert isinstance(emitted[0], Foo)
-
-
 def test_capture_custom_evt_nonspecific_capture_include_fw_evts():
     with capture_events(include_framework=True) as emitted:
-        trigger(State(), "foo", MyCharm, meta=MyCharm.META)
+        trigger(State(), "start", MyCharm, meta=MyCharm.META)
 
-    assert len(emitted) == 4
-    assert isinstance(emitted[0], Foo)
-    assert isinstance(emitted[1], CollectStatusEvent)
-    assert isinstance(emitted[2], PreCommitEvent)
-    assert isinstance(emitted[3], CommitEvent)
+    assert len(emitted) == 5
+    assert isinstance(emitted[0], StartEvent)
+    assert isinstance(emitted[1], Foo)
+    assert isinstance(emitted[2], CollectStatusEvent)
+    assert isinstance(emitted[3], PreCommitEvent)
+    assert isinstance(emitted[4], CommitEvent)
 
 
 def test_capture_juju_evt():

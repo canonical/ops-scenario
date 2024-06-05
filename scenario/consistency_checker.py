@@ -429,6 +429,7 @@ def check_secrets_consistency(
     if not event._is_secret_event:
         return Results(errors, [])
 
+    assert event.secret is not None
     if event.secret not in state.secrets:
         secret_key = event.secret.id if event.secret.id else event.secret.label
         errors.append(
