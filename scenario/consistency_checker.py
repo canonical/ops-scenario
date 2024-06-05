@@ -121,6 +121,7 @@ def check_event_consistency(
     *,
     event: "_Event",
     charm_spec: "_CharmSpec",
+    state: "State",
     **_kwargs,  # noqa: U101
 ) -> Results:
     """Check the internal consistency of the Event data structure.
@@ -141,16 +142,16 @@ def check_event_consistency(
         )
 
     if event._is_relation_event:
-        _check_relation_event(charm_spec, event, errors, warnings)
+        _check_relation_event(charm_spec, event, state, errors, warnings)
 
     if event._is_workload_event:
-        _check_workload_event(charm_spec, event, errors, warnings)
+        _check_workload_event(charm_spec, event, state, errors, warnings)
 
     if event._is_action_event:
-        _check_action_event(charm_spec, event, errors, warnings)
+        _check_action_event(charm_spec, event, state, errors, warnings)
 
     if event._is_storage_event:
-        _check_storage_event(charm_spec, event, errors, warnings)
+        _check_storage_event(charm_spec, event, state, errors, warnings)
 
     return Results(errors, warnings)
 
@@ -158,6 +159,7 @@ def check_event_consistency(
 def _check_relation_event(
     charm_spec: _CharmSpec,  # noqa: U100
     event: "_Event",
+    state: "State",
     errors: List[str],
     warnings: List[str],  # noqa: U100
 ):
@@ -172,11 +174,16 @@ def _check_relation_event(
                 f"relation event should start with relation endpoint name. {event.name} does "
                 f"not start with {event.relation.endpoint}.",
             )
+        if event.relation not in state.relations:
+            errors.append(
+                f"cannot emit {event.name} because relation {event.relation.id} is not in the state.",
+            )
 
 
 def _check_workload_event(
     charm_spec: _CharmSpec,  # noqa: U100
     event: "_Event",
+    state: "State",
     errors: List[str],
     warnings: List[str],  # noqa: U100
 ):
@@ -190,11 +197,21 @@ def _check_workload_event(
             f"workload event should start with container name. {event.name} does "
             f"not start with {event.container.name}.",
         )
+        if event.container not in state.containers:
+            errors.append(
+                f"cannot emit {event.name} because container {event.container.name} "
+                f"is not in the state.",
+            )
+        if not event.container.can_connect:
+            warnings.append(
+                "it's strange to have a workload event when can_connect is False",
+            )
 
 
 def _check_action_event(
     charm_spec: _CharmSpec,
     event: "_Event",
+    state: "State",  # noqa: U100
     errors: List[str],
     warnings: List[str],
 ):
@@ -224,6 +241,7 @@ def _check_action_event(
 def _check_storage_event(
     charm_spec: _CharmSpec,
     event: "_Event",
+    state: "State",
     errors: List[str],
     warnings: List[str],  # noqa: U100
 ):
@@ -244,6 +262,11 @@ def _check_storage_event(
         errors.append(
             f"storage event {event.name} refers to storage {storage.name} "
             f"which is not declared in the charm metadata (metadata.yaml) under 'storage'.",
+        )
+    elif storage not in state.storage:
+        errors.append(
+            f"cannot emit {event.name} because storage {storage.name} "
+            f"is not in the state.",
         )
 
 
@@ -406,9 +429,10 @@ def check_secrets_consistency(
     if not event._is_secret_event:
         return Results(errors, [])
 
-    if not state.secrets:
+    if event.secret not in state.secrets:
+        secret_key = event.secret.id if event.secret.id else event.secret.label
         errors.append(
-            "the event being processed is a secret event; but the state has no secrets.",
+            f"cannot emit {event.name} because secret {secret_key} is not in the state.",
         )
     elif juju_version < (3,):
         errors.append(

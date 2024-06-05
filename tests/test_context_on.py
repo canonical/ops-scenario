@@ -1,3 +1,5 @@
+import copy
+
 import ops
 import pytest
 
@@ -233,6 +235,22 @@ def test_relation_app_events(as_kwarg, event_name, event_kind):
         assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
         event = mgr.charm.observed[0]
         assert isinstance(event, event_kind)
+        assert event.relation.id == relation.id
+        assert event.app.name == relation.remote_app_name
+        assert event.unit is None
+
+
+def test_relation_complex_name():
+    meta = copy.deepcopy(META)
+    meta["requires"]["foo-bar-baz"] = {"interface": "another-one"}
+    ctx = scenario.Context(ContextCharm, meta=meta, actions=ACTIONS)
+    relation = scenario.Relation("foo-bar-baz")
+    state_in = scenario.State(relations=[relation])
+    with ctx.manager(ctx.on.relation_created(relation), state_in) as mgr:
+        mgr.run()
+        assert len(mgr.charm.observed) == 2
+        event = mgr.charm.observed[0]
+        assert isinstance(event, ops.RelationCreatedEvent)
         assert event.relation.id == relation.id
         assert event.app.name == relation.remote_app_name
         assert event.unit is None
