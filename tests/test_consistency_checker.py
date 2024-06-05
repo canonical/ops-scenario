@@ -89,6 +89,20 @@ def test_container_in_state_but_no_container_in_meta():
     )
 
 
+def test_container_not_in_state():
+    container = Container("bar")
+    assert_inconsistent(
+        State(),
+        _Event("bar_pebble_ready", container=container),
+        _CharmSpec(MyCharm, {"containers": {"bar": {}}}),
+    )
+    assert_consistent(
+        State(containers=[container]),
+        _Event("bar_pebble_ready", container=container),
+        _CharmSpec(MyCharm, {"containers": {"bar": {}}}),
+    )
+
+
 def test_evt_bad_container_name():
     assert_inconsistent(
         State(),
@@ -109,9 +123,10 @@ def test_evt_bad_relation_name(suffix):
         _Event(f"foo{suffix}", relation=Relation("bar")),
         _CharmSpec(MyCharm, {"requires": {"foo": {"interface": "xxx"}}}),
     )
+    relation = Relation("bar")
     assert_consistent(
-        State(relations=[Relation("bar")]),
-        _Event(f"bar{suffix}", relation=Relation("bar")),
+        State(relations=[relation]),
+        _Event(f"bar{suffix}", relation=relation),
         _CharmSpec(MyCharm, {"requires": {"bar": {"interface": "xxx"}}}),
     )
 
@@ -119,9 +134,10 @@ def test_evt_bad_relation_name(suffix):
 @pytest.mark.parametrize("suffix", RELATION_EVENTS_SUFFIX)
 def test_evt_no_relation(suffix):
     assert_inconsistent(State(), _Event(f"foo{suffix}"), _CharmSpec(MyCharm, {}))
+    relation = Relation("bar")
     assert_consistent(
-        State(relations=[Relation("bar")]),
-        _Event(f"bar{suffix}", relation=Relation("bar")),
+        State(relations=[relation]),
+        _Event(f"bar{suffix}", relation=relation),
         _CharmSpec(MyCharm, {"requires": {"bar": {"interface": "xxx"}}}),
     )
 
@@ -254,6 +270,20 @@ def test_secrets_jujuv_bad(good_v):
     )
 
 
+def test_secret_not_in_state():
+    secret = Secret("secret:foo", {"a": "b"})
+    assert_inconsistent(
+        State(),
+        _Event("secret_changed", secret=secret),
+        _CharmSpec(MyCharm, {}),
+    )
+    assert_consistent(
+        State(secrets=[secret]),
+        _Event("secret_changed", secret=secret),
+        _CharmSpec(MyCharm, {}),
+    )
+    
+
 def test_peer_relation_consistency():
     assert_inconsistent(
         State(relations=[Relation("foo")]),
@@ -305,6 +335,19 @@ def test_relation_sub_inconsistent():
     assert_inconsistent(
         State(relations=[SubordinateRelation("foo")]),
         _Event("bar"),
+        _CharmSpec(MyCharm, {"requires": {"foo": {"interface": "bar"}}}),
+    )
+
+def test_relation_not_in_state():
+    relation = Relation("foo")
+    assert_inconsistent(
+        State(),
+        _Event("foo_relation_changed", relation=relation),
+        _CharmSpec(MyCharm, {"requires": {"foo": {"interface": "bar"}}}),
+    )
+    assert_consistent(
+        State(relations=[relation]),
+        _Event("foo_relation_changed", relation=relation),
         _CharmSpec(MyCharm, {"requires": {"foo": {"interface": "bar"}}}),
     )
 
@@ -473,6 +516,26 @@ def test_storage_states():
                     "marx": {"type": "filesystem"},
                 },
             },
+        ),
+    )
+
+
+def test_storage_not_in_state():
+    storage = Storage("foo")
+    assert_inconsistent(
+        State(),
+        _Event("foo_storage_attached", storage=storage),
+        _CharmSpec(
+            MyCharm,
+            meta={"name": "sam", "storage": {"foo": {"type": "filesystem"}}},
+        ),
+    )
+    assert_consistent(
+        State(storage=[storage]),
+        _Event("foo_storage_attached", storage=storage),
+        _CharmSpec(
+            MyCharm,
+            meta={"name": "sam", "storage": {"foo": {"type": "filesystem"}}},
         ),
     )
 
