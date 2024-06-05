@@ -71,8 +71,7 @@ def _emit_charm_event(
         ops_logger.debug("Event %s not defined for %s.", event_name, charm)
         raise NoObserverError(
             f"Cannot fire {event_name!r} on {owner}: "
-            f"invalid event (not on charm.on). "
-            f"Use Context.run_custom instead.",
+            f"invalid event (not on charm.on).",
         )
 
     args, kwargs = _get_event_args(charm, event_to_emit)
