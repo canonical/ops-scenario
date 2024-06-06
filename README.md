@@ -397,8 +397,6 @@ meta = {
 }
 ctx = scenario.Context(ops.CharmBase, meta=meta, unit_id=1)
 ctx.run(ctx.on.start(), state_in)  # invalid: this unit's id cannot be the ID of a peer.
-
-
 ```
 
 ### SubordinateRelation
