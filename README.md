@@ -669,10 +669,20 @@ def test_pebble_exec():
 Scenario will attempt to find the right `Exec` object by matching the provided
 command prefix against the command used in the ops `container.exec()` call. For
 example if the command is `['ls', '-ll']` then the searching will be:
+
  1. an `Exec` with exactly the same as command prefix, `('ls', '-ll')`
  2. an `Exec` with the command prefix `('ls', )`
  3. an `Exec` with the command prefix `()`
+
 If none of these are found Scenario will raise a `RuntimeError`.
+
+Note that the `return_code`, `stdout`, and `stderr` attributes of an `Exec`
+object are the *output* that the charm will receive when a matching `exec` call
+is made. You'll want to provide these when constructing the input state, and
+will rarely want to assert on them in the output state (they cannot change).
+The `stdin` attribute is ignored in the input state, and in the output
+state will contain any content that the charm wrote to stdin as part of the
+`exec` call, so you'll want to assert that it has the appropriate value.
 
 ### Pebble Notices
 

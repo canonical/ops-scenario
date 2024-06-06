@@ -87,7 +87,8 @@ class _MockExecProcess:
         self._waited = False
         self.stdout = StringIO(self._exec.stdout)
         self.stderr = StringIO(self._exec.stderr)
-        self.stdin = StringIO(self._exec.stdin)
+        # You can't pass *in* the stdin, the charm is responsible for that.
+        self.stdin = StringIO()
         self._container = container
 
     def _store_stdin(self):
@@ -758,10 +759,16 @@ class _MockPebbleClient(_TestingPebbleClient):
     # Based on a method of the same name from ops.testing.
     def _find_exec_handler(self, command) -> Optional["Exec"]:
         handlers = {exec.command_prefix: exec for exec in self._container.execs}
+        # Start with the full command and, each loop iteration, drop the last
+        # element, until it matches one of the command prefixes in the execs.
+        # This includes matching against the empty list, which will match any
+        # command, if there is not a more specific match.
         for prefix_len in reversed(range(len(command) + 1)):
             command_prefix = tuple(command[:prefix_len])
             if command_prefix in handlers:
                 return handlers[command_prefix]
+        # None of the command prefixes in the execs matched the command, no
+        # matter how much of it was used, so we have failed to find a handler.
         return None
 
     def exec(self, command, **kwargs):  # noqa: U100 type: ignore

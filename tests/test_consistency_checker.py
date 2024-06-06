@@ -14,7 +14,6 @@ from scenario.state import (
     Container,
     Model,
     Exec,
-    Event,
     Network,
     Notice,
     PeerRelation,
@@ -183,7 +182,10 @@ def test_evt_bad_container_name():
 
 
 def test_duplicate_execs_in_container():
-    container = Container("foo", execs={Exec(("ls", "-l"), return_code=0), Exec(("ls", "-l"), return_code=1)})
+    container = Container(
+        "foo",
+        execs={Exec(("ls", "-l"), return_code=0), Exec(("ls", "-l"), return_code=1)},
+    )
     assert_inconsistent(
         State(containers=[container]),
         Event("foo-pebble-ready", container=container),
