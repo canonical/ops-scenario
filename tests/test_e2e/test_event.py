@@ -84,7 +84,9 @@ def test_emitted_deferred():
         capture_deferred_events=True,
         capture_framework_events=True,
     )
-    ctx.run(ctx.on.start(), State(deferred=[Event("update-status").deferred(MyCharm._foo)]))
+    ctx.run(
+        ctx.on.start(), State(deferred=[_Event("update-status").deferred(MyCharm._foo)])
+    )
 
     assert len(ctx.emitted_events) == 5
     assert [e.handle.kind for e in ctx.emitted_events] == [

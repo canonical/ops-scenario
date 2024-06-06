@@ -578,6 +578,7 @@ class Container:
         """Simulated pebble filesystem in this context."""
         return ctx._get_container_root(self.name)
 
+
 _RawStatusLiteral = Literal[
     "waiting",
     "blocked",
@@ -702,6 +703,7 @@ class Storage:
     def get_filesystem(self, ctx: "Context") -> Path:
         """Simulated filesystem root in this context."""
         return ctx._get_storage_root(self.name, self.index)
+
 
 @dataclasses.dataclass(frozen=True)
 class State:
