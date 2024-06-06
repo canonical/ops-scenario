@@ -1013,7 +1013,7 @@ foo_relation = scenario.Relation('foo')
 foo_relation.changed_event.deferred(handler=MyCharm._on_foo_relation_changed)
 ```
 
-# Live charm introspection
+=# Live charm introspection
 
 Scenario is a black-box, state-transition testing framework. It makes it trivial to assert that a status went from A to
 B, but not to assert that, in the context of this charm execution, with this state, a certain charm-internal method was called and returned a
