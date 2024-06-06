@@ -210,7 +210,7 @@ import ops
 import scenario
 
 # ...
-ctx.run(ctx.start(), scenario.State(unit_status=ops.ActiveStatus('foo')))
+ctx.run(ctx.on.start(), scenario.State(unit_status=ops.ActiveStatus('foo')))
 assert ctx.unit_status_history == [
     ops.ActiveStatus('foo'),  # now the first status is active: 'foo'!
     # ...
