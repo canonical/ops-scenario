@@ -156,8 +156,14 @@ def test_relation_events(mycharm, evt_name, remote_app_name):
 
 
 @pytest.mark.parametrize(
-    "evt_name",
-    ("changed", "broken", "departed", "joined", "created"),
+    "evt_name,has_unit",
+    [
+        ("changed", True),
+        ("broken", False),
+        ("departed", True),
+        ("joined", True),
+        ("created", False),
+    ],
 )
 @pytest.mark.parametrize(
     "remote_app_name",
@@ -167,7 +173,9 @@ def test_relation_events(mycharm, evt_name, remote_app_name):
     "remote_unit_id",
     (0, 1),
 )
-def test_relation_events_attrs(mycharm, evt_name, remote_app_name, remote_unit_id):
+def test_relation_events_attrs(
+    mycharm, evt_name, has_unit, remote_app_name, remote_unit_id
+):
     relation = Relation(
         endpoint="foo", interface="foo", remote_app_name=remote_app_name
     )
@@ -177,7 +185,8 @@ def test_relation_events_attrs(mycharm, evt_name, remote_app_name, remote_unit_i
             return
 
         assert event.app
-        assert event.unit
+        if not isinstance(event, (RelationCreatedEvent, RelationBrokenEvent)):
+            assert event.unit
         if isinstance(event, RelationDepartedEvent):
             assert event.departing_unit
 
@@ -193,9 +202,10 @@ def test_relation_events_attrs(mycharm, evt_name, remote_app_name, remote_unit_i
         },
     )
     state = State(relations=[relation])
-    event = getattr(ctx.on, f"relation_{evt_name}")(
-        relation, remote_unit=remote_unit_id
-    )
+    kwargs = {}
+    if has_unit:
+        kwargs["remote_unit"] = remote_unit_id
+    event = getattr(ctx.on, f"relation_{evt_name}")(relation, **kwargs)
     ctx.run(event, state=state)
 
 
