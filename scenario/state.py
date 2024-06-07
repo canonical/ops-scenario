@@ -766,6 +766,11 @@ class Port:
                 f"`port` arg required with `{self.protocol}` protocol",
             )
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (Port, ops.Port)):
+            return (self.protocol, self.port) == (other.protocol, other.port)
+        return False
+
 
 _next_storage_index_counter = 0  # storage indices start at 0
 
@@ -791,6 +796,11 @@ class Storage:
 
     index: int = dataclasses.field(default_factory=next_storage_index)
     # Every new Storage instance gets a new one, if there's trouble, override.
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (Storage, ops.Storage)):
+            return (self.name, self.index) == (other.name, other.index)
+        return False
 
     def get_filesystem(self, ctx: "Context") -> Path:
         """Simulated filesystem root in this context."""
