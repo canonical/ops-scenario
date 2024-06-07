@@ -85,7 +85,7 @@ With that, we can write the simplest possible scenario test:
 def test_scenario_base():
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
     out = ctx.run(ctx.on.start(), scenario.State())
-    assert out.unit_status == UnknownStatus()
+    assert out.unit_status == scenario.UnknownStatus()
 ```
 
 Now let's start making it more complicated. Our charm sets a special state if it has leadership on 'start':
@@ -110,7 +110,7 @@ class MyCharm(ops.CharmBase):
 def test_status_leader(leader):
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
     out = ctx.run(ctx.on.start(), scenario.State(leader=leader))
-    assert out.unit_status == ActiveStatus('I rule' if leader else 'I am ruled')
+    assert out.unit_status == scenario.ActiveStatus('I rule' if leader else 'I am ruled')
 ```
 
 By defining the right state we can programmatically define what answers will the charm get to all the questions it can
@@ -165,15 +165,15 @@ def test_statuses():
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
     out = ctx.run(ctx.on.start(), scenario.State(leader=False))
     assert ctx.unit_status_history == [
-        UnknownStatus(),
-        MaintenanceStatus('determining who the ruler is...'),
-        WaitingStatus('checking this is right...'),
+        scenario.UnknownStatus(),
+        scenario.MaintenanceStatus('determining who the ruler is...'),
+        scenario.WaitingStatus('checking this is right...'),
     ]
-    assert out.unit_status == ActiveStatus("I am ruled")
+    assert out.unit_status == scenario.ActiveStatus("I am ruled")
     
     # similarly you can check the app status history:
     assert ctx.app_status_history == [
-        UnknownStatus(),
+        scenario.UnknownStatus(),
         ...
     ]
 ```
@@ -198,9 +198,9 @@ class MyCharm(ops.CharmBase):
 
 # ...
 ctx = scenario.Context(MyCharm, meta={"name": "foo"})
-ctx.run(ctx.on.start(), scenario.State(unit_status=ActiveStatus('foo')))
+ctx.run(ctx.on.start(), scenario.State(unit_status=scenario.ActiveStatus('foo')))
 assert ctx.unit_status_history == [
-    ActiveStatus('foo'),  # now the first status is active: 'foo'!
+    scenario.ActiveStatus('foo'),  # now the first status is active: 'foo'!
     # ...
 ]
 ```
