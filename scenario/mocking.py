@@ -754,7 +754,7 @@ class _MockPebbleClient(_TestingPebbleClient):
 
     @property
     def _service_status(self) -> Dict[str, pebble.ServiceStatus]:
-        return self._container.service_status
+        return self._container.service_statuses
 
     # Based on a method of the same name from ops.testing.
     def _find_exec_handler(self, command) -> Optional["Exec"]:

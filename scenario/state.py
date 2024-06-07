@@ -803,7 +803,7 @@ class Container(_max_posargs(1)):
     layers: Dict[str, pebble.Layer] = dataclasses.field(default_factory=dict)
     """All :class:`ops.pebble.Layer` definitions that have already been added to the container."""
 
-    service_status: Dict[str, pebble.ServiceStatus] = dataclasses.field(
+    service_statuses: Dict[str, pebble.ServiceStatus] = dataclasses.field(
         default_factory=dict,
     )
     """The current status of each Pebble service running in the container."""
@@ -898,7 +898,7 @@ class Container(_max_posargs(1)):
                 # in pebble, it just returns "nothing matched" if there are 0 matches,
                 # but it ignores services it doesn't recognize
                 continue
-            status = self.service_status.get(name, pebble.ServiceStatus.INACTIVE)
+            status = self.service_statuses.get(name, pebble.ServiceStatus.INACTIVE)
             if service.startup == "":
                 startup = pebble.ServiceStartup.DISABLED
             else:

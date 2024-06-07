@@ -297,7 +297,7 @@ def test_pebble_plan(charm_cls, starting_service_status):
                 }
             )
         },
-        service_status={
+        service_statuses={
             "fooserv": pebble.ServiceStatus.ACTIVE,
             # todo: should we disallow setting status for services that aren't known YET?
             "barserv": starting_service_status,
