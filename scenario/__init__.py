@@ -4,14 +4,18 @@
 from scenario.context import ActionOutput, Context
 from scenario.state import (
     Action,
+    ActiveStatus,
     Address,
     BindAddress,
     CloudCredential,
     CloudSpec,
+    BlockedStatus,
     Container,
     DeferredEvent,
+    ErrorStatus,
     ExecOutput,
     ICMPPort,
+    MaintenanceStatus,
     Model,
     Mount,
     Network,
@@ -26,6 +30,8 @@ from scenario.state import (
     SubordinateRelation,
     TCPPort,
     UDPPort,
+    UnknownStatus,
+    WaitingStatus,
     deferred,
 )
 
@@ -56,4 +62,10 @@ __all__ = [
     "StoredState",
     "State",
     "DeferredEvent",
+    "ErrorStatus",
+    "BlockedStatus",
+    "WaitingStatus",
+    "MaintenanceStatus",
+    "ActiveStatus",
+    "UnknownStatus",
 ]

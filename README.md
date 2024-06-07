@@ -85,7 +85,7 @@ With that, we can write the simplest possible scenario test:
 def test_scenario_base():
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
     out = ctx.run(ctx.on.start(), scenario.State())
-    assert out.unit_status == ops.UnknownStatus()
+    assert out.unit_status == UnknownStatus()
 ```
 
 Now let's start making it more complicated. Our charm sets a special state if it has leadership on 'start':
@@ -110,7 +110,7 @@ class MyCharm(ops.CharmBase):
 def test_status_leader(leader):
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
     out = ctx.run(ctx.on.start(), scenario.State(leader=leader))
-    assert out.unit_status == ops.ActiveStatus('I rule' if leader else 'I am ruled')
+    assert out.unit_status == ActiveStatus('I rule' if leader else 'I am ruled')
 ```
 
 By defining the right state we can programmatically define what answers will the charm get to all the questions it can
@@ -165,15 +165,15 @@ def test_statuses():
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
     out = ctx.run(ctx.on.start(), scenario.State(leader=False))
     assert ctx.unit_status_history == [
-        ops.UnknownStatus(),
-        ops.MaintenanceStatus('determining who the ruler is...'),
-        ops.WaitingStatus('checking this is right...'),
+        UnknownStatus(),
+        MaintenanceStatus('determining who the ruler is...'),
+        WaitingStatus('checking this is right...'),
     ]
-    assert out.unit_status == ops.ActiveStatus("I am ruled")
+    assert out.unit_status == ActiveStatus("I am ruled")
     
     # similarly you can check the app status history:
     assert ctx.app_status_history == [
-        ops.UnknownStatus(),
+        UnknownStatus(),
         ...
     ]
 ```
@@ -198,9 +198,9 @@ class MyCharm(ops.CharmBase):
 
 # ...
 ctx = scenario.Context(MyCharm, meta={"name": "foo"})
-ctx.run(ctx.on.start(), scenario.State(unit_status=ops.ActiveStatus('foo')))
+ctx.run(ctx.on.start(), scenario.State(unit_status=ActiveStatus('foo')))
 assert ctx.unit_status_history == [
-    ops.ActiveStatus('foo'),  # now the first status is active: 'foo'!
+    ActiveStatus('foo'),  # now the first status is active: 'foo'!
     # ...
 ]
 ```
@@ -248,7 +248,7 @@ def test_emitted_full():
         capture_deferred_events=True,
         capture_framework_events=True,
     )
-    ctx.run(ctx.on.start(), scenario.State(deferred=[scenario.Event("update-status").deferred(MyCharm._foo)]))
+    ctx.run(ctx.on.start(), scenario.State(deferred=[scenario._Event("update-status").deferred(MyCharm._foo)]))
 
     assert len(ctx.emitted_events) == 5
     assert [e.handle.kind for e in ctx.emitted_events] == [

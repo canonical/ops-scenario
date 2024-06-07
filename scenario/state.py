@@ -28,6 +28,7 @@ from typing import (
 )
 from uuid import uuid4
 
+import ops
 import yaml
 from ops import pebble
 from ops.charm import CharmBase, CharmEvents
@@ -850,7 +851,8 @@ _RawStatusLiteral = Literal[
 class _EntityStatus:
     """This class represents StatusBase and should not be interacted with directly."""
 
-    # Why not use StatusBase directly? Because that's not json-serializable.
+    # Why not use StatusBase directly? Because that can't be used with
+    # dataclasses.asdict to then be JSON-serializable.
 
     name: _RawStatusLiteral
     message: str = ""
@@ -873,14 +875,104 @@ class _EntityStatus:
 
 def _status_to_entitystatus(obj: StatusBase) -> _EntityStatus:
     """Convert StatusBase to _EntityStatus."""
-    statusbase_subclass = type(StatusBase.from_name(obj.name, obj.message))
+    return {
+        ops.UnknownStatus: UnknownStatus,
+        ops.ErrorStatus: ErrorStatus,
+        ops.ActiveStatus: ActiveStatus,
+        ops.BlockedStatus: BlockedStatus,
+        ops.MaintenanceStatus: MaintenanceStatus,
+        ops.WaitingStatus: WaitingStatus,
+    }[obj.__class__](obj.message)
 
-    class _MyClass(_EntityStatus, statusbase_subclass):
-        # Custom type inheriting from a specific StatusBase subclass to support instance checks:
-        #  isinstance(state.unit_status, ops.ActiveStatus)
-        pass
 
-    return _MyClass(cast(_RawStatusLiteral, obj.name), obj.message)
+@dataclasses.dataclass(frozen=True, eq=False, repr=False)
+class UnknownStatus(_EntityStatus, ops.UnknownStatus):
+    """The unit status is unknown.
+
+    A unit-agent has finished calling install, config-changed, and start, but the
+    charm has not called status-set yet.
+    """
+
+    name: Literal["unknown"] = "unknown"
+
+    def __init__(self):
+        super().__init__(name=self.name)
+
+
+@dataclasses.dataclass(frozen=True, eq=False, repr=False)
+class ErrorStatus(_EntityStatus, ops.ErrorStatus):
+    """The unit status is error.
+
+    The unit-agent has encountered an error (the application or unit requires
+    human intervention in order to operate correctly).
+    """
+
+    name: Literal["error"] = "error"
+
+    def __init__(self, message: str = ""):
+        super().__init__(name="error", message=message)
+
+
+@dataclasses.dataclass(frozen=True, eq=False, repr=False)
+class ActiveStatus(_EntityStatus, ops.ActiveStatus):
+    """The unit/app is ready.
+
+    Use the :attr:`message` to provide details when the unit/app is operational
+    but in a degraded state (such as lacking high availability).
+    """
+
+    name: Literal["active"] = "active"
+
+    def __init__(self, message: str = ""):
+        super().__init__(name="active", message=message)
+
+
+@dataclasses.dataclass(frozen=True, eq=False, repr=False)
+class BlockedStatus(_EntityStatus, ops.BlockedStatus):
+    """The unit/app requires manual intervention.
+
+    An admin has to manually intervene to unblock the unit/app and let it proceed.
+    """
+
+    name: Literal["blocked"] = "blocked"
+
+    def __init__(self, message: str = ""):
+        super().__init__(name="blocked", message=message)
+
+
+@dataclasses.dataclass(frozen=True, eq=False, repr=False)
+class MaintenanceStatus(_EntityStatus, ops.MaintenanceStatus):
+    """The unit/app is performing maintenance tasks.
+
+    The unit/app is performing an operation such as ``apt install`` or waiting for
+    something under its control, such as ``pebble-ready`` or an ``exec``
+    operation in the workload container.
+
+    In constrast to :class:`WaitingStatus`, ``MaintenanceStatus`` reflects
+    activity on this unit or charm, not on peers or related units.
+    """
+
+    name: Literal["maintenance"] = "maintenance"
+
+    def __init__(self, message: str = ""):
+        super().__init__(name="maintenance", message=message)
+
+
+@dataclasses.dataclass(frozen=True, eq=False, repr=False)
+class WaitingStatus(_EntityStatus, ops.WaitingStatus):
+    """The unit/app is waiting on an integration.
+
+    The unit/app is waiting on a charm with which it is integrated, such as
+    waiting for an integrated database charm to provide credentials.
+
+    In contrast to :class:`MaintenanceStatus`, ``WaitingStatus`` reflects
+    activity on related units, not on this unit or charm.
+    """
+
+    name: Literal["waiting"] = "waiting"
+
+    def __init__(self, message: str = ""):
+        super().__init__(name="waiting", message=message)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1061,15 +1153,16 @@ class State(_max_posargs(0)):
     stored_state: List["StoredState"] = dataclasses.field(default_factory=list)
     """Contents of a charm's stored state."""
 
-    # the current statuses. Will be cast to _EntitiyStatus in __post_init__
-    app_status: Union[StatusBase, _EntityStatus] = _EntityStatus("unknown")
+    # the current statuses.
+    app_status: _EntityStatus = UnknownStatus()
     """Status of the application."""
-    unit_status: Union[StatusBase, _EntityStatus] = _EntityStatus("unknown")
+    unit_status: _EntityStatus = UnknownStatus()
     """Status of the unit."""
     workload_version: str = ""
     """Workload version."""
 
     def __post_init__(self):
+        # Let people pass in the ops classes, and convert them to the appropriate Scenario classes.
         for name in ["app_status", "unit_status"]:
             val = getattr(self, name)
             if isinstance(val, _EntityStatus):
@@ -1078,6 +1171,26 @@ class State(_max_posargs(0)):
                 object.__setattr__(self, name, _status_to_entitystatus(val))
             else:
                 raise TypeError(f"Invalid status.{name}: {val!r}")
+        normalised_ports = [
+            Port(protocol=port.protocol, port=port.port)
+            if isinstance(port, ops.Port)
+            else port
+            for port in self.opened_ports
+        ]
+        if self.opened_ports != normalised_ports:
+            object.__setattr__(self, "opened_ports", normalised_ports)
+        normalised_storage = [
+            Storage(name=storage.name, index=storage.index)
+            if isinstance(storage, ops.Storage)
+            else storage
+            for storage in self.storage
+        ]
+        if self.storage != normalised_storage:
+            object.__setattr__(self, "storage", normalised_storage)
+        # ops.Container, ops.Model, ops.Relation, ops.Secret should not be instantiated by charmers.
+        # ops.Network does not have the relation name, so cannot be converted.
+        # ops.Resources does not contain the source of the resource, so cannot be converted.
+        # ops.StoredState is not convenient to initialise with data, so not useful here.
 
     def _update_workload_version(self, new_workload_version: str):
         """Update the current app version and record the previous one."""
@@ -1090,13 +1203,12 @@ class State(_max_posargs(0)):
     def _update_status(
         self,
         new_status: _RawStatusLiteral,
-        new_message: str = "",
         is_app: bool = False,
     ):
-        """Update the current app/unit status and add the previous one to the history."""
+        """Update the current app/unit status."""
         name = "app_status" if is_app else "unit_status"
         # bypass frozen dataclass
-        object.__setattr__(self, name, _EntityStatus(new_status, new_message))
+        object.__setattr__(self, name, new_status)
 
     def with_can_connect(self, container_name: str, can_connect: bool) -> "State":
         def replacer(container: Container):
@@ -1113,10 +1225,7 @@ class State(_max_posargs(0)):
     def with_unit_status(self, status: StatusBase) -> "State":
         return dataclasses.replace(
             self,
-            status=dataclasses.replace(
-                cast(_EntityStatus, self.unit_status),
-                unit=_status_to_entitystatus(status),
-            ),
+            unit_status=_status_to_entitystatus(status),
         )
 
     def get_container(self, container: Union[str, Container]) -> Container:
