@@ -583,7 +583,7 @@ class Container:
     # as all will be known when unit-testing.
     layers: Dict[str, pebble.Layer] = dataclasses.field(default_factory=dict)
 
-    service_status: Dict[str, pebble.ServiceStatus] = dataclasses.field(
+    service_statuses: Dict[str, pebble.ServiceStatus] = dataclasses.field(
         default_factory=dict,
     )
 
@@ -650,7 +650,7 @@ class Container:
                 # in pebble, it just returns "nothing matched" if there are 0 matches,
                 # but it ignores services it doesn't recognize
                 continue
-            status = self.service_status.get(name, pebble.ServiceStatus.INACTIVE)
+            status = self.service_statuses.get(name, pebble.ServiceStatus.INACTIVE)
             if service.startup == "":
                 startup = pebble.ServiceStartup.DISABLED
             else:
