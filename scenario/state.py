@@ -873,7 +873,9 @@ class State(_MaxPositionalArgs):
             elif isinstance(val, StatusBase):
                 object.__setattr__(self, name, _status_to_entitystatus(val))
             else:
-                raise TypeError(f"Cannot set {name!r} to {val!r}. Expecting an ops.StatusBase instance.")
+                raise TypeError(
+                    f"Cannot set {name!r} to {val!r}. Expecting an ops.StatusBase instance.",
+                )
 
     def _update_workload_version(self, new_workload_version: str):
         """Update the current app version and record the previous one."""
