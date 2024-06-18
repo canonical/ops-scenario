@@ -9,7 +9,7 @@ from ops.framework import Framework
 from ops.pebble import ExecError, ServiceStartup, ServiceStatus
 
 from scenario import Context
-from scenario.state import Container, ExecOutput, Mount, Port, State
+from scenario.state import Container, Exec, Mount, Port, State
 from tests.helpers import jsonpatch_delta, trigger
 
 
@@ -193,7 +193,7 @@ def test_exec(charm_cls, cmd, out):
         container = self.unit.get_container("foo")
         proc = container.exec([cmd])
         proc.wait()
-        assert proc.stdout.read() == "hello pebble"
+        assert proc.stdout.read() == out
 
     trigger(
         State(
@@ -201,7 +201,7 @@ def test_exec(charm_cls, cmd, out):
                 Container(
                     name="foo",
                     can_connect=True,
-                    exec_mock={(cmd,): ExecOutput(stdout="hello pebble")},
+                    execs={Exec((cmd,), stdout=out)},
                 )
             ]
         ),
@@ -210,6 +210,26 @@ def test_exec(charm_cls, cmd, out):
         event="start",
         post_event=callback,
     )
+
+
+def test_get_exec():
+    class MyCharm(CharmBase):
+        def __init__(self, framework: Framework):
+            super().__init__(framework)
+            self.framework.observe(self.on.foo_pebble_ready, self._on_ready)
+
+        def _on_ready(self, _):
+            proc = self.unit.get_container("foo").exec(["ls"])
+            proc.stdin.write("hello world!")
+            proc.wait_output()
+
+    ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
+    exec = Exec((), stdout=LS)
+    container = Container(name="foo", can_connect=True, execs={exec})
+    state_out = ctx.run(
+        ctx.on.pebble_ready(container=container), State(containers=[container])
+    )
+    assert state_out.get_container(container).get_exec(()).stdin == "hello world!"
 
 
 def test_pebble_ready(charm_cls):
@@ -279,7 +299,7 @@ def test_pebble_plan(charm_cls, starting_service_status):
                 }
             )
         },
-        service_status={
+        service_statuses={
             "fooserv": pebble.ServiceStatus.ACTIVE,
             # todo: should we disallow setting status for services that aren't known YET?
             "barserv": starting_service_status,
@@ -312,7 +332,7 @@ def test_exec_wait_error(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                exec_mock={("foo",): ExecOutput(stdout="hello pebble", return_code=1)},
+                execs={Exec(("foo",), stdout="hello pebble", return_code=1)},
             )
         ]
     )
@@ -321,9 +341,9 @@ def test_exec_wait_error(charm_cls):
     with ctx.manager(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
-        with pytest.raises(ExecError):
-            proc.wait()
-        assert proc.stdout.read() == "hello pebble"
+        with pytest.raises(ExecError) as exc_info:
+            proc.wait_output()
+        assert exc_info.value.stdout == "hello pebble"
 
 
 def test_exec_wait_output(charm_cls):
@@ -332,9 +352,7 @@ def test_exec_wait_output(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                exec_mock={
-                    ("foo",): ExecOutput(stdout="hello pebble", stderr="oepsie")
-                },
+                execs={Exec(("foo",), stdout="hello pebble", stderr="oepsie")},
             )
         ]
     )
@@ -354,7 +372,7 @@ def test_exec_wait_output_error(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                exec_mock={("foo",): ExecOutput(stdout="hello pebble", return_code=1)},
+                execs={Exec(("foo",), stdout="hello pebble", return_code=1)},
             )
         ]
     )

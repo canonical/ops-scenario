@@ -9,6 +9,7 @@ from scenario.state import (
     RELATION_EVENTS_SUFFIX,
     Action,
     Container,
+    Exec,
     Network,
     PeerRelation,
     Relation,
@@ -115,6 +116,18 @@ def test_evt_bad_container_name():
         State(containers=[Container("bar")]),
         _Event("bar-pebble-ready", container=Container("bar")),
         _CharmSpec(MyCharm, {"containers": {"bar": {}}}),
+    )
+
+
+def test_duplicate_execs_in_container():
+    container = Container(
+        "foo",
+        execs={Exec(("ls", "-l"), return_code=0), Exec(("ls", "-l"), return_code=1)},
+    )
+    assert_inconsistent(
+        State(containers=[container]),
+        _Event("foo-pebble-ready", container=container),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
 
 

@@ -185,7 +185,7 @@ def _check_workload_event(
     event: "_Event",
     state: "State",
     errors: List[str],
-    warnings: List[str],  # noqa: U100
+    warnings: List[str],
 ):
     if not event.container:
         errors.append(
@@ -197,6 +197,12 @@ def _check_workload_event(
             f"workload event should start with container name. {event.name} does "
             f"not start with {event.container.name}.",
         )
+    else:
+        names = Counter(exec.command_prefix for exec in event.container.execs)
+        if dupes := [n for n in names if names[n] > 1]:
+            errors.append(
+                f"container {event.container.name} has duplicate command prefixes: {dupes}",
+            )
         if event.container not in state.containers:
             errors.append(
                 f"cannot emit {event.name} because container {event.container.name} "

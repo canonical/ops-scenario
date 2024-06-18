@@ -14,10 +14,13 @@ from typing import (
     Any,
     Callable,
     Dict,
+    FrozenSet,
     Generic,
+    Iterable,
     List,
     Literal,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Type,
@@ -463,19 +466,18 @@ def _generate_new_change_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class ExecOutput:
+class Exec:
+    command_prefix: Sequence[str]
     return_code: int = 0
     stdout: str = ""
     stderr: str = ""
+    stdin: Optional[str] = None
 
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
 
     def _run(self) -> int:
         return self._change_id
-
-
-_ExecMock = Dict[Tuple[str, ...], ExecOutput]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -499,7 +501,7 @@ class Container:
     # as all will be known when unit-testing.
     layers: Dict[str, pebble.Layer] = dataclasses.field(default_factory=dict)
 
-    service_status: Dict[str, pebble.ServiceStatus] = dataclasses.field(
+    service_statuses: Dict[str, pebble.ServiceStatus] = dataclasses.field(
         default_factory=dict,
     )
 
@@ -519,7 +521,12 @@ class Container:
     # create a tempfile and insert its path in the mock filesystem tree
     mounts: Dict[str, Mount] = dataclasses.field(default_factory=dict)
 
-    exec_mock: _ExecMock = dataclasses.field(default_factory=dict)
+    execs: FrozenSet[Exec] = frozenset()
+
+    def __post_init__(self):
+        if not isinstance(self.execs, frozenset):
+            # Allow passing a regular set (or other iterable) of Execs.
+            object.__setattr__(self, "execs", frozenset(self.execs))
 
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
@@ -561,7 +568,7 @@ class Container:
                 # in pebble, it just returns "nothing matched" if there are 0 matches,
                 # but it ignores services it doesn't recognize
                 continue
-            status = self.service_status.get(name, pebble.ServiceStatus.INACTIVE)
+            status = self.service_statuses.get(name, pebble.ServiceStatus.INACTIVE)
             if service.startup == "":
                 startup = pebble.ServiceStartup.DISABLED
             else:
@@ -577,6 +584,17 @@ class Container:
     def get_filesystem(self, ctx: "Context") -> Path:
         """Simulated pebble filesystem in this context."""
         return ctx._get_container_root(self.name)
+
+    def get_exec(self, command_prefix: Sequence[str]):
+        """Get the Exec object from the container with the given command prefix."""
+        for exec in self.execs:
+            if exec.command_prefix == command_prefix:
+                return exec
+        raise KeyError(f"no exec found with command prefix {command_prefix}")
+
+    def _update_execs(self, execs: Iterable[Exec]):
+        # bypass frozen dataclass
+        object.__setattr__(self, "execs", frozenset(execs))
 
 
 _RawStatusLiteral = Literal[
