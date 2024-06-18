@@ -226,7 +226,9 @@ def test_get_exec():
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
     exec = Exec((), stdout=LS)
     container = Container(name="foo", can_connect=True, execs={exec})
-    state_out = ctx.run(container.pebble_ready_event, State(containers=[container]))
+    state_out = ctx.run(
+        ctx.on.pebble_ready(container=container), State(containers=[container])
+    )
     assert state_out.get_container(container).get_exec(()).stdin == "hello world!"
 
 

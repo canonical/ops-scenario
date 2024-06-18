@@ -186,7 +186,7 @@ def _check_workload_event(
     event: "_Event",
     state: "State",
     errors: List[str],
-    warnings: List[str],  # noqa: U100
+    warnings: List[str],
 ):
     if not event.container:
         errors.append(

@@ -188,7 +188,7 @@ def test_duplicate_execs_in_container():
     )
     assert_inconsistent(
         State(containers=[container]),
-        Event("foo-pebble-ready", container=container),
+        _Event("foo-pebble-ready", container=container),
         _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
 
