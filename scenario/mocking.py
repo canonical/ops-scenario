@@ -57,6 +57,7 @@ if TYPE_CHECKING:  # pragma: no cover
         State,
         SubordinateRelation,
         _CharmSpec,
+        _Event,
     )
 
 logger = scenario_logger.getChild("mocking")
@@ -129,7 +130,7 @@ class _MockModelBackend(_ModelBackend):
     def __init__(
         self,
         state: "State",
-        event: "Event",
+        event: "_Event",
         charm_spec: "_CharmSpec",
         context: "Context",
     ):
@@ -190,7 +191,7 @@ class _MockModelBackend(_ModelBackend):
     ) -> Union["Relation", "SubordinateRelation", "PeerRelation"]:
         try:
             return next(
-                filter(lambda r: r.relation_id == rel_id, self._state.relations),
+                filter(lambda r: r.id == rel_id, self._state.relations),
             )
         except StopIteration:
             raise RelationNotFoundError()
@@ -272,9 +273,7 @@ class _MockModelBackend(_ModelBackend):
 
     def relation_ids(self, relation_name):
         return [
-            rel.relation_id
-            for rel in self._state.relations
-            if rel.endpoint == relation_name
+            rel.id for rel in self._state.relations if rel.endpoint == relation_name
         ]
 
     def relation_list(self, relation_id: int) -> Tuple[str, ...]:
@@ -667,7 +666,7 @@ class _MockPebbleClient(_TestingPebbleClient):
         mounts: Dict[str, Mount],
         *,
         state: "State",
-        event: "Event",
+        event: "_Event",
         charm_spec: "_CharmSpec",
     ):
         self._state = state

@@ -129,7 +129,7 @@ def test_fs_pull(charm_cls, make_dirs):
         charm_type=charm_cls,
         meta={"name": "foo", "containers": {"foo": {}}},
     )
-    with ctx.manager("start", state=state) as mgr:
+    with ctx.manager(ctx.on.start(), state=state) as mgr:
         out = mgr.run()
         callback(mgr.charm)
 
@@ -241,7 +241,7 @@ def test_pebble_ready(charm_cls):
         State(containers=[container]),
         charm_type=charm_cls,
         meta={"name": "foo", "containers": {"foo": {}}},
-        event=container.pebble_ready_event,
+        event="pebble_ready",
         post_event=callback,
     )
 
@@ -308,7 +308,7 @@ def test_pebble_plan(charm_cls, starting_service_status):
         State(containers=[container]),
         charm_type=PlanCharm,
         meta={"name": "foo", "containers": {"foo": {}}},
-        event=container.pebble_ready_event,
+        event="pebble_ready",
     )
 
     serv = lambda name, obj: pebble.Service(name, raw=obj)
@@ -335,9 +335,8 @@ def test_exec_wait_error(charm_cls):
         ]
     )
 
-    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
-        "start", state
-    ) as mgr:
+    ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
+    with ctx.manager(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         with pytest.raises(ExecError) as exc_info:
@@ -356,9 +355,8 @@ def test_exec_wait_output(charm_cls):
         ]
     )
 
-    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
-        "start", state
-    ) as mgr:
+    ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
+    with ctx.manager(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         out, err = proc.wait_output()
@@ -377,9 +375,8 @@ def test_exec_wait_output_error(charm_cls):
         ]
     )
 
-    with Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}}).manager(
-        "start", state
-    ) as mgr:
+    ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
+    with ctx.manager(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         with pytest.raises(ExecError):

@@ -2,7 +2,7 @@ import pytest
 from ops.charm import CharmBase
 from ops.framework import Framework
 
-from scenario.state import Event, Network, Relation, State, _CharmSpec
+from scenario.state import Network, Relation, State, _CharmSpec, _Event
 from tests.helpers import trigger
 
 

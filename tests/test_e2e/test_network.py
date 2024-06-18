@@ -41,14 +41,14 @@ def test_ip_get(mycharm):
     )
 
     with ctx.manager(
-        "update_status",
+        ctx.on.update_status(),
         State(
             relations=[
                 Relation(
                     interface="foo",
                     remote_app_name="remote",
                     endpoint="metrics-endpoint",
-                    relation_id=1,
+                    id=1,
                 ),
             ],
             networks={"foo": Network.default(private_address="4.4.4.4")},
@@ -78,7 +78,7 @@ def test_no_sub_binding(mycharm):
     )
 
     with ctx.manager(
-        "update_status",
+        ctx.on.update_status(),
         State(
             relations=[
                 SubordinateRelation("bar"),
@@ -103,14 +103,14 @@ def test_no_relation_error(mycharm):
     )
 
     with ctx.manager(
-        "update_status",
+        ctx.on.update_status(),
         State(
             relations=[
                 Relation(
                     interface="foo",
                     remote_app_name="remote",
                     endpoint="metrics-endpoint",
-                    relation_id=1,
+                    id=1,
                 ),
             ],
             networks={"bar": Network.default()},

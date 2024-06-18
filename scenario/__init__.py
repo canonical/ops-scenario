@@ -47,5 +47,4 @@ __all__ = [
     "StoredState",
     "State",
     "DeferredEvent",
-    "Event",
 ]
