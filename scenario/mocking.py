@@ -50,7 +50,6 @@ if TYPE_CHECKING:  # pragma: no cover
     from scenario.context import Context
     from scenario.state import Container as ContainerSpec
     from scenario.state import (
-        Event,
         Exec,
         Relation,
         Secret,

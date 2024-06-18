@@ -8,7 +8,6 @@ from scenario.state import (
     BindAddress,
     Container,
     DeferredEvent,
-    Event,
     Exec,
     Model,
     Mount,
