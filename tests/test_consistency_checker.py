@@ -265,7 +265,7 @@ def test_secrets_jujuv_bad(bad_v):
 @pytest.mark.parametrize("good_v", ("3.0", "3.1", "3", "3.33", "4", "100"))
 def test_secrets_jujuv_bad(good_v):
     assert_consistent(
-        State(secrets=[Secret("secret:foo", {0: {"a": "b"}})]),
+        State(secrets=[Secret(id="secret:foo", contents={0: {"a": "b"}})]),
         _Event("bar"),
         _CharmSpec(MyCharm, {}),
         good_v,
@@ -273,7 +273,7 @@ def test_secrets_jujuv_bad(good_v):
 
 
 def test_secret_not_in_state():
-    secret = Secret("secret:foo", {"a": "b"})
+    secret = Secret(id="secret:foo", contents={"a": "b"})
     assert_inconsistent(
         State(),
         _Event("secret_changed", secret=secret),
@@ -619,10 +619,10 @@ def test_storedstate_consistency():
     assert_consistent(
         State(
             stored_state=[
-                StoredState(None, content={"foo": "bar"}),
-                StoredState(None, "my_stored_state", content={"foo": 1}),
-                StoredState("MyCharmLib", content={"foo": None}),
-                StoredState("OtherCharmLib", content={"foo": (1, 2, 3)}),
+                StoredState(content={"foo": "bar"}),
+                StoredState(name="my_stored_state", content={"foo": 1}),
+                StoredState(owner_path="MyCharmLib", content={"foo": None}),
+                StoredState(owner_path="OtherCharmLib", content={"foo": (1, 2, 3)}),
             ]
         ),
         _Event("start"),
@@ -636,8 +636,8 @@ def test_storedstate_consistency():
     assert_inconsistent(
         State(
             stored_state=[
-                StoredState(None, content={"foo": "bar"}),
-                StoredState(None, "_stored", content={"foo": "bar"}),
+                StoredState(owner_path=None, content={"foo": "bar"}),
+                StoredState(owner_path=None, name="_stored", content={"foo": "bar"}),
             ]
         ),
         _Event("start"),
@@ -649,7 +649,13 @@ def test_storedstate_consistency():
         ),
     )
     assert_inconsistent(
-        State(stored_state=[StoredState(None, content={"secret": Secret("foo", {})})]),
+        State(
+            stored_state=[
+                StoredState(
+                    owner_path=None, content={"secret": Secret(id="foo", contents={})}
+                )
+            ]
+        ),
         _Event("start"),
         _CharmSpec(
             MyCharm,

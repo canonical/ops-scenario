@@ -533,7 +533,7 @@ local_file = pathlib.Path('/path/to/local/real/file.txt')
 container = scenario.Container(
     name="foo",
     can_connect=True,
-    mounts={'local': scenario.Mount('/local/share/config.yaml', local_file)}
+    mounts={'local': scenario.Mount(location='/local/share/config.yaml', source=local_file)}
     )
 state = scenario.State(containers=[container])
 ```
@@ -570,7 +570,7 @@ def test_pebble_push():
         container = scenario,Container(
             name='foo',
             can_connect=True,
-            mounts={'local': Mount('/local/share/config.yaml', local_file.name)}
+            mounts={'local': Mount(location='/local/share/config.yaml', source=local_file.name)}
         )
         state_in = State(containers=[container])
         ctx = Context(
@@ -735,13 +735,13 @@ Since `ops 2.6.0`, charms can invoke the `open-port`, `close-port`, and `opened-
 
 - simulate a charm run with a port opened by some previous execution
 ctx = scenario.Context(MyCharm, meta=MyCharm.META)
-ctx.run(ctx.on.start(), scenario.State(opened_ports=[scenario.Port("tcp", 42)]))
+ctx.run(ctx.on.start(), scenario.State(opened_ports=[scenario.TCPPort(port=42)]))
 ```
 - assert that a charm has called `open-port` or `close-port`:
 ```python
 ctx = scenario.Context(PortCharm, meta=MyCharm.META)
 state1 = ctx.run(ctx.on.start(), scenario.State())
-assert state1.opened_ports == [scenario.Port("tcp", 42)]
+assert state1.opened_ports == [scenario.TCPPort(port=42)]
 
 state2 = ctx.run(ctx.on.stop(), state1)
 assert state2.opened_ports == []
@@ -755,8 +755,8 @@ Scenario has secrets. Here's how you use them.
 state = scenario.State(
     secrets=[
         scenario.Secret(
+            {0: {'key': 'public'}},
             id='foo',
-            contents={0: {'key': 'public'}}
         )
     ]
 )
@@ -784,8 +784,8 @@ To specify a secret owned by this unit (or app):
 state = scenario.State(
     secrets=[
         scenario.Secret(
+            {0: {'key': 'private'}},
             id='foo',
-            contents={0: {'key': 'private'}},
             owner='unit',  # or 'app'
             remote_grants={0: {"remote"}}
             # the secret owner has granted access to the "remote" app over some relation with ID 0
@@ -800,8 +800,8 @@ To specify a secret owned by some other application and give this unit (or app) 
 state = scenario.State(
     secrets=[
         scenario.Secret(
+            {0: {'key': 'public'}},
             id='foo',
-            contents={0: {'key': 'public'}},
             # owner=None, which is the default
             revision=0,  # the revision that this unit (or app) is currently tracking
         )

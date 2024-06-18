@@ -14,6 +14,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Final,
     Generic,
     List,
     Literal,
@@ -118,16 +119,36 @@ class MetadataNotFoundError(RuntimeError):
     """Raised when Scenario can't find a metadata.yaml file in the provided charm root."""
 
 
+# This can be replaced with the KW_ONLY dataclasses functionality in Python 3.10+.
+class _MaxPositionalArgs:
+    """Raises TypeError when instantiating objects if arguments are not passed as keywords.
+
+    Looks for a `_max_positional_args` class attribute, which should be an int
+    indicating the maximum number of positional arguments that can be passed to
+    `__init__` (excluding `self`). If not present, no limit is applied.
+    """
+
+    _max_positional_args = 0
+
+    def __new__(cls, *args, **_):
+        if len(args) > getattr(cls, "_max_positional_args", float("inf")):
+            raise TypeError(
+                f"{cls.__name__}.__init__() takes {cls._max_positional_args + 1} "
+                f"positional arguments but {len(args) + 1} were given",
+            )
+        return super().__new__(cls)
+
+
 @dataclasses.dataclass(frozen=True)
-class Secret:
+class Secret(_MaxPositionalArgs):
+    # mapping from revision IDs to each revision's contents
+    contents: Dict[int, "RawSecretRevisionContents"]
+
     id: str
     # CAUTION: ops-created Secrets (via .add_secret()) will have a canonicalized
     #  secret id (`secret:` prefix)
     #  but user-created ones will not. Using post-init to patch it in feels bad, but requiring the user to
     #  add the prefix manually every time seems painful as well.
-
-    # mapping from revision IDs to each revision's contents
-    contents: Dict[int, "RawSecretRevisionContents"]
 
     # indicates if the secret is owned by THIS unit, THIS app or some other app/unit.
     # if None, the implication is that the secret has been granted to this unit.
@@ -144,6 +165,8 @@ class Secret:
     description: Optional[str] = None
     expire: Optional[datetime.datetime] = None
     rotate: Optional[SecretRotate] = None
+
+    _max_positional_args: Final = 1
 
     def _set_revision(self, revision: int):
         """Set a new tracked revision."""
@@ -182,18 +205,22 @@ def normalize_name(s: str):
 
 
 @dataclasses.dataclass(frozen=True)
-class Address:
-    hostname: str
+class Address(_MaxPositionalArgs):
     value: str
-    cidr: str
+    hostname: str = ""
+    cidr: str = ""
     address: str = ""  # legacy
+
+    _max_positional_args: Final = 1
 
 
 @dataclasses.dataclass(frozen=True)
-class BindAddress:
-    interface_name: str
+class BindAddress(_MaxPositionalArgs):
     addresses: List[Address]
+    interface_name: str = ""
     mac_address: Optional[str] = None
+
+    _max_positional_args: Final = 1
 
     def hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
@@ -208,10 +235,12 @@ class BindAddress:
 
 
 @dataclasses.dataclass(frozen=True)
-class Network:
+class Network(_MaxPositionalArgs):
     bind_addresses: List[BindAddress]
     ingress_addresses: List[str]
     egress_subnets: List[str]
+
+    _max_positional_args: Final = 0
 
     def hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
@@ -251,7 +280,7 @@ class Network:
 _next_relation_id_counter = 1
 
 
-def next_relation_id(update=True):
+def next_relation_id(*, update=True):
     global _next_relation_id_counter
     cur = _next_relation_id_counter
     if update:
@@ -260,7 +289,7 @@ def next_relation_id(update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class _RelationBase:
+class _RelationBase(_MaxPositionalArgs):
     endpoint: str
     """Relation endpoint name. Must match some endpoint name defined in metadata.yaml."""
 
@@ -279,6 +308,8 @@ class _RelationBase:
         default_factory=lambda: DEFAULT_JUJU_DATABAG.copy(),
     )
     """This unit's databag for this relation."""
+
+    _max_positional_args: Final = 2
 
     @property
     def _databags(self):
@@ -436,13 +467,16 @@ def _random_model_name():
 
 
 @dataclasses.dataclass(frozen=True)
-class Model:
+class Model(_MaxPositionalArgs):
     name: str = dataclasses.field(default_factory=_random_model_name)
+
     uuid: str = dataclasses.field(default_factory=lambda: str(uuid4()))
 
     # whatever juju models --format=json | jq '.models[<current-model-index>].type' gives back.
     # TODO: make this exhaustive.
     type: Literal["kubernetes", "lxd"] = "kubernetes"
+
+    _max_positional_args: Final = 1
 
 
 # for now, proc mock allows you to map one command to one mocked output.
@@ -463,13 +497,15 @@ def _generate_new_change_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class ExecOutput:
+class ExecOutput(_MaxPositionalArgs):
     return_code: int = 0
     stdout: str = ""
     stderr: str = ""
 
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
+
+    _max_positional_args: Final = 0
 
     def _run(self) -> int:
         return self._change_id
@@ -479,14 +515,17 @@ _ExecMock = Dict[Tuple[str, ...], ExecOutput]
 
 
 @dataclasses.dataclass(frozen=True)
-class Mount:
+class Mount(_MaxPositionalArgs):
     location: Union[str, PurePosixPath]
-    src: Union[str, Path]
+    source: Union[str, Path]
+
+    _max_positional_args: Final = 0
 
 
 @dataclasses.dataclass(frozen=True)
-class Container:
+class Container(_MaxPositionalArgs):
     name: str
+
     can_connect: bool = False
 
     # This is the base plan. On top of it, one can add layers.
@@ -511,8 +550,8 @@ class Container:
     #
     # this becomes:
     # mounts = {
-    #     'foo': Mount('/home/foo/', Path('/path/to/local/dir/containing/bar/py/'))
-    #     'bin': Mount('/bin/', Path('/path/to/local/dir/containing/bash/and/baz/'))
+    #     'foo': Mount(location='/home/foo/', source=Path('/path/to/local/dir/containing/bar/py/'))
+    #     'bin': Mount(location='/bin/', source=Path('/path/to/local/dir/containing/bash/and/baz/'))
     # }
     # when the charm runs `pebble.pull`, it will return .open() from one of those paths.
     # when the charm pushes, it will either overwrite one of those paths (careful!) or it will
@@ -520,6 +559,8 @@ class Container:
     mounts: Dict[str, Mount] = dataclasses.field(default_factory=dict)
 
     exec_mock: _ExecMock = dataclasses.field(default_factory=dict)
+
+    _max_positional_args: Final = 1
 
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
@@ -627,12 +668,13 @@ def _status_to_entitystatus(obj: StatusBase) -> _EntityStatus:
 
 
 @dataclasses.dataclass(frozen=True)
-class StoredState:
+class StoredState(_MaxPositionalArgs):
+    name: str = "_stored"
+
     # /-separated Object names. E.g. MyCharm/MyCharmLib.
     # if None, this StoredState instance is owned by the Framework.
-    owner_path: Optional[str]
+    owner_path: Optional[str] = None
 
-    name: str = "_stored"
     # Ideally, the type here would be only marshallable types, rather than Any.
     # However, it's complex to describe those types, since it's a recursive
     # definition - even in TypeShed the _Marshallable type includes containers
@@ -640,6 +682,8 @@ class StoredState:
     content: Dict[str, Any] = dataclasses.field(default_factory=dict)
 
     _data_type_name: str = "StoredStateData"
+
+    _max_positional_args: Final = 1
 
     @property
     def handle_path(self):
@@ -650,35 +694,84 @@ _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
 
 
 @dataclasses.dataclass(frozen=True)
-class Port:
+class _Port(_MaxPositionalArgs):
     """Represents a port on the charm host."""
 
-    protocol: _RawPortProtocolLiteral
     port: Optional[int] = None
     """The port to open. Required for TCP and UDP; not allowed for ICMP."""
+    protocol: _RawPortProtocolLiteral = "tcp"
+
+    _max_positional_args = 1
 
     def __post_init__(self):
-        port = self.port
-        is_icmp = self.protocol == "icmp"
-        if port:
-            if is_icmp:
-                raise StateValidationError(
-                    "`port` arg not supported with `icmp` protocol",
-                )
-            if not (1 <= port <= 65535):
-                raise StateValidationError(
-                    f"`port` outside bounds [1:65535], got {port}",
-                )
-        elif not is_icmp:
-            raise StateValidationError(
-                f"`port` arg required with `{self.protocol}` protocol",
+        if type(self) is _Port:
+            raise RuntimeError(
+                "_Port cannot be instantiated directly; "
+                "please use TCPPort, UDPPort, or ICMPPort",
             )
+
+
+@dataclasses.dataclass(frozen=True)
+class TCPPort(_Port):
+    """Represents a TCP port on the charm host."""
+
+    port: int
+    """The port to open."""
+    protocol: _RawPortProtocolLiteral = "tcp"
+
+    _max_positional_args: Final = 1
+
+    def __post_init__(self):
+        super().__post_init__()
+        if not (1 <= self.port <= 65535):
+            raise StateValidationError(
+                f"`port` outside bounds [1:65535], got {self.port}",
+            )
+
+
+@dataclasses.dataclass(frozen=True)
+class UDPPort(_Port):
+    """Represents a UDP port on the charm host."""
+
+    port: int
+    """The port to open."""
+    protocol: _RawPortProtocolLiteral = "udp"
+
+    _max_positional_args: Final = 1
+
+    def __post_init__(self):
+        super().__post_init__()
+        if not (1 <= self.port <= 65535):
+            raise StateValidationError(
+                f"`port` outside bounds [1:65535], got {self.port}",
+            )
+
+
+@dataclasses.dataclass(frozen=True)
+class ICMPPort(_Port):
+    """Represents an ICMP port on the charm host."""
+
+    protocol: _RawPortProtocolLiteral = "icmp"
+
+    _max_positional_args: Final = 0
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self.port is not None:
+            raise StateValidationError("`port` cannot be set for `ICMPPort`")
+
+
+_port_cls_by_protocol = {
+    "tcp": TCPPort,
+    "udp": UDPPort,
+    "icmp": ICMPPort,
+}
 
 
 _next_storage_index_counter = 0  # storage indices start at 0
 
 
-def next_storage_index(update=True):
+def next_storage_index(*, update=True):
     """Get the index (used to be called ID) the next Storage to be created will get.
 
     Pass update=False if you're only inspecting it.
@@ -692,7 +785,7 @@ def next_storage_index(update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Storage:
+class Storage(_MaxPositionalArgs):
     """Represents an (attached!) storage made available to the charm container."""
 
     name: str
@@ -700,13 +793,15 @@ class Storage:
     index: int = dataclasses.field(default_factory=next_storage_index)
     # Every new Storage instance gets a new one, if there's trouble, override.
 
+    _max_positional_args: Final = 1
+
     def get_filesystem(self, ctx: "Context") -> Path:
         """Simulated filesystem root in this context."""
         return ctx._get_storage_root(self.name, self.index)
 
 
 @dataclasses.dataclass(frozen=True)
-class State:
+class State(_MaxPositionalArgs):
     """Represents the juju-owned portion of a unit's state.
 
     Roughly speaking, it wraps all hook-tool- and pebble-mediated data a charm can access in its
@@ -735,7 +830,7 @@ class State:
     If a storage is not attached, omit it from this listing."""
 
     # we don't use sets to make json serialization easier
-    opened_ports: List[Port] = dataclasses.field(default_factory=list)
+    opened_ports: List[_Port] = dataclasses.field(default_factory=list)
     """Ports opened by juju on this charm."""
     leader: bool = False
     """Whether this charm has leadership."""
@@ -768,6 +863,8 @@ class State:
     workload_version: str = ""
     """Workload version."""
 
+    _max_positional_args: Final = 0
+
     def __post_init__(self):
         for name in ["app_status", "unit_status"]:
             val = getattr(self, name)
@@ -776,7 +873,9 @@ class State:
             elif isinstance(val, StatusBase):
                 object.__setattr__(self, name, _status_to_entitystatus(val))
             else:
-                raise TypeError(f"Invalid status.{name}: {val!r}")
+                raise TypeError(
+                    f"Cannot set {name!r} to {val!r}. Expecting an ops.StatusBase instance.",
+                )
 
     def _update_workload_version(self, new_workload_version: str):
         """Update the current app version and record the previous one."""
@@ -1183,7 +1282,7 @@ class _Event:
 _next_action_id_counter = 1
 
 
-def next_action_id(update=True):
+def next_action_id(*, update=True):
     global _next_action_id_counter
     cur = _next_action_id_counter
     if update:
@@ -1194,7 +1293,7 @@ def next_action_id(update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Action:
+class Action(_MaxPositionalArgs):
     name: str
 
     params: Dict[str, "AnyJson"] = dataclasses.field(default_factory=dict)
@@ -1204,6 +1303,8 @@ class Action:
 
     Every action invocation is automatically assigned a new one. Override in
     the rare cases where a specific ID is required."""
+
+    _max_positional_args: Final = 1
 
     @property
     def event(self) -> _Event:
