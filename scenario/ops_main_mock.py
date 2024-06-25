@@ -145,11 +145,26 @@ def setup_framework(
     return framework
 
 
-def setup_charm(charm_class, framework, dispatcher):
+def setup_charm(charm_class, framework, dispatcher, middlewares=None):
     sig = inspect.signature(charm_class)
     sig.bind(framework)  # signature check
 
-    charm = charm_class(framework)
+    if middlewares:
+        for middleware in middlewares:
+            middleware.setup_class(charm_class)
+
+        class _MiddlewaredCharmType(charm_class):
+            def __init__(self, *args, **kwargs):
+                for middleware in middlewares:
+                    middleware.pre_init(self)
+
+                super().__init__(*args, **kwargs)
+                for middleware in middlewares:
+                    middleware.post_init(self)
+
+        charm = _MiddlewaredCharmType(framework)
+    else:
+        charm = charm_class(framework)
     dispatcher.ensure_event_links(charm)
     return charm
 
@@ -163,7 +178,7 @@ def setup(state: "State", event: "Event", context: "Context", charm_spec: "_Char
     dispatcher.run_any_legacy_hook()
 
     framework = setup_framework(charm_dir, state, event, context, charm_spec)
-    charm = setup_charm(charm_class, framework, dispatcher)
+    charm = setup_charm(charm_class, framework, dispatcher, context.middlewares)
     return dispatcher, framework, charm
 
 

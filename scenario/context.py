@@ -5,7 +5,18 @@ import dataclasses
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+    cast,
+)
 
 from ops import CharmBase, EventBase
 
@@ -164,6 +175,7 @@ class Context:
         actions: Optional[Dict[str, Any]] = None,
         config: Optional[Dict[str, Any]] = None,
         charm_root: Optional["PathLike"] = None,
+        middlewares: Optional[Sequence[Any]] = None,
         juju_version: str = DEFAULT_JUJU_VERSION,
         capture_deferred_events: bool = False,
         capture_framework_events: bool = False,
@@ -262,6 +274,7 @@ class Context:
             )
 
         self.charm_spec = spec
+        self.middlewares = middlewares
         self.charm_root = charm_root
         self.juju_version = juju_version
         if juju_version.split(".")[0] == "2":
