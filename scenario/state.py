@@ -134,7 +134,7 @@ class _MaxPositionalArgs:
     _max_positional_args = 0
 
     def __new__(cls, *args, **_):
-        if len(args) > getattr(cls, "_max_positional_args", float("inf")):
+        if len(args) > cls._max_positional_args:
             raise TypeError(
                 f"{cls.__name__}.__init__() takes {cls._max_positional_args + 1} "
                 f"positional arguments but {len(args) + 1} were given",
