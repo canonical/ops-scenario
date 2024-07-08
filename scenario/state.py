@@ -14,7 +14,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Final,
     Generic,
     List,
     Literal,
@@ -28,11 +27,10 @@ from typing import (
 )
 from uuid import uuid4
 
+import ops
 import yaml
 from ops import pebble
 from ops.charm import CharmBase, CharmEvents
-from ops.model import CloudCredential as CloudCredential_Ops
-from ops.model import CloudSpec as CloudSpec_Ops
 from ops.model import SecretRotate, StatusBase
 
 from scenario.logger import logger as scenario_logger
@@ -122,77 +120,8 @@ class MetadataNotFoundError(RuntimeError):
     """Raised when Scenario can't find a metadata.yaml file in the provided charm root."""
 
 
-# This can be replaced with the KW_ONLY dataclasses functionality in Python 3.10+.
-def _max_posargs(n: int):
-    class _MaxPositionalArgs:
-        """Raises TypeError when instantiating objects if arguments are not passed as keywords.
-
-        Looks for a `_max_positional_args` class attribute, which should be an int
-        indicating the maximum number of positional arguments that can be passed to
-        `__init__` (excluding `self`).
-        """
-
-        _max_positional_args = n
-
-        def __new__(cls, *args, **kwargs):
-            # inspect.signature guarantees the order of parameters is as
-            # declared, which aligns with dataclasses. Simpler ways of
-            # getting the arguments (like __annotations__) do not have that
-            # guarantee, although in practice it is the case.
-            parameters = inspect.signature(cls).parameters
-            required_args = [
-                name
-                for name in tuple(parameters)
-                if parameters[name].default is inspect.Parameter.empty
-                and name not in kwargs
-            ]
-            n_posargs = len(args)
-            max_n_posargs = cls._max_positional_args
-            kw_only = {
-                name
-                for name in tuple(parameters)[max_n_posargs:]
-                if not name.startswith("_")
-            }
-            if n_posargs > max_n_posargs:
-                raise TypeError(
-                    f"{cls.__name__} takes {max_n_posargs} positional "
-                    f"argument{'' if max_n_posargs == 1 else 's'} but "
-                    f"{n_posargs} {'was' if n_posargs == 1 else 'were'} "
-                    f"given. The following arguments are keyword-only: "
-                    f"{', '.join(kw_only)}",
-                ) from None
-            # Also check if there are just not enough arguments at all, because
-            # the default TypeError message will incorrectly describe some of
-            # the arguments as positional.
-            elif n_posargs < len(required_args):
-                required_pos = [
-                    f"'{arg}'"
-                    for arg in required_args[n_posargs:]
-                    if arg not in kw_only
-                ]
-                required_kw = {
-                    f"'{arg}'" for arg in required_args[n_posargs:] if arg in kw_only
-                }
-                if required_pos and required_kw:
-                    details = f"positional: {', '.join(required_pos)} and keyword: {', '.join(required_kw)} arguments"
-                elif required_pos:
-                    details = f"positional argument{'' if len(required_pos) == 1 else 's'}: {', '.join(required_pos)}"
-                else:
-                    details = f"keyword argument{'' if len(required_kw) == 1 else 's'}: {', '.join(required_kw)}"
-                raise TypeError(f"{cls.__name__} missing required {details}") from None
-            return super().__new__(cls)
-
-        def __reduce__(self):
-            # The default __reduce__ doesn't understand that some arguments have
-            # to be passed as keywords, so using the copy module fails.
-            attrs = cast(Dict[str, Any], super().__reduce__()[2])
-            return (lambda: self.__class__(**attrs), ())
-
-    return _MaxPositionalArgs
-
-
 @dataclasses.dataclass(frozen=True)
-class CloudCredential(_max_posargs(0)):
+class CloudCredential:
     auth_type: str
     """Authentication type."""
 
@@ -206,8 +135,8 @@ class CloudCredential(_max_posargs(0)):
     redacted: List[str] = dataclasses.field(default_factory=list)
     """A list of redacted generic cloud API secrets."""
 
-    def _to_ops(self) -> CloudCredential_Ops:
-        return CloudCredential_Ops(
+    def _to_ops(self) -> ops.CloudCredential:
+        return ops.CloudCredential(
             auth_type=self.auth_type,
             attributes=self.attributes,
             redacted=self.redacted,
@@ -215,7 +144,7 @@ class CloudCredential(_max_posargs(0)):
 
 
 @dataclasses.dataclass(frozen=True)
-class CloudSpec(_max_posargs(1)):
+class CloudSpec:
     type: str
     """Type of the cloud."""
 
@@ -246,8 +175,8 @@ class CloudSpec(_max_posargs(1)):
     is_controller_cloud: bool = False
     """If this is the cloud used by the controller."""
 
-    def _to_ops(self) -> CloudSpec_Ops:
-        return CloudSpec_Ops(
+    def _to_ops(self) -> ops.CloudSpec:
+        return ops.CloudSpec(
             type=self.type,
             name=self.name,
             region=self.region,
@@ -262,15 +191,15 @@ class CloudSpec(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
-class Secret(_max_posargs(1)):
-    # mapping from revision IDs to each revision's contents
-    contents: Dict[int, "RawSecretRevisionContents"]
-
+class Secret:
     id: str
     # CAUTION: ops-created Secrets (via .add_secret()) will have a canonicalized
     #  secret id (`secret:` prefix)
     #  but user-created ones will not. Using post-init to patch it in feels bad, but requiring the user to
     #  add the prefix manually every time seems painful as well.
+
+    # mapping from revision IDs to each revision's contents
+    contents: Dict[int, "RawSecretRevisionContents"]
 
     # indicates if the secret is owned by THIS unit, THIS app or some other app/unit.
     # if None, the implication is that the secret has been granted to this unit.
@@ -325,17 +254,17 @@ def normalize_name(s: str):
 
 
 @dataclasses.dataclass(frozen=True)
-class Address(_max_posargs(1)):
+class Address:
+    hostname: str
     value: str
-    hostname: str = ""
-    cidr: str = ""
+    cidr: str
     address: str = ""  # legacy
 
 
 @dataclasses.dataclass(frozen=True)
-class BindAddress(_max_posargs(1)):
+class BindAddress:
+    interface_name: str
     addresses: List[Address]
-    interface_name: str = ""
     mac_address: Optional[str] = None
 
     def hook_tool_output_fmt(self):
@@ -351,7 +280,7 @@ class BindAddress(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
-class Network(_max_posargs(0)):
+class Network:
     bind_addresses: List[BindAddress]
     ingress_addresses: List[str]
     egress_subnets: List[str]
@@ -394,7 +323,7 @@ class Network(_max_posargs(0)):
 _next_relation_id_counter = 1
 
 
-def next_relation_id(*, update=True):
+def next_relation_id(update=True):
     global _next_relation_id_counter
     cur = _next_relation_id_counter
     if update:
@@ -403,7 +332,7 @@ def next_relation_id(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class _RelationBase(_max_posargs(2)):
+class _RelationBase:
     endpoint: str
     """Relation endpoint name. Must match some endpoint name defined in metadata.yaml."""
 
@@ -579,9 +508,8 @@ def _random_model_name():
 
 
 @dataclasses.dataclass(frozen=True)
-class Model(_max_posargs(1)):
+class Model:
     name: str = dataclasses.field(default_factory=_random_model_name)
-
     uuid: str = dataclasses.field(default_factory=lambda: str(uuid4()))
 
     # whatever juju models --format=json | jq '.models[<current-model-index>].type' gives back.
@@ -610,7 +538,7 @@ def _generate_new_change_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class ExecOutput(_max_posargs(0)):
+class ExecOutput:
     return_code: int = 0
     stdout: str = ""
     stderr: str = ""
@@ -626,9 +554,9 @@ _ExecMock = Dict[Tuple[str, ...], ExecOutput]
 
 
 @dataclasses.dataclass(frozen=True)
-class Mount(_max_posargs(0)):
+class Mount:
     location: Union[str, PurePosixPath]
-    source: Union[str, Path]
+    src: Union[str, Path]
 
 
 def _now_utc():
@@ -638,7 +566,7 @@ def _now_utc():
 _next_notice_id_counter = 1
 
 
-def next_notice_id(*, update=True):
+def next_notice_id(update=True):
     global _next_notice_id_counter
     cur = _next_notice_id_counter
     if update:
@@ -647,7 +575,7 @@ def next_notice_id(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Notice(_max_posargs(1)):
+class Notice:
     key: str
     """The notice key, a string that differentiates notices of this type.
 
@@ -706,7 +634,7 @@ class Notice(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
-class _BoundNotice(_max_posargs(0)):
+class _BoundNotice:
     notice: Notice
     container: "Container"
 
@@ -722,9 +650,8 @@ class _BoundNotice(_max_posargs(0)):
 
 
 @dataclasses.dataclass(frozen=True)
-class Container(_max_posargs(1)):
+class Container:
     name: str
-
     can_connect: bool = False
 
     # This is the base plan. On top of it, one can add layers.
@@ -749,8 +676,8 @@ class Container(_max_posargs(1)):
     #
     # this becomes:
     # mounts = {
-    #     'foo': Mount(location='/home/foo/', source=Path('/path/to/local/dir/containing/bar/py/'))
-    #     'bin': Mount(location='/bin/', source=Path('/path/to/local/dir/containing/bash/and/baz/'))
+    #     'foo': Mount('/home/foo/', Path('/path/to/local/dir/containing/bar/py/'))
+    #     'bin': Mount('/bin/', Path('/path/to/local/dir/containing/bash/and/baz/'))
     # }
     # when the charm runs `pebble.pull`, it will return .open() from one of those paths.
     # when the charm pushes, it will either overwrite one of those paths (careful!) or it will
@@ -830,7 +757,7 @@ class Container(_max_posargs(1)):
         """
         for notice in self.notices:
             if notice.key == key and notice.type == notice_type:
-                return _BoundNotice(notice=notice, container=self)
+                return _BoundNotice(notice, self)
         raise KeyError(
             f"{self.name} does not have a notice with key {key} and type {notice_type}",
         )
@@ -884,13 +811,12 @@ def _status_to_entitystatus(obj: StatusBase) -> _EntityStatus:
 
 
 @dataclasses.dataclass(frozen=True)
-class StoredState(_max_posargs(1)):
-    name: str = "_stored"
-
+class StoredState:
     # /-separated Object names. E.g. MyCharm/MyCharmLib.
     # if None, this StoredState instance is owned by the Framework.
-    owner_path: Optional[str] = None
+    owner_path: Optional[str]
 
+    name: str = "_stored"
     # Ideally, the type here would be only marshallable types, rather than Any.
     # However, it's complex to describe those types, since it's a recursive
     # definition - even in TypeShed the _Marshallable type includes containers
@@ -908,78 +834,35 @@ _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
 
 
 @dataclasses.dataclass(frozen=True)
-class _Port(_max_posargs(1)):
+class Port:
     """Represents a port on the charm host."""
 
+    protocol: _RawPortProtocolLiteral
     port: Optional[int] = None
     """The port to open. Required for TCP and UDP; not allowed for ICMP."""
-    protocol: _RawPortProtocolLiteral = "tcp"
 
     def __post_init__(self):
-        if type(self) is _Port:
-            raise RuntimeError(
-                "_Port cannot be instantiated directly; "
-                "please use TCPPort, UDPPort, or ICMPPort",
-            )
-
-
-@dataclasses.dataclass(frozen=True)
-class TCPPort(_Port):
-    """Represents a TCP port on the charm host."""
-
-    port: int
-    """The port to open."""
-    protocol: _RawPortProtocolLiteral = "tcp"
-
-    def __post_init__(self):
-        super().__post_init__()
-        if not (1 <= self.port <= 65535):
+        port = self.port
+        is_icmp = self.protocol == "icmp"
+        if port:
+            if is_icmp:
+                raise StateValidationError(
+                    "`port` arg not supported with `icmp` protocol",
+                )
+            if not (1 <= port <= 65535):
+                raise StateValidationError(
+                    f"`port` outside bounds [1:65535], got {port}",
+                )
+        elif not is_icmp:
             raise StateValidationError(
-                f"`port` outside bounds [1:65535], got {self.port}",
+                f"`port` arg required with `{self.protocol}` protocol",
             )
-
-
-@dataclasses.dataclass(frozen=True)
-class UDPPort(_Port):
-    """Represents a UDP port on the charm host."""
-
-    port: int
-    """The port to open."""
-    protocol: _RawPortProtocolLiteral = "udp"
-
-    def __post_init__(self):
-        super().__post_init__()
-        if not (1 <= self.port <= 65535):
-            raise StateValidationError(
-                f"`port` outside bounds [1:65535], got {self.port}",
-            )
-
-
-@dataclasses.dataclass(frozen=True)
-class ICMPPort(_Port):
-    """Represents an ICMP port on the charm host."""
-
-    protocol: _RawPortProtocolLiteral = "icmp"
-
-    _max_positional_args: Final = 0
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.port is not None:
-            raise StateValidationError("`port` cannot be set for `ICMPPort`")
-
-
-_port_cls_by_protocol = {
-    "tcp": TCPPort,
-    "udp": UDPPort,
-    "icmp": ICMPPort,
-}
 
 
 _next_storage_index_counter = 0  # storage indices start at 0
 
 
-def next_storage_index(*, update=True):
+def next_storage_index(update=True):
     """Get the index (used to be called ID) the next Storage to be created will get.
 
     Pass update=False if you're only inspecting it.
@@ -993,7 +876,7 @@ def next_storage_index(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Storage(_max_posargs(1)):
+class Storage:
     """Represents an (attached!) storage made available to the charm container."""
 
     name: str
@@ -1007,7 +890,7 @@ class Storage(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
-class State(_max_posargs(0)):
+class State:
     """Represents the juju-owned portion of a unit's state.
 
     Roughly speaking, it wraps all hook-tool- and pebble-mediated data a charm can access in its
@@ -1036,7 +919,7 @@ class State(_max_posargs(0)):
     If a storage is not attached, omit it from this listing."""
 
     # we don't use sets to make json serialization easier
-    opened_ports: List[_Port] = dataclasses.field(default_factory=list)
+    opened_ports: List[Port] = dataclasses.field(default_factory=list)
     """Ports opened by juju on this charm."""
     leader: bool = False
     """Whether this charm has leadership."""
@@ -1501,7 +1384,7 @@ class _Event:
 _next_action_id_counter = 1
 
 
-def next_action_id(*, update=True):
+def next_action_id(update=True):
     global _next_action_id_counter
     cur = _next_action_id_counter
     if update:
@@ -1512,7 +1395,7 @@ def next_action_id(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Action(_max_posargs(1)):
+class Action:
     name: str
 
     params: Dict[str, "AnyJson"] = dataclasses.field(default_factory=dict)

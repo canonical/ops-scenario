@@ -20,11 +20,8 @@ from typing import (
     cast,
 )
 
-from ops import JujuVersion, pebble
-from ops.model import CloudSpec as CloudSpec_Ops
-from ops.model import ModelError
-from ops.model import Port as Port_Ops
-from ops.model import RelationNotFoundError
+from ops import CloudSpec, JujuVersion, pebble
+from ops.model import ModelError, RelationNotFoundError
 from ops.model import Secret as Secret_Ops  # lol
 from ops.model import (
     SecretInfo,
@@ -42,8 +39,8 @@ from scenario.state import (
     Mount,
     Network,
     PeerRelation,
+    Port,
     Storage,
-    _port_cls_by_protocol,
     _RawPortProtocolLiteral,
     _RawStatusLiteral,
 )
@@ -115,11 +112,8 @@ class _MockModelBackend(_ModelBackend):
         self._context = context
         self._charm_spec = charm_spec
 
-    def opened_ports(self) -> Set[Port_Ops]:
-        return {
-            Port_Ops(protocol=port.protocol, port=port.port)
-            for port in self._state.opened_ports
-        }
+    def opened_ports(self) -> Set[Port]:
+        return set(self._state.opened_ports)
 
     def open_port(
         self,
@@ -128,7 +122,7 @@ class _MockModelBackend(_ModelBackend):
     ):
         # fixme: the charm will get hit with a StateValidationError
         #  here, not the expected ModelError...
-        port_ = _port_cls_by_protocol[protocol](port=port)
+        port_ = Port(protocol, port)
         ports = self._state.opened_ports
         if port_ not in ports:
             ports.append(port_)
@@ -138,7 +132,7 @@ class _MockModelBackend(_ModelBackend):
         protocol: "_RawPortProtocolLiteral",
         port: Optional[int] = None,
     ):
-        _port = _port_cls_by_protocol[protocol](port=port)
+        _port = Port(protocol, port)
         ports = self._state.opened_ports
         if _port in ports:
             ports.remove(_port)
@@ -635,7 +629,7 @@ class _MockModelBackend(_ModelBackend):
                 f"resource {resource_name} not found in State. please pass it.",
             )
 
-    def credential_get(self) -> CloudSpec_Ops:
+    def credential_get(self) -> CloudSpec:
         if not self._context.app_trusted:
             raise ModelError(
                 "ERROR charm is not trusted, initialise Context with `app_trusted=True`",
@@ -675,7 +669,7 @@ class _MockPebbleClient(_TestingPebbleClient):
             path = Path(mount.location).parts
             mounting_dir = container_root.joinpath(*path[1:])
             mounting_dir.parent.mkdir(parents=True, exist_ok=True)
-            mounting_dir.symlink_to(mount.source)
+            mounting_dir.symlink_to(mount.src)
 
         self._root = container_root
 
