@@ -185,7 +185,7 @@ def _max_posargs(n: int):
         def __reduce__(self):
             # The default __reduce__ doesn't understand that some arguments have
             # to be passed as keywords, so using the copy module fails.
-            attrs = cast(Dict[str, Any], self.__getstate__())
+            attrs = cast(Dict[str, Any], super().__reduce__()[2])
             return (lambda: self.__class__(**attrs), ())
 
     return _MaxPositionalArgs
