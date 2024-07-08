@@ -123,27 +123,76 @@ class MetadataNotFoundError(RuntimeError):
 
 
 # This can be replaced with the KW_ONLY dataclasses functionality in Python 3.10+.
-class _MaxPositionalArgs:
-    """Raises TypeError when instantiating objects if arguments are not passed as keywords.
+def _max_posargs(n: int):
+    class _MaxPositionalArgs:
+        """Raises TypeError when instantiating objects if arguments are not passed as keywords.
 
-    Looks for a `_max_positional_args` class attribute, which should be an int
-    indicating the maximum number of positional arguments that can be passed to
-    `__init__` (excluding `self`). If not present, no limit is applied.
-    """
+        Looks for a `_max_positional_args` class attribute, which should be an int
+        indicating the maximum number of positional arguments that can be passed to
+        `__init__` (excluding `self`).
+        """
 
-    _max_positional_args = 0
+        _max_positional_args = n
 
-    def __new__(cls, *args, **_):
-        if len(args) > cls._max_positional_args:
-            raise TypeError(
-                f"{cls.__name__}.__init__() takes {cls._max_positional_args + 1} "
-                f"positional arguments but {len(args) + 1} were given",
-            )
-        return super().__new__(cls)
+        def __new__(cls, *args, **kwargs):
+            # inspect.signature guarantees the order of parameters is as
+            # declared, which aligns with dataclasses. Simpler ways of
+            # getting the arguments (like __annotations__) do not have that
+            # guarantee, although in practice it is the case.
+            parameters = inspect.signature(cls).parameters
+            required_args = [
+                name
+                for name in tuple(parameters)
+                if parameters[name].default is inspect.Parameter.empty
+                and name not in kwargs
+            ]
+            n_posargs = len(args)
+            max_n_posargs = cls._max_positional_args
+            kw_only = {
+                name
+                for name in tuple(parameters)[max_n_posargs:]
+                if not name.startswith("_")
+            }
+            if n_posargs > max_n_posargs:
+                raise TypeError(
+                    f"{cls.__name__} takes {max_n_posargs} positional "
+                    f"argument{'' if max_n_posargs == 1 else 's'} but "
+                    f"{n_posargs} {'was' if n_posargs == 1 else 'were'} "
+                    f"given. The following arguments are keyword-only: "
+                    f"{', '.join(kw_only)}",
+                ) from None
+            # Also check if there are just not enough arguments at all, because
+            # the default TypeError message will incorrectly describe some of
+            # the arguments as positional.
+            elif n_posargs < len(required_args):
+                required_pos = [
+                    f"'{arg}'"
+                    for arg in required_args[n_posargs:]
+                    if arg not in kw_only
+                ]
+                required_kw = {
+                    f"'{arg}'" for arg in required_args[n_posargs:] if arg in kw_only
+                }
+                if required_pos and required_kw:
+                    details = f"positional: {', '.join(required_pos)} and keyword: {', '.join(required_kw)} arguments"
+                elif required_pos:
+                    details = f"positional argument{'' if len(required_pos) == 1 else 's'}: {', '.join(required_pos)}"
+                else:
+                    details = f"keyword argument{'' if len(required_kw) == 1 else 's'}: {', '.join(required_kw)}"
+                raise TypeError(f"{cls.__name__} missing required {details}") from None
+            return super().__new__(cls)
+
+        def __reduce__(self):
+            # The default __reduce__ doesn't understand that some arguments have
+            # to be passed as keywords, so using the copy module fails.
+            attrs = cast(Dict[str, Any], self.__getstate__())
+            return (lambda: self.__class__(**attrs), ())
+
+    return _MaxPositionalArgs
 
 
 @dataclasses.dataclass(frozen=True)
-class CloudCredential:
+class CloudCredential(_max_posargs(0)):
     auth_type: str
     """Authentication type."""
 
@@ -166,7 +215,7 @@ class CloudCredential:
 
 
 @dataclasses.dataclass(frozen=True)
-class CloudSpec:
+class CloudSpec(_max_posargs(1)):
     type: str
     """Type of the cloud."""
 
@@ -213,7 +262,7 @@ class CloudSpec:
 
 
 @dataclasses.dataclass(frozen=True)
-class Secret(_MaxPositionalArgs):
+class Secret(_max_posargs(1)):
     # mapping from revision IDs to each revision's contents
     contents: Dict[int, "RawSecretRevisionContents"]
 
@@ -238,8 +287,6 @@ class Secret(_MaxPositionalArgs):
     description: Optional[str] = None
     expire: Optional[datetime.datetime] = None
     rotate: Optional[SecretRotate] = None
-
-    _max_positional_args: Final = 1
 
     def _set_revision(self, revision: int):
         """Set a new tracked revision."""
@@ -278,22 +325,18 @@ def normalize_name(s: str):
 
 
 @dataclasses.dataclass(frozen=True)
-class Address(_MaxPositionalArgs):
+class Address(_max_posargs(1)):
     value: str
     hostname: str = ""
     cidr: str = ""
     address: str = ""  # legacy
 
-    _max_positional_args: Final = 1
-
 
 @dataclasses.dataclass(frozen=True)
-class BindAddress(_MaxPositionalArgs):
+class BindAddress(_max_posargs(1)):
     addresses: List[Address]
     interface_name: str = ""
     mac_address: Optional[str] = None
-
-    _max_positional_args: Final = 1
 
     def hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
@@ -308,12 +351,10 @@ class BindAddress(_MaxPositionalArgs):
 
 
 @dataclasses.dataclass(frozen=True)
-class Network(_MaxPositionalArgs):
+class Network(_max_posargs(0)):
     bind_addresses: List[BindAddress]
     ingress_addresses: List[str]
     egress_subnets: List[str]
-
-    _max_positional_args: Final = 0
 
     def hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
@@ -362,7 +403,7 @@ def next_relation_id(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class _RelationBase(_MaxPositionalArgs):
+class _RelationBase(_max_posargs(2)):
     endpoint: str
     """Relation endpoint name. Must match some endpoint name defined in metadata.yaml."""
 
@@ -381,8 +422,6 @@ class _RelationBase(_MaxPositionalArgs):
         default_factory=lambda: DEFAULT_JUJU_DATABAG.copy(),
     )
     """This unit's databag for this relation."""
-
-    _max_positional_args: Final = 2
 
     @property
     def _databags(self):
@@ -540,7 +579,7 @@ def _random_model_name():
 
 
 @dataclasses.dataclass(frozen=True)
-class Model(_MaxPositionalArgs):
+class Model(_max_posargs(1)):
     name: str = dataclasses.field(default_factory=_random_model_name)
 
     uuid: str = dataclasses.field(default_factory=lambda: str(uuid4()))
@@ -551,8 +590,6 @@ class Model(_MaxPositionalArgs):
 
     cloud_spec: Optional[CloudSpec] = None
     """Cloud specification information (metadata) including credentials."""
-
-    _max_positional_args: Final = 1
 
 
 # for now, proc mock allows you to map one command to one mocked output.
@@ -573,15 +610,13 @@ def _generate_new_change_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class ExecOutput(_MaxPositionalArgs):
+class ExecOutput(_max_posargs(0)):
     return_code: int = 0
     stdout: str = ""
     stderr: str = ""
 
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
-
-    _max_positional_args: Final = 0
 
     def _run(self) -> int:
         return self._change_id
@@ -591,11 +626,9 @@ _ExecMock = Dict[Tuple[str, ...], ExecOutput]
 
 
 @dataclasses.dataclass(frozen=True)
-class Mount(_MaxPositionalArgs):
+class Mount(_max_posargs(0)):
     location: Union[str, PurePosixPath]
     source: Union[str, Path]
-
-    _max_positional_args: Final = 0
 
 
 def _now_utc():
@@ -614,7 +647,7 @@ def next_notice_id(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Notice(_MaxPositionalArgs):
+class Notice(_max_posargs(1)):
     key: str
     """The notice key, a string that differentiates notices of this type.
 
@@ -656,8 +689,6 @@ class Notice(_MaxPositionalArgs):
     expire_after: Optional[datetime.timedelta] = None
     """How long since one of these last occurred until Pebble will drop the notice."""
 
-    _max_positional_args: Final = 1
-
     def _to_ops(self) -> pebble.Notice:
         return pebble.Notice(
             id=self.id,
@@ -675,11 +706,9 @@ class Notice(_MaxPositionalArgs):
 
 
 @dataclasses.dataclass(frozen=True)
-class _BoundNotice(_MaxPositionalArgs):
+class _BoundNotice(_max_posargs(0)):
     notice: Notice
     container: "Container"
-
-    _max_positional_args: Final = 0
 
     @property
     def event(self):
@@ -693,7 +722,7 @@ class _BoundNotice(_MaxPositionalArgs):
 
 
 @dataclasses.dataclass(frozen=True)
-class Container(_MaxPositionalArgs):
+class Container(_max_posargs(1)):
     name: str
 
     can_connect: bool = False
@@ -731,8 +760,6 @@ class Container(_MaxPositionalArgs):
     exec_mock: _ExecMock = dataclasses.field(default_factory=dict)
 
     notices: List[Notice] = dataclasses.field(default_factory=list)
-
-    _max_positional_args: Final = 1
 
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
@@ -857,7 +884,7 @@ def _status_to_entitystatus(obj: StatusBase) -> _EntityStatus:
 
 
 @dataclasses.dataclass(frozen=True)
-class StoredState(_MaxPositionalArgs):
+class StoredState(_max_posargs(1)):
     name: str = "_stored"
 
     # /-separated Object names. E.g. MyCharm/MyCharmLib.
@@ -872,8 +899,6 @@ class StoredState(_MaxPositionalArgs):
 
     _data_type_name: str = "StoredStateData"
 
-    _max_positional_args: Final = 1
-
     @property
     def handle_path(self):
         return f"{self.owner_path or ''}/{self._data_type_name}[{self.name}]"
@@ -883,14 +908,12 @@ _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
 
 
 @dataclasses.dataclass(frozen=True)
-class _Port(_MaxPositionalArgs):
+class _Port(_max_posargs(1)):
     """Represents a port on the charm host."""
 
     port: Optional[int] = None
     """The port to open. Required for TCP and UDP; not allowed for ICMP."""
     protocol: _RawPortProtocolLiteral = "tcp"
-
-    _max_positional_args = 1
 
     def __post_init__(self):
         if type(self) is _Port:
@@ -908,8 +931,6 @@ class TCPPort(_Port):
     """The port to open."""
     protocol: _RawPortProtocolLiteral = "tcp"
 
-    _max_positional_args: Final = 1
-
     def __post_init__(self):
         super().__post_init__()
         if not (1 <= self.port <= 65535):
@@ -925,8 +946,6 @@ class UDPPort(_Port):
     port: int
     """The port to open."""
     protocol: _RawPortProtocolLiteral = "udp"
-
-    _max_positional_args: Final = 1
 
     def __post_init__(self):
         super().__post_init__()
@@ -974,7 +993,7 @@ def next_storage_index(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Storage(_MaxPositionalArgs):
+class Storage(_max_posargs(1)):
     """Represents an (attached!) storage made available to the charm container."""
 
     name: str
@@ -982,15 +1001,13 @@ class Storage(_MaxPositionalArgs):
     index: int = dataclasses.field(default_factory=next_storage_index)
     # Every new Storage instance gets a new one, if there's trouble, override.
 
-    _max_positional_args: Final = 1
-
     def get_filesystem(self, ctx: "Context") -> Path:
         """Simulated filesystem root in this context."""
         return ctx._get_storage_root(self.name, self.index)
 
 
 @dataclasses.dataclass(frozen=True)
-class State(_MaxPositionalArgs):
+class State(_max_posargs(0)):
     """Represents the juju-owned portion of a unit's state.
 
     Roughly speaking, it wraps all hook-tool- and pebble-mediated data a charm can access in its
@@ -1051,8 +1068,6 @@ class State(_MaxPositionalArgs):
     """Status of the unit."""
     workload_version: str = ""
     """Workload version."""
-
-    _max_positional_args: Final = 0
 
     def __post_init__(self):
         for name in ["app_status", "unit_status"]:
@@ -1497,7 +1512,7 @@ def next_action_id(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class Action(_MaxPositionalArgs):
+class Action(_max_posargs(1)):
     name: str
 
     params: Dict[str, "AnyJson"] = dataclasses.field(default_factory=dict)
@@ -1507,8 +1522,6 @@ class Action(_MaxPositionalArgs):
 
     Every action invocation is automatically assigned a new one. Override in
     the rare cases where a specific ID is required."""
-
-    _max_positional_args: Final = 1
 
     @property
     def event(self) -> _Event:

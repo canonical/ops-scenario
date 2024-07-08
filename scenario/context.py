@@ -5,7 +5,7 @@ import dataclasses
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Final, List, Optional, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union, cast
 
 from ops import CharmBase, EventBase
 
@@ -19,7 +19,7 @@ from scenario.state import (
     Storage,
     _CharmSpec,
     _Event,
-    _MaxPositionalArgs,
+    _max_posargs,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -36,7 +36,7 @@ DEFAULT_JUJU_VERSION = "3.4"
 
 
 @dataclasses.dataclass(frozen=True)
-class ActionOutput(_MaxPositionalArgs):
+class ActionOutput(_max_posargs(0)):
     """Wraps the results of running an action event with `run_action`."""
 
     state: "State"
@@ -49,8 +49,6 @@ class ActionOutput(_MaxPositionalArgs):
     Will be None if the charm never calls action-set."""
     failure: Optional[str] = None
     """If the action is not a success: the message the charm set when failing the action."""
-
-    _max_positional_args: Final = 0
 
     @property
     def success(self) -> bool:

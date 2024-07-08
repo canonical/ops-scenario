@@ -1,3 +1,4 @@
+import copy
 from dataclasses import asdict, replace
 from typing import Type
 
@@ -298,3 +299,20 @@ def test_state_default_values():
     assert state.app_status == UnknownStatus()
     assert state.unit_status == UnknownStatus()
     assert state.workload_version == ""
+
+
+def test_deepcopy_state():
+    containers = [Container("foo"), Container("bar")]
+    state = State(containers=containers)
+    state_copy = copy.deepcopy(state)
+    for container in state.containers:
+        copied_container = state_copy.get_container(container.name)
+        assert container.name == copied_container.name
+
+
+def test_replace_state():
+    containers = [Container("foo"), Container("bar")]
+    state = State(containers=containers, leader=True)
+    state2 = replace(state, leader=False)
+    assert state.leader != state2.leader
+    assert state.containers == state2.containers
