@@ -129,7 +129,7 @@ class _MockModelBackend(_ModelBackend):
         # fixme: the charm will get hit with a StateValidationError
         #  here, not the expected ModelError...
         port_ = _port_cls_by_protocol[protocol](port=port)
-        ports = self._state.opened_ports
+        ports = set(self._state.opened_ports)
         if port_ not in ports:
             ports.add(port_)
         if ports != self._state.opened_ports:
@@ -141,7 +141,7 @@ class _MockModelBackend(_ModelBackend):
         port: Optional[int] = None,
     ):
         _port = _port_cls_by_protocol[protocol](port=port)
-        ports = self._state.opened_ports
+        ports = set(self._state.opened_ports)
         if _port in ports:
             ports.remove(_port)
         if ports != self._state.opened_ports:

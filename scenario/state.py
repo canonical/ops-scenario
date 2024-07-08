@@ -267,7 +267,6 @@ class Secret(_max_posargs(1)):
     # mapping from revision IDs to each revision's contents
     contents: Dict[int, "RawSecretRevisionContents"]
 
-class Secret:
     id: str
     # CAUTION: ops-created Secrets (via .add_secret()) will have a canonicalized
     #  secret id (`secret:` prefix)
@@ -1148,7 +1147,7 @@ class State(_max_posargs(0)):
         # bypass frozen dataclass
         object.__setattr__(self, name, _EntityStatus(new_status, new_message))
 
-    def _update_opened_ports(self, new_ports: FrozenSet[Port]):
+    def _update_opened_ports(self, new_ports: FrozenSet[_Port]):
         """Update the current opened ports."""
         # bypass frozen dataclass
         object.__setattr__(self, "opened_ports", new_ports)

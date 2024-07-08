@@ -707,7 +707,7 @@ storage = scenario.Storage("foo")
 # Setup storage with some content:
 (storage.get_filesystem(ctx) / "myfile.txt").write_text("helloworld")
 
-with ctx.manager(ctx.on.update_status(), scenario.State(storage={storage})) as mgr:
+with ctx.manager(ctx.on.update_status(), scenario.State(storages={storage})) as mgr:
     foo = mgr.charm.model.storages["foo"][0]
     loc = foo.location
     path = loc / "myfile.txt"
@@ -752,11 +752,11 @@ So a natural follow-up Scenario test suite for this case would be:
 ctx = scenario.Context(MyCharm, meta=MyCharm.META)
 foo_0 = scenario.Storage('foo')
 # The charm is notified that one of the storages it has requested is ready:
-ctx.run(ctx.on.storage_attached(foo_0), scenario.State(storage={foo_0}))
+ctx.run(ctx.on.storage_attached(foo_0), scenario.State(storages={foo_0}))
 
 foo_1 = scenario.Storage('foo')
 # The charm is notified that the other storage is also ready:
-ctx.run(ctx.on.storage_attached(foo_1), scenario.State(storage={foo_0, foo_}]))
+ctx.run(ctx.on.storage_attached(foo_1), scenario.State(storages={foo_0, foo_1}))
 ```
 
 ## Ports
@@ -787,7 +787,6 @@ state = scenario.State(
         scenario.Secret(
             {0: {'key': 'public'}},
             id='foo',
-            contents={0: {'key': 'public'}}
         ),
     },
 )
@@ -880,7 +879,7 @@ So, the only consistency-level check we enforce in Scenario when it comes to res
 import pathlib
 
 ctx = scenario.Context(MyCharm, meta={'name': 'juliette', "resources": {"foo": {"type": "oci-image"}}})
-resource = scenario.Resource('foo', '/path/to/resource.tar')
+resource = scenario.Resource(name='foo', path='/path/to/resource.tar')
 with ctx.manager(ctx.on.start(), scenario.State(resources={resource})) as mgr:
     # If the charm, at runtime, were to call self.model.resources.fetch("foo"), it would get '/path/to/resource.tar' back.
     path = mgr.charm.model.resources.fetch('foo')

@@ -45,7 +45,7 @@ def test_stored_state_default(mycharm):
 def test_stored_state_initialized(mycharm):
     out = trigger(
         State(
-            stored_state={
+            stored_states={
                 StoredState(
                     owner_path="MyCharm", name="_stored", content={"foo": "FOOX"}
                 ),

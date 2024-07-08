@@ -53,7 +53,6 @@ __all__ = [
     "ICMPPort",
     "TCPPort",
     "UDPPort",
-    "Port",
     "Resource",
     "Storage",
     "StoredState",

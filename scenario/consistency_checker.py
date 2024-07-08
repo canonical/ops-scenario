@@ -265,7 +265,7 @@ def _check_storage_event(
             f"storage event {event.name} refers to storage {storage.name} "
             f"which is not declared in the charm metadata (metadata.yaml) under 'storage'.",
         )
-    elif storage not in state.storage:
+    elif storage not in state.storages:
         errors.append(
             f"cannot emit {event.name} because storage {storage.name} "
             f"is not in the state.",

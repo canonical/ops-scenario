@@ -27,7 +27,7 @@ def ctx():
 
 
 def test_open_port(ctx):
-    out = ctx.run(ctx.on.start()), State())
+    out = ctx.run(ctx.on.start(), State())
     assert len(out.opened_ports) == 1
     port = tuple(out.opened_ports)[0]
 

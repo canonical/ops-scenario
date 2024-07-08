@@ -347,7 +347,7 @@ class Runtime:
         elif (
             not spec.is_autoloaded and any_metadata_files_present_in_charm_virtual_root
         ):
-            logger.warn(
+            logger.warning(
                 f"Some metadata files found in custom user-provided charm_root "
                 f"{charm_virtual_root} while you have passed meta, config or actions to "
                 f"Context.run(). "

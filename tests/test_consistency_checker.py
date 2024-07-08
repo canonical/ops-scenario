@@ -376,14 +376,6 @@ def test_relation_not_in_state():
     )
 
 
-def test_dupe_containers_inconsistent():
-    assert_inconsistent(
-        State(containers={Container("foo"), Container("foo")}),
-        _Event("bar"),
-        _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
-    )
-
-
 def test_action_not_in_meta_inconsistent():
     action = Action("foo", params={"bar": "baz"})
     assert_inconsistent(
@@ -549,7 +541,7 @@ def test_storage_not_in_state():
         ),
     )
     assert_consistent(
-        State(storage=[storage]),
+        State(storages=[storage]),
         _Event("foo_storage_attached", storage=storage),
         _CharmSpec(
             MyCharm,
@@ -561,7 +553,7 @@ def test_storage_not_in_state():
 def test_resource_states():
     # happy path
     assert_consistent(
-        State(resources={Resource("foo", "/foo/bar.yaml")}),
+        State(resources={Resource(name="foo", path="/foo/bar.yaml")}),
         _Event("start"),
         _CharmSpec(
             MyCharm,
@@ -581,7 +573,7 @@ def test_resource_states():
 
     # resource not defined in meta
     assert_inconsistent(
-        State(resources={Resource("bar", "/foo/bar.yaml")}),
+        State(resources={Resource(name="bar", path="/foo/bar.yaml")}),
         _Event("start"),
         _CharmSpec(
             MyCharm,
@@ -590,7 +582,7 @@ def test_resource_states():
     )
 
     assert_inconsistent(
-        State(resources={Resource("bar", "/foo/bar.yaml")}),
+        State(resources={Resource(name="bar", path="/foo/bar.yaml")}),
         _Event("start"),
         _CharmSpec(
             MyCharm,
@@ -678,21 +670,6 @@ def test_storedstate_consistency():
                 StoredState(name="my_stored_state", content={"foo": 1}),
                 StoredState(owner_path="MyCharmLib", content={"foo": None}),
                 StoredState(owner_path="OtherCharmLib", content={"foo": (1, 2, 3)}),
-            }
-        ),
-        _Event("start"),
-        _CharmSpec(
-            MyCharm,
-            meta={
-                "name": "foo",
-            },
-        ),
-    )
-    assert_inconsistent(
-        State(
-            stored_states={
-                StoredState(owner_path=None, content={"foo": "bar"}),
-                StoredState(owner_path=None, name="_stored", content={"foo": "bar"}),
             }
         ),
         _Event("start"),

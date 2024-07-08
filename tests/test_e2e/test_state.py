@@ -287,13 +287,13 @@ def test_container_default_values():
 def test_state_default_values():
     state = State()
     assert state.config == {}
-    assert state.relations == []
+    assert state.relations == frozenset()
     assert state.networks == {}
-    assert state.containers == []
-    assert state.storage == []
-    assert state.opened_ports == []
-    assert state.secrets == []
-    assert state.resources == {}
+    assert state.containers == frozenset()
+    assert state.storages == frozenset()
+    assert state.opened_ports == frozenset()
+    assert state.secrets == frozenset()
+    assert state.resources == frozenset()
     assert state.deferred == []
     assert isinstance(state.model, Model)
     assert state.leader is False
