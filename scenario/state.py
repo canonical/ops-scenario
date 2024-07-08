@@ -1254,11 +1254,6 @@ class State(_max_posargs(0)):
             if normalize_name(r.endpoint) == normalized_endpoint
         )
 
-    # TODO: It seems like this method has no tests.
-    def get_storages(self, name: str) -> Tuple["Storage", ...]:
-        """Get all storages with this name."""
-        return tuple(s for s in self.storages if s.name == name)
-
 
 def _is_valid_charmcraft_25_metadata(meta: Dict[str, Any]):
     # Check whether this dict has the expected mandatory metadata fields according to the
