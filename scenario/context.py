@@ -19,6 +19,7 @@ from scenario.state import (
     Storage,
     _CharmSpec,
     _Event,
+    _max_posargs,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -34,8 +35,8 @@ logger = scenario_logger.getChild("runtime")
 DEFAULT_JUJU_VERSION = "3.4"
 
 
-@dataclasses.dataclass
-class ActionOutput:
+@dataclasses.dataclass(frozen=True)
+class ActionOutput(_max_posargs(0)):
     """Wraps the results of running an action event with `run_action`."""
 
     state: "State"
@@ -43,7 +44,7 @@ class ActionOutput:
     In most cases, actions are not expected to be affecting it."""
     logs: List[str]
     """Any logs associated with the action output, set by the charm."""
-    results: Optional[Dict[str, Any]]
+    results: Optional[Dict[str, Any]] = None
     """Key-value mapping assigned by the charm as a result of the action.
     Will be None if the charm never calls action-set."""
     failure: Optional[str] = None
@@ -316,6 +317,7 @@ class Context:
         self,
         charm_type: Type["CharmType"],
         meta: Optional[Dict[str, Any]] = None,
+        *,
         actions: Optional[Dict[str, Any]] = None,
         config: Optional[Dict[str, Any]] = None,
         charm_root: Optional["PathLike"] = None,
@@ -382,7 +384,7 @@ class Context:
             defined in metadata.yaml.
         :arg unit_id: Unit ID that this charm is deployed as. Defaults to 0.
         :arg app_trusted: whether the charm has Juju trust (deployed with ``--trust`` or added with
-            ``juju trust``). Defaults to False
+            ``juju trust``). Defaults to False.
         :arg charm_root: virtual charm root the charm will be executed with.
             If the charm, say, expects a `./src/foo/bar.yaml` file present relative to the
             execution cwd, you need to use this. E.g.:
@@ -553,10 +555,10 @@ class Context:
 
     def _finalize_action(self, state_out: "State"):
         ao = ActionOutput(
-            state_out,
-            self._action_logs,
-            self._action_results,
-            self._action_failure,
+            state=state_out,
+            logs=self._action_logs,
+            results=self._action_results,
+            failure=self._action_failure,
         )
 
         # reset all action-related state
