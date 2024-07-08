@@ -250,10 +250,10 @@ def test_relation_set(mycharm):
     "klass,num_args",
     [
         (State, (1,)),
-        (Resource, (1, )),
+        (Resource, (1,)),
         (Address, (0, 2)),
         (BindAddress, (0, 2)),
-        (Network, (0, 2)),
+        (Network, (1, 2)),
     ],
 )
 def test_positional_arguments(klass, num_args):
@@ -290,7 +290,7 @@ def test_state_default_values():
     state = State()
     assert state.config == {}
     assert state.relations == frozenset()
-    assert state.networks == {}
+    assert state.networks == frozenset()
     assert state.containers == frozenset()
     assert state.storages == frozenset()
     assert state.opened_ports == frozenset()

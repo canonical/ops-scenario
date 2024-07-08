@@ -78,6 +78,7 @@ def jsonpatch_delta(self, other: "State"):
         "secrets",
         "resources",
         "stored_states",
+        "networks",
     ):
         dict_other[attr] = [dataclasses.asdict(o) for o in dict_other[attr]]
         dict_self[attr] = [dataclasses.asdict(o) for o in dict_self[attr]]

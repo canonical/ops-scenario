@@ -355,10 +355,14 @@ class BindAddress(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
-class Network(_max_posargs(0)):
+class Network(_max_posargs(1)):
+    binding_name: str
     bind_addresses: List[BindAddress]
     ingress_addresses: List[str]
     egress_subnets: List[str]
+
+    def __hash__(self) -> int:
+        return hash(self.binding_name)
 
     def hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
@@ -371,6 +375,7 @@ class Network(_max_posargs(0)):
     @classmethod
     def default(
         cls,
+        binding_name: str,
         private_address: str = "192.0.2.0",
         hostname: str = "",
         cidr: str = "",
@@ -381,6 +386,7 @@ class Network(_max_posargs(0)):
     ) -> "Network":
         """Helper to create a minimal, heavily defaulted Network."""
         return cls(
+            binding_name=binding_name,
             bind_addresses=[
                 BindAddress(
                     interface_name=interface_name,
@@ -1051,7 +1057,7 @@ class State(_max_posargs(0)):
     """The present configuration of this charm."""
     relations: FrozenSet["AnyRelation"] = dataclasses.field(default_factory=frozenset)
     """All relations that currently exist for this charm."""
-    networks: Dict[str, Network] = dataclasses.field(default_factory=dict)
+    networks: FrozenSet[Network] = dataclasses.field(default_factory=frozenset)
     """Manual overrides for any relation and extra bindings currently provisioned for this charm.
     If a metadata-defined relation endpoint is not explicitly mapped to a Network in this field,
     it will be defaulted.
@@ -1116,6 +1122,7 @@ class State(_max_posargs(0)):
             "relations",
             "containers",
             "storages",
+            "networks",
             "opened_ports",
             "secrets",
             "resources",
@@ -1184,6 +1191,13 @@ class State(_max_posargs(0)):
             if state_container.name == container:
                 return state_container
         raise KeyError(f"container: {container} not found in the State")
+
+    def get_network(self, binding_name: str, /) -> Network:
+        """Get network from this State, based on its binding name."""
+        for network in self.networks:
+            if network.binding_name == binding_name:
+                return network
+        raise KeyError(f"network: {binding_name} not found in the State")
 
     def get_secret(
         self,

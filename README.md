@@ -495,7 +495,7 @@ If you want to, you can override any of these relation or extra-binding associat
 
 ```python
 state = scenario.State(networks={
-  'foo': scenario.Network.default(private_address='192.0.2.1')
+  scenario.Network.default("foo", private_address='192.0.2.1')
 })
 ```
 

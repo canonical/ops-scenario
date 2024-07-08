@@ -462,7 +462,7 @@ def check_network_consistency(
         if metadata.get("scope") != "container"  # mark of a sub
     }
 
-    state_bindings = set(state.networks)
+    state_bindings = {network.binding_name for network in state.networks}
     if diff := state_bindings.difference(meta_bindings.union(non_sub_relations)):
         errors.append(
             f"Some network bindings defined in State are not in metadata.yaml: {diff}.",
