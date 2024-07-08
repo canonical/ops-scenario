@@ -15,6 +15,7 @@ from scenario.state import (
     Model,
     Network,
     Relation,
+    Resource,
     State,
 )
 from tests.helpers import jsonpatch_delta, sort_patch, trigger
@@ -249,6 +250,7 @@ def test_relation_set(mycharm):
     "klass,num_args",
     [
         (State, (1,)),
+        (Resource, (1, )),
         (Address, (0, 2)),
         (BindAddress, (0, 2)),
         (Network, (0, 2)),
