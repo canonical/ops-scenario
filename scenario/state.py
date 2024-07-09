@@ -1208,10 +1208,10 @@ class State(_max_posargs(0)):
             Storage(name=storage.name, index=storage.index)
             if isinstance(storage, ops.Storage)
             else storage
-            for storage in self.storage
+            for storage in self.storages
         ]
-        if self.storage != normalised_storage:
-            object.__setattr__(self, "storage", normalised_storage)
+        if self.storages != normalised_storage:
+            object.__setattr__(self, "storages", normalised_storage)
         # ops.Container, ops.Model, ops.Relation, ops.Secret should not be instantiated by charmers.
         # ops.Network does not have the relation name, so cannot be converted.
         # ops.Resources does not contain the source of the resource, so cannot be converted.
