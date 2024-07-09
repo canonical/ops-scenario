@@ -201,6 +201,8 @@ want a fresh `Context` (e.g. with no history), you should create a new object.
 The deprecated `pre_event` and `post_event` arguments to `run` and `run_action`
 have been removed. Use the appropriate context handler instead.
 
+TODO: name the context handler above, once we decide on manager/event/event_manager/context-as-manager, etc.
+
 `Secret.granted` has been removed. Only include in the state the secrets that
 the charm has permission to (at least) view.
 
