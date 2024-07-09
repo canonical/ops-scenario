@@ -39,7 +39,7 @@ def test_get_secret_no_secret(mycharm):
 def test_get_secret(mycharm):
     ctx = Context(mycharm, meta={"name": "local"})
     with ctx.manager(
-        state=State(secrets=[Secret(id="foo", contents={0: {"a": "b"}})]),
+        state=State(secrets={Secret(id="foo", contents={0: {"a": "b"}})}),
         event=ctx.on.update_status(),
     ) as mgr:
         assert mgr.charm.model.get_secret(id="foo").get_content()["a"] == "b"
@@ -51,7 +51,7 @@ def test_get_secret_get_refresh(mycharm, owner):
     with ctx.manager(
         ctx.on.update_status(),
         State(
-            secrets=[
+            secrets={
                 Secret(
                     id="foo",
                     contents={
@@ -60,7 +60,7 @@ def test_get_secret_get_refresh(mycharm, owner):
                     },
                     owner=owner,
                 )
-            ]
+            }
         ),
     ) as mgr:
         charm = mgr.charm
@@ -74,7 +74,7 @@ def test_get_secret_nonowner_peek_update(mycharm, app):
         ctx.on.update_status(),
         State(
             leader=app,
-            secrets=[
+            secrets={
                 Secret(
                     id="foo",
                     contents={
@@ -82,7 +82,7 @@ def test_get_secret_nonowner_peek_update(mycharm, app):
                         1: {"a": "c"},
                     },
                 ),
-            ],
+            },
         ),
     ) as mgr:
         charm = mgr.charm
@@ -100,7 +100,7 @@ def test_get_secret_owner_peek_update(mycharm, owner):
     with ctx.manager(
         ctx.on.update_status(),
         State(
-            secrets=[
+            secrets={
                 Secret(
                     id="foo",
                     contents={
@@ -109,7 +109,7 @@ def test_get_secret_owner_peek_update(mycharm, owner):
                     },
                     owner=owner,
                 )
-            ]
+            }
         ),
     ) as mgr:
         charm = mgr.charm
@@ -171,7 +171,7 @@ def test_add(mycharm, app):
             charm.unit.add_secret({"foo": "bar"}, label="mylabel")
 
     assert mgr.output.secrets
-    secret = mgr.output.secrets[0]
+    secret = mgr.output.get_secret(label="mylabel")
     assert secret.contents[0] == {"foo": "bar"}
     assert secret.label == "mylabel"
 
@@ -215,7 +215,7 @@ def test_set_legacy_behaviour(mycharm):
             == rev3
         )
 
-    assert state_out.secrets[0].contents == {
+    assert state_out.get_secret(label="mylabel").contents == {
         0: rev1,
         1: rev2,
         2: rev3,
@@ -247,7 +247,7 @@ def test_set(mycharm):
         assert secret.get_content() == rev2
         assert secret.peek_content() == secret.get_content(refresh=True) == rev3
 
-    assert state_out.secrets[0].contents == {
+    assert state_out.get_secret(label="mylabel").contents == {
         0: rev1,
         1: rev2,
         2: rev3,
@@ -276,7 +276,7 @@ def test_set_juju33(mycharm):
         assert secret.peek_content() == rev3
         assert secret.get_content(refresh=True) == rev3
 
-    assert state_out.secrets[0].contents == {
+    assert state_out.get_secret(label="mylabel").contents == {
         0: rev1,
         1: rev2,
         2: rev3,
@@ -290,7 +290,7 @@ def test_meta(mycharm, app):
         ctx.on.update_status(),
         State(
             leader=True,
-            secrets=[
+            secrets={
                 Secret(
                     owner="app" if app else "unit",
                     id="foo",
@@ -301,7 +301,7 @@ def test_meta(mycharm, app):
                         0: {"a": "b"},
                     },
                 )
-            ],
+            },
         ),
     ) as mgr:
         charm = mgr.charm
@@ -330,7 +330,7 @@ def test_secret_permission_model(mycharm, leader, owner):
         ctx.on.update_status(),
         State(
             leader=leader,
-            secrets=[
+            secrets={
                 Secret(
                     id="foo",
                     label="mylabel",
@@ -341,7 +341,7 @@ def test_secret_permission_model(mycharm, leader, owner):
                         0: {"a": "b"},
                     },
                 )
-            ],
+            },
         ),
     ) as mgr:
         secret = mgr.charm.model.get_secret(id="foo")
@@ -383,7 +383,7 @@ def test_grant(mycharm, app):
         ctx.on.update_status(),
         State(
             relations=[Relation("foo", "remote")],
-            secrets=[
+            secrets={
                 Secret(
                     owner="unit",
                     id="foo",
@@ -394,7 +394,7 @@ def test_grant(mycharm, app):
                         0: {"a": "b"},
                     },
                 )
-            ],
+            },
         ),
     ) as mgr:
         charm = mgr.charm
@@ -404,7 +404,7 @@ def test_grant(mycharm, app):
             secret.grant(relation=foo)
         else:
             secret.grant(relation=foo, unit=foo.units.pop())
-    vals = list(mgr.output.secrets[0].remote_grants.values())
+    vals = list(mgr.output.get_secret(label="mylabel").remote_grants.values())
     assert vals == [{"remote"}] if app else [{"remote/0"}]
 
 
@@ -415,7 +415,7 @@ def test_update_metadata(mycharm):
     with ctx.manager(
         ctx.on.update_status(),
         State(
-            secrets=[
+            secrets={
                 Secret(
                     owner="unit",
                     id="foo",
@@ -424,7 +424,7 @@ def test_update_metadata(mycharm):
                         0: {"a": "b"},
                     },
                 )
-            ],
+            },
         ),
     ) as mgr:
         secret = mgr.charm.model.get_secret(label="mylabel")
@@ -435,7 +435,7 @@ def test_update_metadata(mycharm):
             rotate=SecretRotate.DAILY,
         )
 
-    secret_out = mgr.output.secrets[0]
+    secret_out = mgr.output.get_secret(label="babbuccia")
     assert secret_out.label == "babbuccia"
     assert secret_out.rotate == SecretRotate.DAILY
     assert secret_out.description == "blu"
@@ -475,8 +475,8 @@ def test_grant_nonowner(mycharm):
 
     out = trigger(
         State(
-            relations=[Relation("foo", "remote")],
-            secrets=[
+            relations={Relation("foo", "remote")},
+            secrets={
                 Secret(
                     id="foo",
                     label="mylabel",
@@ -486,7 +486,7 @@ def test_grant_nonowner(mycharm):
                         0: {"a": "b"},
                     },
                 )
-            ],
+            },
         ),
         "update_status",
         mycharm,
@@ -508,9 +508,9 @@ def test_add_grant_revoke_remove():
 
     state = State(
         leader=True,
-        relations=[
+        relations={
             Relation("bar", remote_app_name=relation_remote_app, id=relation_id)
-        ],
+        },
     )
 
     with ctx.manager(ctx.on.start(), state) as mgr:
@@ -521,7 +521,7 @@ def test_add_grant_revoke_remove():
         secret.grant(bar_relation)
 
     assert mgr.output.secrets
-    scenario_secret = mgr.output.secrets[0]
+    scenario_secret = mgr.output.get_secret(label="mylabel")
     assert relation_remote_app in scenario_secret.remote_grants[relation_id]
 
     with ctx.manager(ctx.on.start(), mgr.output) as mgr:
@@ -529,7 +529,7 @@ def test_add_grant_revoke_remove():
         secret = charm.model.get_secret(label="mylabel")
         secret.revoke(bar_relation)
 
-    scenario_secret = mgr.output.secrets[0]
+    scenario_secret = mgr.output.get_secret(label="mylabel")
     assert scenario_secret.remote_grants == {}
 
     with ctx.manager(ctx.on.start(), mgr.output) as mgr:
@@ -537,7 +537,7 @@ def test_add_grant_revoke_remove():
         secret = charm.model.get_secret(label="mylabel")
         secret.remove_all_revisions()
 
-    assert not mgr.output.secrets[0].contents  # secret wiped
+    assert not mgr.output.get_secret(label="mylabel").contents  # secret wiped
 
 
 def test_no_additional_positional_arguments():
