@@ -8,8 +8,12 @@ from scenario.runtime import InconsistentScenarioError
 from scenario.state import (
     RELATION_EVENTS_SUFFIX,
     Action,
+    CloudCredential,
+    CloudSpec,
     Container,
+    Model,
     Network,
+    Notice,
     PeerRelation,
     Relation,
     Secret,
@@ -61,6 +65,22 @@ def test_workload_event_without_container():
     assert_consistent(
         State(containers=[Container("foo")]),
         _Event("foo-pebble-ready", container=Container("foo")),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
+    )
+    assert_inconsistent(
+        State(),
+        _Event("foo-pebble-custom-notice", container=Container("foo")),
+        _CharmSpec(MyCharm, {}),
+    )
+    notice = Notice("example.com/foo")
+    assert_consistent(
+        State(containers=[Container("foo", notices=[notice])]),
+        _Event("foo-pebble-custom-notice", container=Container("foo"), notice=notice),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
+    )
+    assert_inconsistent(
+        State(containers=[Container("foo")]),
+        _Event("foo-pebble-custom-notice", container=Container("foo"), notice=notice),
         _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
 
@@ -240,7 +260,7 @@ def test_config_secret_old_juju(juju_version):
 
 @pytest.mark.parametrize("bad_v", ("1.0", "0", "1.2", "2.35.42", "2.99.99", "2.99"))
 def test_secrets_jujuv_bad(bad_v):
-    secret = Secret(id="secret:foo", contents={0: {"a": "b"}})
+    secret = Secret("secret:foo", {0: {"a": "b"}})
     assert_inconsistent(
         State(secrets=[secret]),
         _Event("bar"),
@@ -437,6 +457,19 @@ def test_action_params_type(ptype, good, bad):
         )
 
 
+def test_duplicate_relation_ids():
+    assert_inconsistent(
+        State(relations=[Relation("foo", id=1), Relation("bar", id=1)]),
+        _Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={
+                "requires": {"foo": {"interface": "foo"}, "bar": {"interface": "bar"}}
+            },
+        ),
+    )
+
+
 def test_relation_without_endpoint():
     assert_inconsistent(
         State(relations=[Relation("foo", id=1), Relation("bar", id=1)]),
@@ -602,12 +635,46 @@ def test_networks_consistency():
     )
 
 
+def test_cloudspec_consistency():
+    cloud_spec = CloudSpec(
+        name="localhost",
+        type="lxd",
+        endpoint="https://127.0.0.1:8443",
+        credential=CloudCredential(
+            auth_type="clientcertificate",
+            attributes={
+                "client-cert": "foo",
+                "client-key": "bar",
+                "server-cert": "baz",
+            },
+        ),
+    )
+
+    assert_consistent(
+        State(model=Model(name="lxd-model", type="lxd", cloud_spec=cloud_spec)),
+        _Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={"name": "MyVMCharm"},
+        ),
+    )
+
+    assert_inconsistent(
+        State(model=Model(name="k8s-model", type="kubernetes", cloud_spec=cloud_spec)),
+        _Event("start"),
+        _CharmSpec(
+            MyCharm,
+            meta={"name": "MyK8sCharm"},
+        ),
+    )
+
+
 def test_storedstate_consistency():
     assert_consistent(
         State(
             stored_state=[
                 StoredState(content={"foo": "bar"}),
-                StoredState("my_stored_state", content={"foo": 1}),
+                StoredState(name="my_stored_state", content={"foo": 1}),
                 StoredState(owner_path="MyCharmLib", content={"foo": None}),
                 StoredState(owner_path="OtherCharmLib", content={"foo": (1, 2, 3)}),
             ]
@@ -623,8 +690,8 @@ def test_storedstate_consistency():
     assert_inconsistent(
         State(
             stored_state=[
-                StoredState(content={"foo": "bar"}),
-                StoredState("_stored", content={"foo": "bar"}),
+                StoredState(owner_path=None, content={"foo": "bar"}),
+                StoredState(owner_path=None, name="_stored", content={"foo": "bar"}),
             ]
         ),
         _Event("start"),
@@ -636,7 +703,13 @@ def test_storedstate_consistency():
         ),
     )
     assert_inconsistent(
-        State(stored_state=[StoredState(content={"secret": Secret({}, id="foo")})]),
+        State(
+            stored_state=[
+                StoredState(
+                    owner_path=None, content={"secret": Secret(id="foo", contents={})}
+                )
+            ]
+        ),
         _Event("start"),
         _CharmSpec(
             MyCharm,
