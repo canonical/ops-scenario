@@ -251,7 +251,7 @@ def test_emitted_full():
         capture_deferred_events=True,
         capture_framework_events=True,
     )
-    ctx.run(ctx.on.start(), scenario.State(deferred=[scenario._Event("update-status").deferred(MyCharm._foo)]))
+    ctx.run(ctx.on.start(), scenario.State(deferred=[ctx.on.update_status().deferred(MyCharm._foo)]))
 
     assert len(ctx.emitted_events) == 5
     assert [e.handle.kind for e in ctx.emitted_events] == [
