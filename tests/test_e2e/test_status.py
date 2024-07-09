@@ -12,7 +12,6 @@ from scenario.state import (
     State,
     UnknownStatus,
     WaitingStatus,
-    _status_to_entitystatus,
 )
 from tests.helpers import trigger
 

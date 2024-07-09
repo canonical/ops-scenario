@@ -38,15 +38,12 @@ from ops.testing import _TestingPebbleClient
 
 from scenario.logger import logger as scenario_logger
 from scenario.state import (
-    ActiveStatus,
-    BlockedStatus,
     JujuLogLine,
-    MaintenanceStatus,
     Mount,
     Network,
     PeerRelation,
     Storage,
-    WaitingStatus,
+    _EntityStatus,
     _port_cls_by_protocol,
     _RawPortProtocolLiteral,
     _RawStatusLiteral,
@@ -334,12 +331,7 @@ class _MockModelBackend(_ModelBackend):
         is_app: bool = False,
     ):
         self._context._record_status(self._state, is_app)
-        status_obj = {
-            "active": ActiveStatus,
-            "blocked": BlockedStatus,
-            "maintenance": MaintenanceStatus,
-            "waiting": WaitingStatus,
-        }[status](message)
+        status_obj = _EntityStatus.from_status_name(status, message)
         self._state._update_status(status_obj, is_app)
 
     def juju_log(self, level: str, message: str):

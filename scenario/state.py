@@ -13,6 +13,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    ClassVar,
     Dict,
     Final,
     Generic,
@@ -857,13 +858,11 @@ class _EntityStatus:
     name: _RawStatusLiteral
     message: str = ""
 
+    _entity_statuses: ClassVar[Dict[str, Type["_EntityStatus"]]] = {}
+
     def __eq__(self, other):
         if isinstance(other, (StatusBase, _EntityStatus)):
             return (self.name, self.message) == (other.name, other.message)
-        logger.warning(
-            f"Comparing Status with {other} is not stable and will be forbidden soon."
-            f"Please compare with StatusBase directly.",
-        )
         return super().__eq__(other)
 
     def __repr__(self):
@@ -872,17 +871,19 @@ class _EntityStatus:
             return f"{status_type_name}()"
         return f"{status_type_name}('{self.message}')"
 
+    @classmethod
+    def from_status_name(
+        cls,
+        name: _RawStatusLiteral,
+        message: str = "",
+    ) -> "_EntityStatus":
+        # Note that this won't work for UnknownStatus.
+        # All subclasses have a default 'name' attribute, but the type checker can't tell that.
+        return cls._entity_statuses[name](message=message)  # type:ignore
 
-def _status_to_entitystatus(obj: StatusBase) -> _EntityStatus:
-    """Convert StatusBase to _EntityStatus."""
-    return {
-        ops.UnknownStatus: UnknownStatus,
-        ops.ErrorStatus: ErrorStatus,
-        ops.ActiveStatus: ActiveStatus,
-        ops.BlockedStatus: BlockedStatus,
-        ops.MaintenanceStatus: MaintenanceStatus,
-        ops.WaitingStatus: WaitingStatus,
-    }[obj.__class__](obj.message)
+    @classmethod
+    def from_ops(cls, obj: StatusBase) -> "_EntityStatus":
+        return cls.from_status_name(cast(_RawStatusLiteral, obj.name), obj.message)
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -897,6 +898,7 @@ class UnknownStatus(_EntityStatus, ops.UnknownStatus):
 
     def __init__(self):
         super().__init__(name=self.name)
+        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -911,6 +913,7 @@ class ErrorStatus(_EntityStatus, ops.ErrorStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="error", message=message)
+        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -925,6 +928,7 @@ class ActiveStatus(_EntityStatus, ops.ActiveStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="active", message=message)
+        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -938,6 +942,7 @@ class BlockedStatus(_EntityStatus, ops.BlockedStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="blocked", message=message)
+        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -956,6 +961,7 @@ class MaintenanceStatus(_EntityStatus, ops.MaintenanceStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="maintenance", message=message)
+        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -973,6 +979,7 @@ class WaitingStatus(_EntityStatus, ops.WaitingStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="waiting", message=message)
+        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1178,7 +1185,7 @@ class State(_max_posargs(0)):
             if isinstance(val, _EntityStatus):
                 pass
             elif isinstance(val, StatusBase):
-                object.__setattr__(self, name, _status_to_entitystatus(val))
+                object.__setattr__(self, name, _EntityStatus.from_ops(val))
             else:
                 raise TypeError(f"Invalid status.{name}: {val!r}")
         normalised_ports = [
@@ -1212,7 +1219,7 @@ class State(_max_posargs(0)):
 
     def _update_status(
         self,
-        new_status: _RawStatusLiteral,
+        new_status: _EntityStatus,
         is_app: bool = False,
     ):
         """Update the current app/unit status."""
@@ -1235,7 +1242,7 @@ class State(_max_posargs(0)):
     def with_unit_status(self, status: StatusBase) -> "State":
         return dataclasses.replace(
             self,
-            unit_status=_status_to_entitystatus(status),
+            unit_status=_EntityStatus.from_ops(status),
         )
 
     def get_container(self, container: Union[str, Container]) -> Container:
