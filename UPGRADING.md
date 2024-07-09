@@ -2,15 +2,15 @@
 
 ## Scenario 6.x to Scenario 7.x
 
-Scenario 7.0 had substantial API incompatibility with earlier versions, but
+Scenario 7.0 has substantial API incompatibility with earlier versions, but
 comes with an intention to reduce the frequency of breaking changes in the
-future, alignin with the `ops` library.
+future, aligning with the `ops` library.
 
 The changes listed below are not the only features introduced in Scenario 7.0
 (for that, see the release notes), but cover the breaking changes where you will
 need to update your existing Scenario tests.
 
-### Specifying events
+### Specify events via context.on
 
 In previous versions of Scenario, an event would be passed to `Context.run`
 as a string name, via a convenient shorthand property of a state component
@@ -31,27 +31,10 @@ ctx.run(ctx.on.pebble_ready(container=container), state)
 ctx.run(ctx.on.relation_joined(relation=relation), state)
 ```
 
-### Running custom events
+### State components are (frozen) sets
 
-Scenario no longer supports explicitly running custom events. Instead, you
-should run the Juju event(s) that will trigger the custom event. For example,
-if you have a charm lib that will emit a `database-created` event on
-`relation-created`:
-
-```python
-# Older Scenario code.
-ctx.run("my_charm_lib.on.database_created", state)
-
-# Scenario 7.x
-ctx.run(ctx.on.relation_created(relation=relation), state)
-```
-
-Scenario will still capture custom events in `Context.emitted_events`.
-
-### State components are (frozen) sets, rather than lists
-
-State components, like containers, relations, and networks, do not have any
-inherant ordering. When these were lists, 'magic' numbers tended to creep into
+Like containers, relations, and networks, state components do not have any
+inherent ordering. When these were lists, 'magic' numbers tended to creep into
 test code. These are now all sets, and have 'get' methods to retrieve the
 object you want to assert on. In addition, they are actually `frozenset`s
 (Scenario will automatically freeze them if you pass a `set`), which increases
@@ -74,7 +57,7 @@ assert state_out.get_relation(id=r1.id)...
 new_state = dataclasses.replace(state_out, relations=state_out.relations + {r3})
 ```
 
-### Keyword arguments
+### State components are passed by keyword
 
 Most state components, and the `State` object itself, now request at least some
 arguments to be passed by keyword. In most cases, it's likely that you were
@@ -95,7 +78,24 @@ state = State(
 )
 ```
 
-### Copying objects
+### Trigger custom events by triggering the underlying Juju event
+
+Scenario no longer supports explicitly running custom events. Instead, you
+should run the Juju event(s) that will trigger the custom event. For example,
+if you have a charm lib that will emit a `database-created` event on
+`relation-created`:
+
+```python
+# Older Scenario code.
+ctx.run("my_charm_lib.on.database_created", state)
+
+# Scenario 7.x
+ctx.run(ctx.on.relation_created(relation=relation), state)
+```
+
+Scenario will still capture custom events in `Context.emitted_events`.
+
+### Copy objects with dataclasses.replace and copy.deepcopy
 
 The `copy()` and `replace()` methods of `State` and the various state components
 have been removed. You should use the `dataclasses.replace` and `copy.deepcopy`
@@ -111,17 +111,10 @@ new_container = dataclasses.replace(container, can_connect=True)
 duplicate_relation = copy.deepcopy(relation)
 ```
 
-### Mocking Container.exec
+### Define resources with the Resource class
 
-In addition to the new ability to assert against content the charm writes to
-`stdin` and to use pattern matching for the command, `Container.exec_mocks` is
-now named `Container.execs`, `Container.service_status` is now named
-`Container.service_statuses`, and `ExecOutput` is now named `Exec`.
-
-### Resources are classes, not dictionaries
-
-The resources in State objects are now `scenario.Resource` objects rather than
-plain dictionaries, aligning with all of the other State components.
+The resources in State objects were previously plain dictionaryes, and are now
+`scenario.Resource` objects, aligning with all of the other State components.
 
 ```python
 # Older Scenario code
@@ -132,26 +125,12 @@ resource = Resource(location="/path/to/foo", source=pathlib.Path("/mock/foo"))
 state = State(resources={resource})
 ```
 
-### State.storage and State.stored_state plurals
+### Give Network objects a binding name attribute
 
-The `State.storage` and `State.stored_state` attributes are now plurals, to
-reflect that you may have more than one in the state, aligning with the other
-State components.
-
-```python
-# Older Scenario code
-state = State(stored_state=[ss1, ss2], storage=[s1, s2])
-
-# Scenario 7.x
-state = State(stored_states={s1, s2}, storages={s1, s2})
-```
-
-### Network
-
-`Network` objects are added to the state as a set, like the other components,
-rather than as a dictionary of `{binding_name: network}` as previously. This
-means that the `Network` object now requires a binding name to be passed in when
-it is created.
+Previously, `Network` objects were added to the state as a dictionary of
+`{binding_name: network}`. Now, `Network` objects are added to the state as a
+set, like the other components. This means that the `Network` object now
+requires a binding name to be passed in when it is created.
 
 ```python
 # Older Scenario code
@@ -161,15 +140,50 @@ state = State(networks={"foo": Network.default()})
 state = State(networks={Network.default("foo")})
 ```
 
-### Names made private
+### Update names: State.storages, State.stored_states, Container.execs, Container.service_statuses
 
-Several attributes and classes that were never intended for end users have been made private:
+The `State.storage` and `State.stored_state` attributes are now plurals. This
+reflects that you may have more than one in the state, and also aligns with the
+other State components.
+
+```python
+# Older Scenario code
+state = State(stored_state=[ss1, ss2], storage=[s1, s2])
+
+# Scenario 7.x
+state = State(stored_states={s1, s2}, storages={s1, s2})
+```
+
+Similarly, `Container.exec_mocks` is now named `Container.execs`,
+`Container.service_status` is now named `Container.service_statuses`, and
+`ExecOutput` is now named `Exec`.
+
+```python
+# Older Scenario code
+container = Container(
+    name="foo",
+    exec_mock={("ls", "-ll"): ExecOutput(return_code=0, stdout=....)},
+    service_status={"srv1": ops.pebble.ServiceStatus.ACTIVE}
+)
+
+# Scenario 7.x
+container = Container(
+    name="foo",
+    execs={Exec(("ls", "-ll"), return_code=0, stdout=....)},
+    service_statuses={"srv1": ops.pebble.ServiceStatus.ACTIVE},
+)
+```
+
+### Don't use `RelationBase`, `Event`, or `StoredState.data_type_name`
+
+Several attributes and classes that were never intended for end users have been
+made private:
 
 * The `data_type_name` attribute of `StoredState` is now private.
 * The `RelationBase` class is now private.
 * The `Event` class is now private.
 
-### Minor removed functionality
+### Drop use of outdated functionality
 
 The `scenario.sequences` module has been removed. We encourage you to look at
 the new [Catan](https://github.com/PietroPasotti/catan) package.
