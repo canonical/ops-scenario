@@ -88,6 +88,9 @@ def test_scenario_base():
     assert out.unit_status == scenario.UnknownStatus()
 ```
 
+Note that you should always compare the app and unit status using `==`, not `is`. You can compare
+them to either the `scenario` objects, or the `ops` ones.
+
 Now let's start making it more complicated. Our charm sets a special state if it has leadership on 'start':
 
 ```python
