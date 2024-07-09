@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
+
+"""The core Scenario State object, and the components inside it."""
+
 import copy
 import dataclasses
 import datetime
@@ -38,16 +41,6 @@ from ops.model import SecretRotate, StatusBase
 from scenario.logger import logger as scenario_logger
 
 JujuLogLine = namedtuple("JujuLogLine", ("level", "message"))
-"""A simulated line in Juju's ``debug-log``.
-
-.. py:attribute:: level
-
-    The log level, roughly equivalent to :class:`logging.Logger` levels.
-
-.. py:attribute:: message
-
-    The formatted log message.
-"""
 
 if TYPE_CHECKING:  # pragma: no cover
     try:
@@ -366,7 +359,7 @@ class Address(_DCBase):
 
     @address.setter
     def address(self, value):
-        self.value = value
+        object.__setattr__(self, "value", value)
 
 
 @dataclasses.dataclass(frozen=True)
