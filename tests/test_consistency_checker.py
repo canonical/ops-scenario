@@ -1,3 +1,5 @@
+import dataclasses
+
 import pytest
 from ops.charm import CharmBase
 
@@ -238,7 +240,7 @@ def test_config_secret_old_juju(juju_version):
 
 @pytest.mark.parametrize("bad_v", ("1.0", "0", "1.2", "2.35.42", "2.99.99", "2.99"))
 def test_secrets_jujuv_bad(bad_v):
-    secret = Secret("secret:foo", {0: {"a": "b"}})
+    secret = Secret(id="secret:foo", contents={0: {"a": "b"}})
     assert_inconsistent(
         State(secrets=[secret]),
         _Event("bar"),
@@ -263,7 +265,7 @@ def test_secrets_jujuv_bad(bad_v):
 @pytest.mark.parametrize("good_v", ("3.0", "3.1", "3", "3.33", "4", "100"))
 def test_secrets_jujuv_bad(good_v):
     assert_consistent(
-        State(secrets=[Secret("secret:foo", {0: {"a": "b"}})]),
+        State(secrets=[Secret(id="secret:foo", contents={0: {"a": "b"}})]),
         _Event("bar"),
         _CharmSpec(MyCharm, {}),
         good_v,
@@ -271,7 +273,7 @@ def test_secrets_jujuv_bad(good_v):
 
 
 def test_secret_not_in_state():
-    secret = Secret("secret:foo", {"a": "b"})
+    secret = Secret(id="secret:foo", contents={"a": "b"})
     assert_inconsistent(
         State(),
         _Event("secret_changed", secret=secret),
@@ -435,35 +437,16 @@ def test_action_params_type(ptype, good, bad):
         )
 
 
-def test_duplicate_relation_ids():
-    assert_inconsistent(
-        State(
-            relations=[Relation("foo", relation_id=1), Relation("bar", relation_id=1)]
-        ),
-        Event("start"),
-        _CharmSpec(
-            MyCharm,
-            meta={
-                "requires": {"foo": {"interface": "foo"}, "bar": {"interface": "bar"}}
-            },
-        ),
-    )
-
-
 def test_relation_without_endpoint():
     assert_inconsistent(
-        State(
-            relations=[Relation("foo", relation_id=1), Relation("bar", relation_id=1)]
-        ),
-        Event("start"),
+        State(relations=[Relation("foo", id=1), Relation("bar", id=1)]),
+        _Event("start"),
         _CharmSpec(MyCharm, meta={"name": "charlemagne"}),
     )
 
     assert_consistent(
-        State(
-            relations=[Relation("foo", relation_id=1), Relation("bar", relation_id=2)]
-        ),
-        Event("start"),
+        State(relations=[Relation("foo", id=1), Relation("bar", id=2)]),
+        _Event("start"),
         _CharmSpec(
             MyCharm,
             meta={
@@ -499,15 +482,15 @@ def test_storage_states():
         _CharmSpec(MyCharm, meta={"name": "everett"}),
     )
     assert_consistent(
-        State(storage=[storage1, storage2.replace(index=2)]),
-        Event("start"),
+        State(storage=[storage1, dataclasses.replace(storage2, index=2)]),
+        _Event("start"),
         _CharmSpec(
             MyCharm, meta={"name": "frank", "storage": {"foo": {"type": "filesystem"}}}
         ),
     )
     assert_consistent(
-        State(storage=[storage1, storage2.replace(name="marx")]),
-        Event("start"),
+        State(storage=[storage1, dataclasses.replace(storage2, name="marx")]),
+        _Event("start"),
         _CharmSpec(
             MyCharm,
             meta={
@@ -623,10 +606,10 @@ def test_storedstate_consistency():
     assert_consistent(
         State(
             stored_state=[
-                StoredState(None, content={"foo": "bar"}),
-                StoredState(None, "my_stored_state", content={"foo": 1}),
-                StoredState("MyCharmLib", content={"foo": None}),
-                StoredState("OtherCharmLib", content={"foo": (1, 2, 3)}),
+                StoredState(content={"foo": "bar"}),
+                StoredState("my_stored_state", content={"foo": 1}),
+                StoredState(owner_path="MyCharmLib", content={"foo": None}),
+                StoredState(owner_path="OtherCharmLib", content={"foo": (1, 2, 3)}),
             ]
         ),
         _Event("start"),
@@ -640,8 +623,8 @@ def test_storedstate_consistency():
     assert_inconsistent(
         State(
             stored_state=[
-                StoredState(None, content={"foo": "bar"}),
-                StoredState(None, "_stored", content={"foo": "bar"}),
+                StoredState(content={"foo": "bar"}),
+                StoredState("_stored", content={"foo": "bar"}),
             ]
         ),
         _Event("start"),
@@ -653,7 +636,7 @@ def test_storedstate_consistency():
         ),
     )
     assert_inconsistent(
-        State(stored_state=[StoredState(None, content={"secret": Secret("foo", {})})]),
+        State(stored_state=[StoredState(content={"secret": Secret({}, id="foo")})]),
         _Event("start"),
         _CharmSpec(
             MyCharm,

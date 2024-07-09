@@ -46,8 +46,8 @@ from scenario.state import (
     Network,
     PeerRelation,
     Storage,
-    _port_cls_by_protocol,
     WaitingStatus,
+    _port_cls_by_protocol,
     _RawPortProtocolLiteral,
     _RawStatusLiteral,
 )

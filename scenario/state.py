@@ -1015,7 +1015,7 @@ class _Port(_max_posargs(1)):
             )
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, (Port, ops.Port)):
+        if isinstance(other, (_Port, ops.Port)):
             return (self.protocol, self.port) == (other.protocol, other.port)
         return False
 
@@ -1182,7 +1182,7 @@ class State(_max_posargs(0)):
             else:
                 raise TypeError(f"Invalid status.{name}: {val!r}")
         normalised_ports = [
-            Port(protocol=port.protocol, port=port.port)
+            _Port(protocol=port.protocol, port=port.port)
             if isinstance(port, ops.Port)
             else port
             for port in self.opened_ports
