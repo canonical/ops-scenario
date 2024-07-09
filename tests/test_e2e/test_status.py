@@ -156,6 +156,16 @@ def test_status_comparison(status):
         ops_status = ops.UnknownStatus()
     else:
         ops_status = getattr(ops, status.__class__.__name__)(status.message)
-    assert status == status == ops_status
+    # A status can be compared to itself.
+    assert status == status
+    # A status can be compared to another instance of the scenario class.
+    if isinstance(status, UnknownStatus):
+        assert status == status.__class__()
+    else:
+        assert status == status.__class__(status.message)
+    # A status can be compared to an instance of the ops class.
+    assert status == ops_status
+    # isinstance also works for comparing to the ops classes.
     assert isinstance(status, type(ops_status))
+    # The repr of the scenario and ops classes should be identical.
     assert repr(status) == repr(ops_status)
