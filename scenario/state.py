@@ -16,6 +16,7 @@ from typing import (
     ClassVar,
     Dict,
     Final,
+    FrozenSet,
     Generic,
     List,
     Literal,
@@ -290,6 +291,9 @@ class Secret(_max_posargs(1)):
     expire: Optional[datetime.datetime] = None
     rotate: Optional[SecretRotate] = None
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
     def _set_revision(self, revision: int):
         """Set a new tracked revision."""
         # bypass frozen dataclass
@@ -353,10 +357,14 @@ class BindAddress(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
-class Network(_max_posargs(0)):
+class Network(_max_posargs(1)):
+    binding_name: str
     bind_addresses: List[BindAddress]
     ingress_addresses: List[str]
     egress_subnets: List[str]
+
+    def __hash__(self) -> int:
+        return hash(self.binding_name)
 
     def hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
@@ -369,6 +377,7 @@ class Network(_max_posargs(0)):
     @classmethod
     def default(
         cls,
+        binding_name: str,
         private_address: str = "192.0.2.0",
         hostname: str = "",
         cidr: str = "",
@@ -379,6 +388,7 @@ class Network(_max_posargs(0)):
     ) -> "Network":
         """Helper to create a minimal, heavily defaulted Network."""
         return cls(
+            binding_name=binding_name,
             bind_addresses=[
                 BindAddress(
                     interface_name=interface_name,
@@ -453,6 +463,9 @@ class _RelationBase(_max_posargs(2)):
         for databag in self._databags:
             self._validate_databag(databag)
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
     def _validate_databag(self, databag: dict):
         if not isinstance(databag, dict):
             raise StateValidationError(
@@ -485,6 +498,9 @@ class Relation(_RelationBase):
     remote_units_data: Dict["UnitID", "RawDataBagContents"] = dataclasses.field(
         default_factory=lambda: {0: DEFAULT_JUJU_DATABAG.copy()},  # dedup
     )
+
+    def __hash__(self) -> int:
+        return hash(self.id)
 
     @property
     def _remote_app_name(self) -> str:
@@ -520,6 +536,9 @@ class SubordinateRelation(_RelationBase):
     remote_app_name: str = "remote"
     remote_unit_id: int = 0
 
+    def __hash__(self) -> int:
+        return hash(self.id)
+
     @property
     def _remote_unit_ids(self) -> Tuple[int]:
         """Ids of the units on the other end of this relation."""
@@ -554,6 +573,9 @@ class PeerRelation(_RelationBase):
     )
     # mapping from peer unit IDs to their databag contents.
     # Consistency checks will validate that *this unit*'s ID is not in here.
+
+    def __hash__(self) -> int:
+        return hash(self.id)
 
     @property
     def _databags(self):
@@ -762,6 +784,9 @@ class Container(_max_posargs(1)):
     exec_mock: _ExecMock = dataclasses.field(default_factory=dict)
 
     notices: List[Notice] = dataclasses.field(default_factory=list)
+
+    def __hash__(self) -> int:
+        return hash(self.name)
 
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
@@ -972,6 +997,9 @@ class StoredState(_max_posargs(1)):
     def handle_path(self):
         return f"{self.owner_path or ''}/{self._data_type_name}[{self.name}]"
 
+    def __hash__(self) -> int:
+        return hash(self.handle_path)
+
 
 _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
 
@@ -1086,6 +1114,14 @@ class Storage(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
+class Resource(_max_posargs(0)):
+    """Represents a resource made available to the charm."""
+
+    name: str
+    path: "PathLike"
+
+
+@dataclasses.dataclass(frozen=True)
 class State(_max_posargs(0)):
     """Represents the juju-owned portion of a unit's state.
 
@@ -1098,9 +1134,9 @@ class State(_max_posargs(0)):
         default_factory=dict,
     )
     """The present configuration of this charm."""
-    relations: List["AnyRelation"] = dataclasses.field(default_factory=list)
+    relations: FrozenSet["AnyRelation"] = dataclasses.field(default_factory=frozenset)
     """All relations that currently exist for this charm."""
-    networks: Dict[str, Network] = dataclasses.field(default_factory=dict)
+    networks: FrozenSet[Network] = dataclasses.field(default_factory=frozenset)
     """Manual overrides for any relation and extra bindings currently provisioned for this charm.
     If a metadata-defined relation endpoint is not explicitly mapped to a Network in this field,
     it will be defaulted.
@@ -1108,36 +1144,38 @@ class State(_max_posargs(0)):
     support it, but use at your own risk.] If a metadata-defined extra-binding is left empty,
     it will be defaulted.
     """
-    containers: List[Container] = dataclasses.field(default_factory=list)
+    containers: FrozenSet[Container] = dataclasses.field(default_factory=frozenset)
     """All containers (whether they can connect or not) that this charm is aware of."""
-    storage: List[Storage] = dataclasses.field(default_factory=list)
+    storages: FrozenSet[Storage] = dataclasses.field(default_factory=frozenset)
     """All ATTACHED storage instances for this charm.
     If a storage is not attached, omit it from this listing."""
 
     # we don't use sets to make json serialization easier
-    opened_ports: List[_Port] = dataclasses.field(default_factory=list)
+    opened_ports: FrozenSet[_Port] = dataclasses.field(default_factory=frozenset)
     """Ports opened by juju on this charm."""
     leader: bool = False
     """Whether this charm has leadership."""
     model: Model = Model()
     """The model this charm lives in."""
-    secrets: List[Secret] = dataclasses.field(default_factory=list)
+    secrets: FrozenSet[Secret] = dataclasses.field(default_factory=frozenset)
     """The secrets this charm has access to (as an owner, or as a grantee).
     The presence of a secret in this list entails that the charm can read it.
     Whether it can manage it or not depends on the individual secret's `owner` flag."""
-    resources: Dict[str, "PathLike"] = dataclasses.field(default_factory=dict)
-    """Mapping from resource name to path at which the resource can be found."""
+    resources: FrozenSet[Resource] = dataclasses.field(default_factory=frozenset)
+    """All resources that this charm can access."""
     planned_units: int = 1
     """Number of non-dying planned units that are expected to be running this application.
     Use with caution."""
 
-    # represents the OF's event queue. These events will be emitted before the event being
+    # Represents the OF's event queue. These events will be emitted before the event being
     # dispatched, and represent the events that had been deferred during the previous run.
     # If the charm defers any events during "this execution", they will be appended
     # to this list.
     deferred: List["DeferredEvent"] = dataclasses.field(default_factory=list)
     """Events that have been deferred on this charm by some previous execution."""
-    stored_state: List["StoredState"] = dataclasses.field(default_factory=list)
+    stored_states: FrozenSet["StoredState"] = dataclasses.field(
+        default_factory=frozenset,
+    )
     """Contents of a charm's stored state."""
 
     # the current statuses.
@@ -1179,6 +1217,25 @@ class State(_max_posargs(0)):
         # ops.Resources does not contain the source of the resource, so cannot be converted.
         # ops.StoredState is not convenient to initialise with data, so not useful here.
 
+        # It's convenient to pass a set, but we really want the attributes to be
+        # frozen sets to increase the immutability of State objects.
+        for name in [
+            "relations",
+            "containers",
+            "storages",
+            "networks",
+            "opened_ports",
+            "secrets",
+            "resources",
+            "stored_states",
+        ]:
+            val = getattr(self, name)
+            # We check for "not frozenset" rather than "is set" so that you can
+            # actually pass a tuple or list or really any iterable of hashable
+            # objects, and it will end up as a frozenset.
+            if not isinstance(val, frozenset):
+                object.__setattr__(self, name, frozenset(val))
+
     def _update_workload_version(self, new_workload_version: str):
         """Update the current app version and record the previous one."""
         # We don't keep a full history because we don't expect the app version to change more
@@ -1196,6 +1253,16 @@ class State(_max_posargs(0)):
         name = "app_status" if is_app else "unit_status"
         # bypass frozen dataclass
         object.__setattr__(self, name, new_status)
+
+    def _update_opened_ports(self, new_ports: FrozenSet[_Port]):
+        """Update the current opened ports."""
+        # bypass frozen dataclass
+        object.__setattr__(self, "opened_ports", new_ports)
+
+    def _update_secrets(self, new_secrets: FrozenSet[Secret]):
+        """Update the current secrets."""
+        # bypass frozen dataclass
+        object.__setattr__(self, "secrets", new_secrets)
 
     def with_can_connect(self, container_name: str, can_connect: bool) -> "State":
         def replacer(container: Container):
@@ -1215,15 +1282,73 @@ class State(_max_posargs(0)):
             unit_status=_EntityStatus.from_ops(status),
         )
 
-    def get_container(self, container: Union[str, Container]) -> Container:
-        """Get container from this State, based on an input container or its name."""
-        container_name = (
-            container.name if isinstance(container, Container) else container
+    def get_container(self, container: str, /) -> Container:
+        """Get container from this State, based on its name."""
+        for state_container in self.containers:
+            if state_container.name == container:
+                return state_container
+        raise KeyError(f"container: {container} not found in the State")
+
+    def get_network(self, binding_name: str, /) -> Network:
+        """Get network from this State, based on its binding name."""
+        for network in self.networks:
+            if network.binding_name == binding_name:
+                return network
+        raise KeyError(f"network: {binding_name} not found in the State")
+
+    def get_secret(
+        self,
+        *,
+        id: Optional[str] = None,
+        label: Optional[str] = None,
+    ) -> Secret:
+        """Get secret from this State, based on the secret's id or label."""
+        if id is None and label is None:
+            raise ValueError("An id or label must be provided.")
+
+        for secret in self.secrets:
+            if (
+                (id and label and secret.id == id and secret.label == label)
+                or (id and label is None and secret.id == id)
+                or (id is None and label and secret.label == label)
+            ):
+                return secret
+        raise KeyError("secret: not found in the State")
+
+    def get_stored_state(
+        self,
+        stored_state: str,
+        /,
+        *,
+        owner_path: Optional[str] = None,
+    ) -> StoredState:
+        """Get stored state from this State, based on the stored state's name and owner_path."""
+        for ss in self.stored_states:
+            if ss.name == stored_state and ss.owner_path == owner_path:
+                return ss
+        raise ValueError(f"stored state: {stored_state} not found in the State")
+
+    def get_storage(
+        self,
+        storage: str,
+        /,
+        *,
+        index: Optional[int] = 0,
+    ) -> Storage:
+        """Get storage from this State, based on the storage's name and index."""
+        for state_storage in self.storages:
+            if state_storage.name == storage and storage.index == index:
+                return state_storage
+        raise ValueError(
+            f"storage: name={storage}, index={index} not found in the State",
         )
-        containers = [c for c in self.containers if c.name == container_name]
-        if not containers:
-            raise ValueError(f"container: {container_name} not found in the State")
-        return containers[0]
+
+    def get_relation(self, relation: int, /) -> "AnyRelation":
+        """Get relation from this State, based on the relation's id."""
+        for state_relation in self.relations:
+            if state_relation.id == relation:
+                return state_relation
+        raise KeyError(f"relation: id={relation} not found in the State")
 
     def get_relations(self, endpoint: str) -> Tuple["AnyRelation", ...]:
         """Get all relations on this endpoint from the current state."""
@@ -1239,10 +1364,6 @@ class State(_max_posargs(0)):
             for r in self.relations
             if normalize_name(r.endpoint) == normalized_endpoint
         )
-
-    def get_storages(self, name: str) -> Tuple["Storage", ...]:
-        """Get all storages with this name."""
-        return tuple(s for s in self.storage if s.name == name)
 
 
 def _is_valid_charmcraft_25_metadata(meta: Dict[str, Any]):
