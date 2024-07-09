@@ -919,7 +919,6 @@ class UnknownStatus(_EntityStatus, ops.UnknownStatus):
 
     def __init__(self):
         super().__init__(name=self.name)
-        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -930,7 +929,6 @@ class ErrorStatus(_EntityStatus, ops.ErrorStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="error", message=message)
-        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -941,7 +939,6 @@ class ActiveStatus(_EntityStatus, ops.ActiveStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="active", message=message)
-        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -952,7 +949,6 @@ class BlockedStatus(_EntityStatus, ops.BlockedStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="blocked", message=message)
-        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -963,7 +959,6 @@ class MaintenanceStatus(_EntityStatus, ops.MaintenanceStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="maintenance", message=message)
-        self.__class__._entity_statuses[self.name] = self.__class__
 
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
@@ -974,7 +969,16 @@ class WaitingStatus(_EntityStatus, ops.WaitingStatus):
 
     def __init__(self, message: str = ""):
         super().__init__(name="waiting", message=message)
-        self.__class__._entity_statuses[self.name] = self.__class__
+
+
+_EntityStatus._entity_statuses.update(
+    unknown=UnknownStatus,
+    error=ErrorStatus,
+    active=ActiveStatus,
+    blocked=BlockedStatus,
+    maintenance=MaintenanceStatus,
+    waiting=WaitingStatus,
+)
 
 
 @dataclasses.dataclass(frozen=True)
