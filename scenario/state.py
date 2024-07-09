@@ -888,11 +888,7 @@ class _EntityStatus:
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
 class UnknownStatus(_EntityStatus, ops.UnknownStatus):
-    """The unit status is unknown.
-
-    A unit-agent has finished calling install, config-changed, and start, but the
-    charm has not called status-set yet.
-    """
+    __doc__ = ops.UnknownStatus.__doc__
 
     name: Literal["unknown"] = "unknown"
 
@@ -903,11 +899,7 @@ class UnknownStatus(_EntityStatus, ops.UnknownStatus):
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
 class ErrorStatus(_EntityStatus, ops.ErrorStatus):
-    """The unit status is error.
-
-    The unit-agent has encountered an error (the application or unit requires
-    human intervention in order to operate correctly).
-    """
+    __doc__ = ops.ErrorStatus.__doc__
 
     name: Literal["error"] = "error"
 
@@ -918,11 +910,7 @@ class ErrorStatus(_EntityStatus, ops.ErrorStatus):
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
 class ActiveStatus(_EntityStatus, ops.ActiveStatus):
-    """The unit/app is ready.
-
-    Use the :attr:`message` to provide details when the unit/app is operational
-    but in a degraded state (such as lacking high availability).
-    """
+    __doc__ = ops.ActiveStatus.__doc__
 
     name: Literal["active"] = "active"
 
@@ -933,10 +921,7 @@ class ActiveStatus(_EntityStatus, ops.ActiveStatus):
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
 class BlockedStatus(_EntityStatus, ops.BlockedStatus):
-    """The unit/app requires manual intervention.
-
-    An admin has to manually intervene to unblock the unit/app and let it proceed.
-    """
+    __doc__ = ops.BlockedStatus.__doc__
 
     name: Literal["blocked"] = "blocked"
 
@@ -947,15 +932,7 @@ class BlockedStatus(_EntityStatus, ops.BlockedStatus):
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
 class MaintenanceStatus(_EntityStatus, ops.MaintenanceStatus):
-    """The unit/app is performing maintenance tasks.
-
-    The unit/app is performing an operation such as ``apt install`` or waiting for
-    something under its control, such as ``pebble-ready`` or an ``exec``
-    operation in the workload container.
-
-    In constrast to :class:`WaitingStatus`, ``MaintenanceStatus`` reflects
-    activity on this unit or charm, not on peers or related units.
-    """
+    __doc__ = ops.MaintenanceStatus.__doc__
 
     name: Literal["maintenance"] = "maintenance"
 
@@ -966,14 +943,7 @@ class MaintenanceStatus(_EntityStatus, ops.MaintenanceStatus):
 
 @dataclasses.dataclass(frozen=True, eq=False, repr=False)
 class WaitingStatus(_EntityStatus, ops.WaitingStatus):
-    """The unit/app is waiting on an integration.
-
-    The unit/app is waiting on a charm with which it is integrated, such as
-    waiting for an integrated database charm to provide credentials.
-
-    In contrast to :class:`MaintenanceStatus`, ``WaitingStatus`` reflects
-    activity on related units, not on this unit or charm.
-    """
+    __doc__ = ops.WaitingStatus.__doc__
 
     name: Literal["waiting"] = "waiting"
 
