@@ -690,7 +690,25 @@ notices = [
     scenario.Notice(key="example.com/c"),
 ]
 container = scenario.Container("my-container", notices=notices)
-ctx.run(container.get_notice("example.com/c").event, scenario.State(containers=[container]))
+state = scenario.State(containers={container})
+ctx.run(ctx.on.pebble_custom_notice(container=container, notice=notices[-1]), state)
+```
+
+### Pebble Checks
+
+A Pebble plan can contain checks, and when those checks exceed the configured
+failure threshold, or start succeeding again after, Juju will emit a
+pebble-check-failed or pebble-check-recovered event. In order to simulate these
+events, you need to add a `Check` to the container. Note that the status of the
+check doesn't have to match the event being generated: by the time that Juju
+sends a pebble-check-failed event the check might have started passing again.
+
+```python
+ctx = scenario.Context(MyCharm, meta={"name": "foo", "containers": {"my-container": {}}})
+check = scenario.Check("http-check", failures=7, status=ops.pebble.CheckStatus.DOWN)
+container = scenario.Container("my-container", checks={check})
+state = scenario.State(containers={container})
+ctx.run(ctx.on.pebble_check_failed(check=check, container=container), state=state)
 ```
 
 ## Storage

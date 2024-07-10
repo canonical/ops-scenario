@@ -13,8 +13,10 @@ from scenario.logger import logger as scenario_logger
 from scenario.runtime import Runtime
 from scenario.state import (
     Action,
+    Check,
     Container,
     MetadataNotFoundError,
+    Notice,
     Secret,
     Storage,
     _CharmSpec,
@@ -311,6 +313,30 @@ class _CharmEvents:
     @staticmethod
     def pebble_ready(container: Container):
         return _Event(f"{container.name}_pebble_ready", container=container)
+
+    @staticmethod
+    def pebble_custom_notice(container: Container, notice: Notice):
+        return _Event(
+            f"{container.name}_pebble_custom_notice",
+            container=container,
+            notice=notice,
+        )
+
+    @staticmethod
+    def pebble_check_failed(container: Container, check: Check):
+        return _Event(
+            f"{container.name}_pebble_check_failed",
+            container=container,
+            check=check,
+        )
+
+    @staticmethod
+    def pebble_check_recovered(container: Container, check: Check):
+        return _Event(
+            f"{container.name}_pebble_check_recovered",
+            container=container,
+            check=check,
+        )
 
 
 class Context:

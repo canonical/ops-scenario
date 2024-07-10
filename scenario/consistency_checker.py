@@ -560,6 +560,7 @@ def check_containers_consistency(
     meta_containers = list(map(normalize_name, meta.get("containers", {})))
     state_containers = [normalize_name(c.name) for c in state.containers]
     all_notices = {notice.id for c in state.containers for notice in c.notices}
+    all_checks = {check.name for c in state.containers for check in c.checks}
     errors = []
 
     # it's fine if you have containers in meta that are not in state.containers (yet), but it's
@@ -583,6 +584,11 @@ def check_containers_consistency(
             errors.append(
                 f"the event being processed concerns notice {event.notice!r}, but that "
                 "notice is not in any of the containers present in the state.",
+            )
+        if event.check and event.check.name not in all_checks:
+            errors.append(
+                f"the event being processed concerns check {event.check!r}, but that "
+                "check is not in any of the containers present in the state.",
             )
 
     # - a container in state.containers is not in meta.containers

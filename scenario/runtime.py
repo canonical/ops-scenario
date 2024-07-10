@@ -271,6 +271,9 @@ class Runtime:
                 },
             )
 
+        if check := event.check:
+            env["JUJU_PEBBLE_CHECK_NAME"] = check.name
+
         if storage := event.storage:
             env.update({"JUJU_STORAGE_ID": f"{storage.name}/{storage.index}"})
 
