@@ -183,10 +183,12 @@ made private:
 * The `RelationBase` class is now private.
 * The `Event` class is now private.
 
-### Drop use of outdated functionality
+### Catan replaces `scenario.sequences`
 
 The `scenario.sequences` module has been removed. We encourage you to look at
 the new [Catan](https://github.com/PietroPasotti/catan) package.
+
+### Use the jsonpatch library directly
 
 The `State.jsonpatch_delta()` and `state.sort_patch()` methods have been
 removed. We are considering adding delta-comparisons of state again in the
@@ -194,29 +196,43 @@ future, but have not yet decided how this will look. In the meantime, you can
 use the jsonpatch package directly if necessary. See the tests/helpers.py file
 for an example.
 
+### No need to call `cleanup`/`clear`
+
 The `Context.cleanup()` and `Context.clear()` methods have been removed. You
 do not need to manually call any cleanup methods after running an event. If you
 want a fresh `Context` (e.g. with no history), you should create a new object.
+
+### Use the context handler rather than `pre_event` and `post_event`
 
 The deprecated `pre_event` and `post_event` arguments to `run` and `run_action`
 have been removed. Use the appropriate context handler instead.
 
 TODO: name the context handler above, once we decide on manager/event/event_manager/context-as-manager, etc.
 
+### Only include secrets in the state if the charm has permission to view them
+
 `Secret.granted` has been removed. Only include in the state the secrets that
 the charm has permission to (at least) view.
 
+### Use 'app' for application-owned secrets
+
 `Secret.owner` should be `'app'` (or `'unit'` or `None`) rather than
 `'application'`.
+
+### Compare statuses with status objects
 
 It is no longer possible to compare statuses with tuples. Create the appropriate
 status object and compare to that. Note that you should always compare statuses
 with `==` not `is`.
 
+### Pass the name of the container to `State.get_container`
+
 The `State.get_container` method previously allowed passing in a `Container`
 object or a container name, but now only accepts a name. This is more consistent
 with the other new `get_*` methods, some of which would be quite complex if they
 accepted an object or key.
+
+### Use `State.storages` to get all the storages in the state
 
 The `State.get_storages` method has been removed. This was primarily intended
 for internal use. You can use `State.get_storage` or iterate through
