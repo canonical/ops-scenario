@@ -443,25 +443,30 @@ def test_pebble_custom_notice_in_charm():
 
 
 def test_pebble_check_failed():
+    infos = []
+
     class MyCharm(CharmBase):
         def __init__(self, framework):
             super().__init__(framework)
             framework.observe(self.on.foo_pebble_check_failed, self._on_check_failed)
 
         def _on_check_failed(self, event):
-            info = event.info
-            assert info.name == "http-check"
-            assert info.status == pebble.CheckStatus.DOWN
-            assert info.failures == 7
+            infos.append(event.info)
 
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
     check = CheckInfo("http-check", failures=7, status=pebble.CheckStatus.DOWN)
     container = Container("foo", checks={check})
     state = State(containers={container})
     ctx.run(ctx.on.pebble_check_failed(check=check, container=container), state=state)
+    assert len(infos) == 1
+    assert infos[0].name == "http-check"
+    assert infos[0].status == pebble.CheckStatus.DOWN
+    assert infos[0].failures == 7
 
 
 def test_pebble_check_recovered():
+    infos = []
+
     class MyCharm(CharmBase):
         def __init__(self, framework):
             super().__init__(framework)
@@ -470,10 +475,7 @@ def test_pebble_check_recovered():
             )
 
         def _on_check_recovered(self, event):
-            info = event.info
-            assert info.name == "http-check"
-            assert info.status == pebble.CheckStatus.UP
-            assert info.failures == 0
+            infos.append(event.info)
 
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
     check = CheckInfo("http-check")
@@ -482,3 +484,7 @@ def test_pebble_check_recovered():
     ctx.run(
         ctx.on.pebble_check_recovered(check=check, container=container), state=state
     )
+    assert len(infos) == 1
+    assert infos[0].name == "http-check"
+    assert infos[0].status == pebble.CheckStatus.UP
+    assert infos[0].failures == 0
