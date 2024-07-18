@@ -769,7 +769,7 @@ class Notice(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
-class Check(_max_posargs(1)):
+class CheckInfo(_max_posargs(1)):
     name: str
     """Name of the check."""
 
@@ -869,7 +869,7 @@ class Container(_max_posargs(1)):
 
     notices: List[Notice] = dataclasses.field(default_factory=list)
 
-    checks: FrozenSet[Check] = frozenset()
+    checks: FrozenSet[CheckInfo] = frozenset()
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -1668,7 +1668,7 @@ class _Event:
     notice: Optional[Notice] = None
     """If this is a Pebble notice event, the notice it refers to."""
 
-    check: Optional[Check] = None
+    check: Optional[CheckInfo] = None
     """If this is a Pebble check event, the check it refers to."""
 
     action: Optional["Action"] = None
@@ -1866,7 +1866,7 @@ def deferred(
     relation: Optional["Relation"] = None,
     container: Optional["Container"] = None,
     notice: Optional["Notice"] = None,
-    check: Optional["Check"] = None,
+    check: Optional["CheckInfo"] = None,
 ):
     """Construct a DeferredEvent from an Event or an event name."""
     if isinstance(event, str):

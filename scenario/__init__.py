@@ -7,8 +7,8 @@ from scenario.state import (
     ActiveStatus,
     Address,
     BindAddress,
-    Check,
     BlockedStatus,
+    CheckInfo,
     CloudCredential,
     CloudSpec,
     Container,
@@ -40,7 +40,7 @@ from scenario.state import (
 __all__ = [
     "Action",
     "ActionOutput",
-    "Check",
+    "CheckInfo",
     "CloudCredential",
     "CloudSpec",
     "Context",

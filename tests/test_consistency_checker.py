@@ -8,7 +8,7 @@ from scenario.runtime import InconsistentScenarioError
 from scenario.state import (
     RELATION_EVENTS_SUFFIX,
     Action,
-    Check,
+    CheckInfo,
     CloudCredential,
     CloudSpec,
     Container,
@@ -85,7 +85,7 @@ def test_workload_event_without_container():
         _Event("foo-pebble-custom-notice", container=Container("foo"), notice=notice),
         _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
-    check = Check("http-check")
+    check = CheckInfo("http-check")
     assert_consistent(
         State(containers={Container("foo", checks={check})}),
         _Event("foo-pebble-check-failed", container=Container("foo"), check=check),

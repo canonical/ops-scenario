@@ -10,7 +10,7 @@ from ops.framework import Framework
 from ops.pebble import ExecError, ServiceStartup, ServiceStatus
 
 from scenario import Context
-from scenario.state import Check, Container, ExecOutput, Mount, Notice, State
+from scenario.state import CheckInfo, Container, ExecOutput, Mount, Notice, State
 from tests.helpers import jsonpatch_delta, trigger
 
 
@@ -455,7 +455,7 @@ def test_pebble_check_failed():
             assert info.failures == 7
 
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
-    check = Check("http-check", failures=7, status=pebble.CheckStatus.DOWN)
+    check = CheckInfo("http-check", failures=7, status=pebble.CheckStatus.DOWN)
     container = Container("foo", checks={check})
     state = State(containers={container})
     ctx.run(ctx.on.pebble_check_failed(check=check, container=container), state=state)
@@ -476,7 +476,7 @@ def test_pebble_check_recovered():
             assert info.failures == 0
 
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
-    check = Check("http-check")
+    check = CheckInfo("http-check")
     container = Container("foo", checks={check})
     state = State(containers={container})
     ctx.run(
