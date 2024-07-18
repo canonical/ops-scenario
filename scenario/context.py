@@ -323,19 +323,19 @@ class _CharmEvents:
         )
 
     @staticmethod
-    def pebble_check_failed(container: Container, check: CheckInfo):
+    def pebble_check_failed(container: Container, info: CheckInfo):
         return _Event(
             f"{container.name}_pebble_check_failed",
             container=container,
-            check=check,
+            check_info=info,
         )
 
     @staticmethod
-    def pebble_check_recovered(container: Container, check: CheckInfo):
+    def pebble_check_recovered(container: Container, info: CheckInfo):
         return _Event(
             f"{container.name}_pebble_check_recovered",
             container=container,
-            check=check,
+            check_info=info,
         )
 
 

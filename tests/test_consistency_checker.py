@@ -88,22 +88,26 @@ def test_workload_event_without_container():
     check = CheckInfo("http-check")
     assert_consistent(
         State(containers={Container("foo", checks={check})}),
-        _Event("foo-pebble-check-failed", container=Container("foo"), check=check),
+        _Event("foo-pebble-check-failed", container=Container("foo"), check_info=check),
         _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
     assert_inconsistent(
         State(containers={Container("foo")}),
-        _Event("foo-pebble-check-failed", container=Container("foo"), check=check),
+        _Event("foo-pebble-check-failed", container=Container("foo"), check_info=check),
         _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
     assert_consistent(
         State(containers={Container("foo", checks={check})}),
-        _Event("foo-pebble-check-recovered", container=Container("foo"), check=check),
+        _Event(
+            "foo-pebble-check-recovered", container=Container("foo"), check_info=check
+        ),
         _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
     assert_inconsistent(
         State(containers={Container("foo")}),
-        _Event("foo-pebble-check-recovered", container=Container("foo"), check=check),
+        _Event(
+            "foo-pebble-check-recovered", container=Container("foo"), check_info=check
+        ),
         _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
 

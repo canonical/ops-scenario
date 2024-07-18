@@ -1668,8 +1668,8 @@ class _Event:
     notice: Optional[Notice] = None
     """If this is a Pebble notice event, the notice it refers to."""
 
-    check: Optional[CheckInfo] = None
-    """If this is a Pebble check event, the check it refers to."""
+    check_info: Optional[CheckInfo] = None
+    """If this is a Pebble check event, the check info it provides."""
 
     action: Optional["Action"] = None
     """If this is an action event, the :class:`Action` it refers to."""
@@ -1788,8 +1788,8 @@ class _Event:
                         "notice_type": notice_type,
                     },
                 )
-            elif self.check:
-                snapshot_data["check_name"] = self.check.name
+            elif self.check_info:
+                snapshot_data["check_name"] = self.check_info.name
 
         elif self._is_relation_event:
             # this is a RelationEvent.
@@ -1866,7 +1866,7 @@ def deferred(
     relation: Optional["Relation"] = None,
     container: Optional["Container"] = None,
     notice: Optional["Notice"] = None,
-    check: Optional["CheckInfo"] = None,
+    check_info: Optional["CheckInfo"] = None,
 ):
     """Construct a DeferredEvent from an Event or an event name."""
     if isinstance(event, str):
@@ -1875,6 +1875,6 @@ def deferred(
             relation=relation,
             container=container,
             notice=notice,
-            check=check,
+            check_info=check_info,
         )
     return event.deferred(handler=handler, event_id=event_id)

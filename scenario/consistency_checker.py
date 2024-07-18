@@ -585,9 +585,9 @@ def check_containers_consistency(
                 f"the event being processed concerns notice {event.notice!r}, but that "
                 "notice is not in any of the containers present in the state.",
             )
-        if event.check and event.check.name not in all_checks:
+        if event.check_info and event.check_info.name not in all_checks:
             errors.append(
-                f"the event being processed concerns check {event.check!r}, but that "
+                f"the event being processed concerns check {event.check_info.name}, but that "
                 "check is not in any of the containers present in the state.",
             )
 

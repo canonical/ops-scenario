@@ -457,7 +457,7 @@ def test_pebble_check_failed():
     check = CheckInfo("http-check", failures=7, status=pebble.CheckStatus.DOWN)
     container = Container("foo", checks={check})
     state = State(containers={container})
-    ctx.run(ctx.on.pebble_check_failed(check=check, container=container), state=state)
+    ctx.run(ctx.on.pebble_check_failed(container, check), state=state)
     assert len(infos) == 1
     assert infos[0].name == "http-check"
     assert infos[0].status == pebble.CheckStatus.DOWN
@@ -481,9 +481,7 @@ def test_pebble_check_recovered():
     check = CheckInfo("http-check")
     container = Container("foo", checks={check})
     state = State(containers={container})
-    ctx.run(
-        ctx.on.pebble_check_recovered(check=check, container=container), state=state
-    )
+    ctx.run(ctx.on.pebble_check_recovered(container, check), state=state)
     assert len(infos) == 1
     assert infos[0].name == "http-check"
     assert infos[0].status == pebble.CheckStatus.UP
