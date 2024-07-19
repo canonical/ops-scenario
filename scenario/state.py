@@ -869,7 +869,7 @@ class Container(_max_posargs(1)):
 
     notices: List[Notice] = dataclasses.field(default_factory=list)
 
-    checks: FrozenSet[CheckInfo] = frozenset()
+    check_infos: FrozenSet[CheckInfo] = frozenset()
 
     def __hash__(self) -> int:
         return hash(self.name)

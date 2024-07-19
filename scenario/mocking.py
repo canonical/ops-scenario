@@ -701,7 +701,7 @@ class _MockPebbleClient(_TestingPebbleClient):
                 else:
                     notice_type = str(notice.type)
                 self._notices[notice_type, notice.key] = notice._to_ops()
-            for check in container.checks:
+            for check in container.check_infos:
                 self._check_infos[check.name] = check._to_ops()
 
     def get_plan(self) -> pebble.Plan:

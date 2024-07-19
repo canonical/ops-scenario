@@ -455,7 +455,7 @@ def test_pebble_check_failed():
 
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
     check = CheckInfo("http-check", failures=7, status=pebble.CheckStatus.DOWN)
-    container = Container("foo", checks={check})
+    container = Container("foo", check_infos={check})
     state = State(containers={container})
     ctx.run(ctx.on.pebble_check_failed(container, check), state=state)
     assert len(infos) == 1
@@ -479,7 +479,7 @@ def test_pebble_check_recovered():
 
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
     check = CheckInfo("http-check")
-    container = Container("foo", checks={check})
+    container = Container("foo", check_infos={check})
     state = State(containers={container})
     ctx.run(ctx.on.pebble_check_recovered(container, check), state=state)
     assert len(infos) == 1

@@ -560,7 +560,7 @@ def check_containers_consistency(
     meta_containers = list(map(normalize_name, meta.get("containers", {})))
     state_containers = [normalize_name(c.name) for c in state.containers]
     all_notices = {notice.id for c in state.containers for notice in c.notices}
-    all_checks = {check.name for c in state.containers for check in c.checks}
+    all_checks = {check.name for c in state.containers for check in c.check_infos}
     errors = []
 
     # it's fine if you have containers in meta that are not in state.containers (yet), but it's
