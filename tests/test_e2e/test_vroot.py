@@ -56,16 +56,16 @@ def test_charm_virtual_root_cleanup_if_exists(charm_virtual_root):
     meta_file.write_text(raw_ori_meta)
 
     ctx = Context(MyCharm, meta=MyCharm.META, charm_root=charm_virtual_root)
-    with ctx.manager(
+    with ctx(
         ctx.on.start(),
         State(),
-    ) as mgr:
+    ) as event:
         assert meta_file.exists()
         assert meta_file.read_text() == yaml.safe_dump({"name": "my-charm"})
         assert (
-            mgr.charm.meta.name == "my-charm"
+            event.charm.meta.name == "my-charm"
         )  # not karl! Context.meta takes precedence
-        mgr.run()
+        event.run()
         assert meta_file.exists()
 
     # meta file was restored to its previous contents
@@ -79,13 +79,13 @@ def test_charm_virtual_root_cleanup_if_not_exists(charm_virtual_root):
     assert not meta_file.exists()
 
     ctx = Context(MyCharm, meta=MyCharm.META, charm_root=charm_virtual_root)
-    with ctx.manager(
+    with ctx(
         ctx.on.start(),
         State(),
-    ) as mgr:
+    ) as event:
         assert meta_file.exists()
         assert meta_file.read_text() == yaml.safe_dump({"name": "my-charm"})
-        mgr.run()
+        event.run()
         assert not meta_file.exists()
 
     assert not meta_file.exists()

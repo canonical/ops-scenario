@@ -154,11 +154,10 @@ class _EventManager(_Manager):
 
 
 class _ActionManager(_Manager):
-    if TYPE_CHECKING:  # pragma: no cover
-        output: ActionOutput  # pyright: ignore[reportIncompatibleVariableOverride]
+    output: ActionOutput  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        def run(self) -> "ActionOutput":
-            return cast("ActionOutput", super().run())
+    def run_action(self) -> "ActionOutput":
+        return cast("ActionOutput", super().run())
 
     @property
     def _runner(self):
@@ -600,37 +599,29 @@ class Context:
         else:
             self.unit_status_history.append(state.unit_status)
 
-    def manager(self, event: "_Event", state: "State"):
+    def __call__(self, event: Union["_Event", "Action"], state: "State"):
         """Context manager to introspect live charm object before and after the event is emitted.
 
         Usage::
 
             ctx = Context(MyCharm)
-            with ctx.manager(ctx.on.start(), State()) as manager:
-                assert manager.charm._some_private_attribute == "foo"  # noqa
-                manager.run()  # this will fire the event
-                assert manager.charm._some_private_attribute == "bar"  # noqa
+            with ctx(ctx.on.start(), State()) as event:
+                event.charm._some_private_setup()
+                event.run()  # this will fire the event
+                assert event.charm._some_private_attribute == "bar"  # noqa
+
+            with ctx(Action("foo"), State()) as event:
+                event.charm._some_private_setup()
+                event.run_action()  # this will fire the event
+                assert event.charm._some_private_attribute == "bar"  # noqa
 
         Args:
-            event: the :class:`Event` that the charm will respond to.
+            event: the :class:`Event` or :class:`Action` that the charm will respond to.
             state: the :class:`State` instance to use when handling the Event.
         """
+        if isinstance(event, Action) or event.action:
+            return _ActionManager(self, event, state)
         return _EventManager(self, event, state)
-
-    def action_manager(self, action: "_Action", state: "State"):
-        """Context manager to introspect live charm object before and after the event is emitted.
-
-        Usage:
-        >>> with Context().action_manager(Action("foo"), State()) as manager:
-        >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
-        >>>     manager.run()  # this will fire the event
-        >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
-
-        :arg action: the Action that the charm will execute.
-        :arg state: the State instance to use as data source for the hook tool calls that the
-            charm will invoke when handling the Action (event).
-        """
-        return _ActionManager(self, action, state)
 
     @contextmanager
     def _run_event(self, event: "_Event", state: "State"):

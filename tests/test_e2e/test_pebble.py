@@ -128,9 +128,9 @@ def test_fs_pull(charm_cls, make_dirs):
         charm_type=charm_cls,
         meta={"name": "foo", "containers": {"foo": {}}},
     )
-    with ctx.manager(ctx.on.start(), state=state) as mgr:
-        out = mgr.run()
-        callback(mgr.charm)
+    with ctx(ctx.on.start(), state=state) as event:
+        out = event.run()
+        callback(event.charm)
 
     if make_dirs:
         # file = (out.get_container("foo").mounts["foo"].source + "bar/baz.txt").open("/foo/bar/baz.txt")
@@ -318,8 +318,8 @@ def test_exec_wait_error(charm_cls):
     )
 
     ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
-    with ctx.manager(ctx.on.start(), state) as mgr:
-        container = mgr.charm.unit.get_container("foo")
+    with ctx(ctx.on.start(), state) as event:
+        container = event.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         with pytest.raises(ExecError):
             proc.wait()
@@ -340,8 +340,8 @@ def test_exec_wait_output(charm_cls):
     )
 
     ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
-    with ctx.manager(ctx.on.start(), state) as mgr:
-        container = mgr.charm.unit.get_container("foo")
+    with ctx(ctx.on.start(), state) as event:
+        container = event.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         out, err = proc.wait_output()
         assert out == "hello pebble"
@@ -360,8 +360,8 @@ def test_exec_wait_output_error(charm_cls):
     )
 
     ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
-    with ctx.manager(ctx.on.start(), state) as mgr:
-        container = mgr.charm.unit.get_container("foo")
+    with ctx(ctx.on.start(), state) as event:
+        container = event.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         with pytest.raises(ExecError):
             proc.wait_output()
@@ -381,10 +381,10 @@ def test_pebble_custom_notice(charm_cls):
 
     state = State(containers=[container])
     ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
-    with ctx.manager(
+    with ctx(
         ctx.on.pebble_custom_notice(container=container, notice=notices[-1]), state
-    ) as mgr:
-        container = mgr.charm.unit.get_container("foo")
+    ) as event:
+        container = event.charm.unit.get_container("foo")
         assert container.get_notices() == [n._to_ops() for n in notices]
 
 

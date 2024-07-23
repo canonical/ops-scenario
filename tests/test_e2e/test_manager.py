@@ -65,7 +65,7 @@ def test_manager_reemit_fails(mycharm):
 
 def test_context_manager(mycharm):
     ctx = Context(mycharm, meta=mycharm.META)
-    with ctx.manager(ctx.on.start(), State()) as manager:
+    with ctx(ctx.on.start(), State()) as manager:
         state_out = manager.run()
         assert isinstance(state_out, State)
     assert ctx.emitted_events[0].handle.kind == "start"
@@ -73,7 +73,7 @@ def test_context_manager(mycharm):
 
 def test_context_action_manager(mycharm):
     ctx = Context(mycharm, meta=mycharm.META, actions=mycharm.ACTIONS)
-    with ctx.action_manager(ctx.on.action("do-x"), State()) as manager:
-        ao = manager.run()
+    with ctx(ctx.on.action("do-x"), State()) as manager:
+        ao = manager.run_action()
         assert isinstance(ao, ActionOutput)
     assert ctx.emitted_events[0].handle.kind == "do_x_action"
