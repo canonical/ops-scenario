@@ -31,6 +31,17 @@ ctx.run(ctx.on.pebble_ready(container=container), state)
 ctx.run(ctx.on.relation_joined(relation=relation), state)
 ```
 
+The same applies to action events:
+
+```python
+# Older Scenario code.
+action = Action("backup", params={...})
+ctx.run_action(action, state)
+
+# Scenario 7.x
+ctx.run_action(ctx.on.action("backup", params={...}), state)
+```
+
 ### State components are (frozen) sets
 
 Like containers, relations, and networks, state components do not have any
@@ -109,6 +120,31 @@ duplicate_relation = relation.copy()
 # Scenario 7.x
 new_container = dataclasses.replace(container, can_connect=True)
 duplicate_relation = copy.deepcopy(relation)
+```
+
+### Use the Context object as a context manager
+
+The deprecated `pre_event` and `post_event` arguments to `run` and `run_action`
+have been removed: use the appropriate context handler instead. In addition, the
+`Context` object itself is now used for a context manager, rather than having
+`.manager()` and `action_manager()` methods.
+
+```python
+# Older Scenario code.
+ctx = Context(MyCharm)
+state = ctx.run("start", pre_event=lambda charm: charm.prepare(), state=State())
+
+ctx = Context(MyCharm)
+with ctx.manager("start", State()) as mgr:
+    mgr.charm.prepare()
+assert mgr.output....
+
+# Scenario 7.x
+ctx = Context(MyCharm)
+with ctx(ctx.on.start(), State()) as event:
+    event.charm.prepare()
+    out = event.run()  # Or run_action() for an action event.
+    assert out...
 ```
 
 ### Define resources with the Resource class
@@ -201,13 +237,6 @@ for an example.
 The `Context.cleanup()` and `Context.clear()` methods have been removed. You
 do not need to manually call any cleanup methods after running an event. If you
 want a fresh `Context` (e.g. with no history), you should create a new object.
-
-### Use the context handler rather than `pre_event` and `post_event`
-
-The deprecated `pre_event` and `post_event` arguments to `run` and `run_action`
-have been removed. Use the appropriate context handler instead.
-
-TODO: name the context handler above, once we decide on manager/event/event_manager/context-as-manager, etc.
 
 ### Only include secrets in the state if the charm has permission to view them
 
