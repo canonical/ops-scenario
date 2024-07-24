@@ -169,9 +169,10 @@ def test_add(mycharm, app):
             charm.app.add_secret({"foo": "bar"}, label="mylabel")
         else:
             charm.unit.add_secret({"foo": "bar"}, label="mylabel")
+        output = event.run()
 
-    assert event.output.secrets
-    secret = event.output.get_secret(label="mylabel")
+    assert output.secrets
+    secret = output.get_secret(label="mylabel")
     assert secret.contents[0] == {"foo": "bar"}
     assert secret.label == "mylabel"
 
@@ -404,7 +405,8 @@ def test_grant(mycharm, app):
             secret.grant(relation=foo)
         else:
             secret.grant(relation=foo, unit=foo.units.pop())
-    vals = list(event.output.get_secret(label="mylabel").remote_grants.values())
+        output = event.run()
+    vals = list(output.get_secret(label="mylabel").remote_grants.values())
     assert vals == [{"remote"}] if app else [{"remote/0"}]
 
 
@@ -434,8 +436,9 @@ def test_update_metadata(mycharm):
             expire=exp,
             rotate=SecretRotate.DAILY,
         )
+        output = event.run()
 
-    secret_out = event.output.get_secret(label="babbuccia")
+    secret_out = output.get_secret(label="babbuccia")
     assert secret_out.label == "babbuccia"
     assert secret_out.rotate == SecretRotate.DAILY
     assert secret_out.description == "blu"
@@ -519,25 +522,28 @@ def test_add_grant_revoke_remove():
         bar_relation = charm.model.relations["bar"][0]
 
         secret.grant(bar_relation)
+        output = event.run()
 
-    assert event.output.secrets
-    scenario_secret = event.output.get_secret(label="mylabel")
+    assert output.secrets
+    scenario_secret = output.get_secret(label="mylabel")
     assert relation_remote_app in scenario_secret.remote_grants[relation_id]
 
-    with ctx(ctx.on.start(), event.output) as event:
+    with ctx(ctx.on.start(), output) as event:
         charm: GrantingCharm = event.charm
         secret = charm.model.get_secret(label="mylabel")
         secret.revoke(bar_relation)
+        output = event.run()
 
-    scenario_secret = event.output.get_secret(label="mylabel")
+    scenario_secret = output.get_secret(label="mylabel")
     assert scenario_secret.remote_grants == {}
 
-    with ctx(ctx.on.start(), event.output) as event:
+    with ctx(ctx.on.start(), output) as event:
         charm: GrantingCharm = event.charm
         secret = charm.model.get_secret(label="mylabel")
         secret.remove_all_revisions()
+        output = event.run()
 
-    assert not event.output.get_secret(label="mylabel").contents  # secret wiped
+    assert not output.get_secret(label="mylabel").contents  # secret wiped
 
 
 def test_no_additional_positional_arguments():

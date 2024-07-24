@@ -1105,7 +1105,7 @@ Scenario is a black-box, state-transition testing framework. It makes it trivial
 B, but not to assert that, in the context of this charm execution, with this state, a certain charm-internal method was called and returned a
 given piece of data, or would return this and that _if_ it had been called.
 
-Scenario offers a cheekily-named context manager for this use case specifically:
+The Scenario `Context` object can be used as a context manager for this use case specifically:
 
 ```python notest
 from charms.bar.lib_name.v1.charm_lib import CharmLib
@@ -1127,10 +1127,9 @@ class MyCharm(ops.CharmBase):
 
 def test_live_charm_introspection(mycharm):
     ctx = scenario.Context(mycharm, meta=mycharm.META)
-    # If you want to do this with actions, you can use `Context.action_manager` instead.
-    with ctx.manager("start", scenario.State()) as manager:
+    with ctx(ctx.on.start(), scenario.State()) as event:
         # This is your charm instance, after ops has set it up:
-        charm: MyCharm = manager.charm
+        charm: MyCharm = event.charm
         
         # We can check attributes on nested Objects or the charm itself:
         assert charm.my_charm_lib.foo == "foo"
@@ -1138,7 +1137,8 @@ def test_live_charm_introspection(mycharm):
         assert charm._stored.a == "a"
 
         # This will tell ops.main to proceed with normal execution and emit the "start" event on the charm:
-        state_out = manager.run()
+        # If you want to do this with actions, you should use `run_action` instead.
+        state_out = event.run()
     
         # After that is done, we are handed back control, and we can again do some introspection:
         assert charm.my_charm_lib.foo == "bar"
@@ -1149,8 +1149,8 @@ def test_live_charm_introspection(mycharm):
     assert state_out.unit_status == ...
 ```
 
-Note that you can't call `manager.run()` multiple times: the manager is a context that ensures that `ops.main` 'pauses' right
-before emitting the event to hand you some introspection hooks, but for the rest this is a regular scenario test: you
+Note that you can't call `event.run()` multiple times: the object is a context that ensures that `ops.main` 'pauses' right
+before emitting the event to hand you some introspection hooks, but for the rest this is a regular Scenario test: you
 can't emit multiple events in a single charm execution.
 
 # The virtual charm root

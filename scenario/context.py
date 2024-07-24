@@ -83,7 +83,7 @@ class _Manager:
     def __init__(
         self,
         ctx: "Context",
-        arg: Union[str, _Action, _Event],
+        arg: _Event,
         state_in: "State",
     ):
         self._ctx = ctx
@@ -91,7 +91,6 @@ class _Manager:
         self._state_in = state_in
 
         self._emitted: bool = False
-        self._run = None
 
         self.ops: Optional["Ops"] = None
         self.output: Optional[Union["State", ActionOutput]] = None
@@ -106,7 +105,7 @@ class _Manager:
 
     @property
     def _runner(self):
-        raise NotImplementedError("override in subclass")
+        return self._ctx._run  # noqa
 
     def _get_output(self):
         raise NotImplementedError("override in subclass")
@@ -117,51 +116,42 @@ class _Manager:
         self.ops = ops
         return self
 
-    def run(self) -> Union[ActionOutput, "State"]:
+    def _run(self) -> Union[ActionOutput, "State"]:
         """Emit the event and proceed with charm execution.
 
         This can only be done once.
         """
         if self._emitted:
-            raise AlreadyEmittedError("Can only context.manager.run() once.")
+            raise AlreadyEmittedError("Can only run once.")
         self._emitted = True
 
         # wrap up Runtime.exec() so that we can gather the output state
         self._wrapped_ctx.__exit__(None, None, None)
 
-        self.output = out = self._get_output()
-        return out
+        return self._get_output()
 
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: U100
         if not self._emitted:
-            logger.debug("manager not invoked. Doing so implicitly...")
-            self.run()
+            logger.debug("event not emitted. Doing so implicitly...")
+            # The output is discarded so we can use the private method.
+            self._run()
 
 
-class _EventManager(_Manager):
-    if TYPE_CHECKING:  # pragma: no cover
-        output: State  # pyright: ignore[reportIncompatibleVariableOverride]
+class ManagedEvent(_Manager):
+    charm: CharmBase  # type: ignore
 
-        def run(self) -> "State":
-            return cast("State", super().run())
-
-    @property
-    def _runner(self):
-        return self._ctx._run_event  # noqa
+    def run(self) -> "State":
+        return cast("State", super()._run())
 
     def _get_output(self):
         return self._ctx._output_state  # noqa
 
 
-class _ActionManager(_Manager):
-    output: ActionOutput  # pyright: ignore[reportIncompatibleVariableOverride]
+class ManagedAction(_Manager):
+    charm: CharmBase  # type: ignore
 
     def run_action(self) -> "ActionOutput":
-        return cast("ActionOutput", super().run())
-
-    @property
-    def _runner(self):
-        return self._ctx._run  # noqa
+        return cast("ActionOutput", super()._run())
 
     def _get_output(self):
         return self._ctx._finalize_action(self._ctx.output_state)  # noqa
@@ -599,7 +589,7 @@ class Context:
         else:
             self.unit_status_history.append(state.unit_status)
 
-    def __call__(self, event: Union["_Event", "_Action"], state: "State"):
+    def __call__(self, event: "_Event", state: "State"):
         """Context manager to introspect live charm object before and after the event is emitted.
 
         Usage::
@@ -620,13 +610,8 @@ class Context:
             state: the :class:`State` instance to use when handling the Event.
         """
         if isinstance(event, _Action) or event.action:
-            return _ActionManager(self, event, state)
-        return _EventManager(self, event, state)
-
-    @contextmanager
-    def _run_event(self, event: "_Event", state: "State"):
-        with self._run(event=event, state=state) as ops:
-            yield ops
+            return ManagedAction(self, event, state)
+        return ManagedEvent(self, event, state)
 
     def run(self, event: "_Event", state: "State") -> "State":
         """Trigger a charm execution with an Event and a State.
@@ -638,9 +623,9 @@ class Context:
         :arg state: the State instance to use as data source for the hook tool calls that the
             charm will invoke when handling the Event.
         """
-        if isinstance(event, _Action) or event.action:
+        if event.action:
             raise InvalidEventError("Use run_action() to run an action event.")
-        with self._run_event(event=event, state=state) as ops:
+        with self._run(event=event, state=state) as ops:
             ops.emit()
         return self.output_state
 
@@ -654,6 +639,8 @@ class Context:
         :arg state: the State instance to use as data source for the hook tool calls that the
             charm will invoke when handling the action event.
         """
+        if not event.action:
+            raise InvalidEventError("Use run() to run an non-action event.")
         with self._run(event=event, state=state) as ops:
             ops.emit()
         return self._finalize_action(self.output_state)
