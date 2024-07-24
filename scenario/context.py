@@ -338,6 +338,7 @@ class _CharmEvents:
             check_info=info,
         )
 
+    @staticmethod
     def action(
         name: str,
         params: Optional[Dict[str, "AnyJson"]] = None,
@@ -349,6 +350,7 @@ class _CharmEvents:
         if id:
             kwargs["id"] = id
         return _Event(f"{name}_action", action=_Action(name, **kwargs))
+
 
 class Context:
     """Represents a simulated charm's execution context.
