@@ -486,3 +486,36 @@ def test_pebble_check_recovered():
     assert infos[0].name == "http-check"
     assert infos[0].status == pebble.CheckStatus.UP
     assert infos[0].failures == 0
+
+
+def test_pebble_check_failed_two_containers():
+    foo_infos = []
+    bar_infos = []
+
+    class MyCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            framework.observe(
+                self.on.foo_pebble_check_failed, self._on_foo_check_failed
+            )
+            framework.observe(
+                self.on.bar_pebble_check_failed, self._on_bar_check_failed
+            )
+
+        def _on_foo_check_failed(self, event):
+            foo_infos.append(event.info)
+
+        def _on_bar_check_failed(self, event):
+            bar_infos.append(event.info)
+
+    ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}, "bar": {}}})
+    check = CheckInfo("http-check", failures=7, status=pebble.CheckStatus.DOWN)
+    foo_container = Container("foo", check_infos={check})
+    bar_container = Container("bar", check_infos={check})
+    state = State(containers={foo_container, bar_container})
+    ctx.run(ctx.on.pebble_check_failed(foo_container, check), state=state)
+    assert len(foo_infos) == 1
+    assert foo_infos[0].name == "http-check"
+    assert foo_infos[0].status == pebble.CheckStatus.DOWN
+    assert foo_infos[0].failures == 7
+    assert len(bar_infos) == 0
