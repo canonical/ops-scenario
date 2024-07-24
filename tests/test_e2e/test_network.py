@@ -53,19 +53,23 @@ def test_ip_get(mycharm):
             ],
             networks={Network.default("foo", private_address="4.4.4.4")},
         ),
-    ) as mgr:
+    ) as event:
         # we have a network for the relation
-        rel = mgr.charm.model.get_relation("metrics-endpoint")
-        assert str(mgr.charm.model.get_binding(rel).network.bind_address) == "192.0.2.0"
+        rel = event.charm.model.get_relation("metrics-endpoint")
+        assert (
+            str(event.charm.model.get_binding(rel).network.bind_address) == "192.0.2.0"
+        )
 
         # we have a network for a binding without relations on it
         assert (
-            str(mgr.charm.model.get_binding("deadnodead").network.bind_address)
+            str(event.charm.model.get_binding("deadnodead").network.bind_address)
             == "192.0.2.0"
         )
 
         # and an extra binding
-        assert str(mgr.charm.model.get_binding("foo").network.bind_address) == "4.4.4.4"
+        assert (
+            str(event.charm.model.get_binding("foo").network.bind_address) == "4.4.4.4"
+        )
 
 
 def test_no_sub_binding(mycharm):
@@ -84,10 +88,10 @@ def test_no_sub_binding(mycharm):
                 SubordinateRelation("bar"),
             ]
         ),
-    ) as mgr:
+    ) as event:
         with pytest.raises(RelationNotFoundError):
             # sub relations have no network
-            mgr.charm.model.get_binding("bar").network
+            event.charm.model.get_binding("bar").network
 
 
 def test_no_relation_error(mycharm):
@@ -115,6 +119,6 @@ def test_no_relation_error(mycharm):
             ],
             networks={Network.default("bar")},
         ),
-    ) as mgr:
+    ) as event:
         with pytest.raises(RelationNotFoundError):
-            net = mgr.charm.model.get_binding("foo").network
+            net = event.charm.model.get_binding("foo").network

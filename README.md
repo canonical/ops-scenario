@@ -726,8 +726,8 @@ storage = scenario.Storage("foo")
 # Setup storage with some content:
 (storage.get_filesystem(ctx) / "myfile.txt").write_text("helloworld")
 
-with ctx.manager(ctx.on.update_status(), scenario.State(storages={storage})) as mgr:
-    foo = mgr.charm.model.storages["foo"][0]
+with ctx(ctx.on.update_status(), scenario.State(storages={storage})) as event:
+    foo = event.charm.model.storages["foo"][0]
     loc = foo.location
     path = loc / "myfile.txt"
     assert path.exists()
@@ -899,9 +899,9 @@ import pathlib
 
 ctx = scenario.Context(MyCharm, meta={'name': 'juliette', "resources": {"foo": {"type": "oci-image"}}})
 resource = scenario.Resource(name='foo', path='/path/to/resource.tar')
-with ctx.manager(ctx.on.start(), scenario.State(resources={resource})) as mgr:
+with ctx(ctx.on.start(), scenario.State(resources={resource})) as event:
     # If the charm, at runtime, were to call self.model.resources.fetch("foo"), it would get '/path/to/resource.tar' back.
-    path = mgr.charm.model.resources.fetch('foo')
+    path = event.charm.model.resources.fetch('foo')
     assert path == pathlib.Path('/path/to/resource.tar')
 ```
 

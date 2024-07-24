@@ -64,11 +64,11 @@ def test_simple_events(event_name, event_kind):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     # These look like:
     #   ctx.run(ctx.on.install(), state)
-    with ctx(getattr(ctx.on, event_name)(), scenario.State()) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        assert isinstance(mgr.charm.observed[0], event_kind)
+    with ctx(getattr(ctx.on, event_name)(), scenario.State()) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        assert isinstance(event.charm.observed[0], event_kind)
 
 
 @pytest.mark.parametrize("as_kwarg", [True, False])
@@ -95,11 +95,11 @@ def test_simple_secret_events(as_kwarg, event_name, event_kind, owner):
     else:
         args = (secret,)
         kwargs = {}
-    with ctx(getattr(ctx.on, event_name)(*args, **kwargs), state_in) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    with ctx(getattr(ctx.on, event_name)(*args, **kwargs), state_in) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, event_kind)
         assert event.secret.id == secret.id
 
@@ -123,11 +123,11 @@ def test_revision_secret_events(event_name, event_kind):
     #   ctx.run(ctx.on.secret_expired(secret=secret, revision=revision), state)
     # The secret and revision must always be passed because the same event name
     # is used for all secrets.
-    with ctx(getattr(ctx.on, event_name)(secret, revision=42), state_in) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    with ctx(getattr(ctx.on, event_name)(secret, revision=42), state_in) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, event_kind)
         assert event.secret.id == secret.id
         assert event.revision == 42
@@ -159,11 +159,11 @@ def test_storage_events(event_name, event_kind):
     state_in = scenario.State(storages=[storage])
     # These look like:
     #   ctx.run(ctx.on.storage_attached(storage), state)
-    with ctx(getattr(ctx.on, event_name)(storage), state_in) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    with ctx(getattr(ctx.on, event_name)(storage), state_in) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, event_kind)
         assert event.storage.name == storage.name
         assert event.storage.index == storage.index
@@ -172,12 +172,12 @@ def test_storage_events(event_name, event_kind):
 def test_action_event_no_params():
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     # These look like:
-    #   ctx.run_action(ctx.on.action(action), state)
-    with ctx(ctx.on.action("act"), scenario.State()) as mgr:
-        mgr.run_action()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    #   ctx.run_action(ctx.on.action(action_name), state)
+    with ctx(ctx.on.action("act"), scenario.State()) as event:
+        event.run_action()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, ops.ActionEvent)
 
 
@@ -187,11 +187,11 @@ def test_action_event_with_params():
     #   ctx.run_action(ctx.on.action(action=action), state)
     # So that any parameters can be included and the ID can be customised.
     call_event = ctx.on.action("act", params={"param": "hello"})
-    with ctx(call_event, scenario.State()) as mgr:
-        mgr.run_action()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    with ctx(call_event, scenario.State()) as event:
+        event.run_action()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, ops.ActionEvent)
         assert event.id == call_event.action.id
         assert event.params["param"] == call_event.action.params["param"]
@@ -203,11 +203,11 @@ def test_pebble_ready_event():
     state_in = scenario.State(containers=[container])
     # These look like:
     #   ctx.run(ctx.on.pebble_ready(container), state)
-    with ctx(ctx.on.pebble_ready(container), state_in) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    with ctx(ctx.on.pebble_ready(container), state_in) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, ops.PebbleReadyEvent)
         assert event.workload.name == container.name
 
@@ -232,11 +232,11 @@ def test_relation_app_events(as_kwarg, event_name, event_kind):
     else:
         args = (relation,)
         kwargs = {}
-    with ctx(getattr(ctx.on, event_name)(*args, **kwargs), state_in) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    with ctx(getattr(ctx.on, event_name)(*args, **kwargs), state_in) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, event_kind)
         assert event.relation.id == relation.id
         assert event.app.name == relation.remote_app_name
@@ -249,10 +249,10 @@ def test_relation_complex_name():
     ctx = scenario.Context(ContextCharm, meta=meta, actions=ACTIONS)
     relation = scenario.Relation("foo-bar-baz")
     state_in = scenario.State(relations=[relation])
-    with ctx(ctx.on.relation_created(relation), state_in) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        event = mgr.charm.observed[0]
+    with ctx(ctx.on.relation_created(relation), state_in) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        event = event.charm.observed[0]
         assert isinstance(event, ops.RelationCreatedEvent)
         assert event.relation.id == relation.id
         assert event.app.name == relation.remote_app_name
@@ -282,11 +282,11 @@ def test_relation_unit_events_default_unit(event_name, event_kind):
     # These look like:
     #   ctx.run(ctx.on.baz_relation_changed, state)
     # The unit is chosen automatically.
-    with ctx(getattr(ctx.on, event_name)(relation), state_in) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    with ctx(getattr(ctx.on, event_name)(relation), state_in) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, event_kind)
         assert event.relation.id == relation.id
         assert event.app.name == relation.remote_app_name
@@ -308,11 +308,11 @@ def test_relation_unit_events(event_name, event_kind):
     state_in = scenario.State(relations=[relation])
     # These look like:
     #   ctx.run(ctx.on.baz_relation_changed(unit=unit_ordinal), state)
-    with ctx(getattr(ctx.on, event_name)(relation, remote_unit=2), state_in) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    with ctx(getattr(ctx.on, event_name)(relation, remote_unit=2), state_in) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, event_kind)
         assert event.relation.id == relation.id
         assert event.app.name == relation.remote_app_name
@@ -327,11 +327,11 @@ def test_relation_departed_event():
     #   ctx.run(ctx.on.baz_relation_departed(unit=unit_ordinal, departing_unit=unit_ordinal), state)
     with ctx(
         ctx.on.relation_departed(relation, remote_unit=2, departing_unit=1), state_in
-    ) as mgr:
-        mgr.run()
-        assert len(mgr.charm.observed) == 2
-        assert isinstance(mgr.charm.observed[1], ops.CollectStatusEvent)
-        event = mgr.charm.observed[0]
+    ) as event:
+        event.run()
+        assert len(event.charm.observed) == 2
+        assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
+        event = event.charm.observed[0]
         assert isinstance(event, ops.RelationDepartedEvent)
         assert event.relation.id == relation.id
         assert event.app.name == relation.remote_app_name
