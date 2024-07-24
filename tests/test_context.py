@@ -4,7 +4,7 @@ import pytest
 from ops import CharmBase
 
 from scenario import ActionOutput, Context, State
-from scenario.state import _Action, _Event, next_action_id
+from scenario.state import _Event, next_action_id
 
 
 class MyCharm(CharmBase):
@@ -65,7 +65,7 @@ def test_context_manager():
         event.run()
         assert event.charm.meta.name == "foo"
 
-    with ctx(Action("act"), state) as event:
+    with ctx(ctx.on.action("act"), state) as event:
         event.run_action()
         assert event.charm.meta.name == "foo"
 

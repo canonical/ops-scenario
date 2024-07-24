@@ -599,7 +599,7 @@ class Context:
         else:
             self.unit_status_history.append(state.unit_status)
 
-    def __call__(self, event: Union["_Event", "Action"], state: "State"):
+    def __call__(self, event: Union["_Event", "_Action"], state: "State"):
         """Context manager to introspect live charm object before and after the event is emitted.
 
         Usage::
@@ -619,7 +619,7 @@ class Context:
             event: the :class:`Event` or :class:`Action` that the charm will respond to.
             state: the :class:`State` instance to use when handling the Event.
         """
-        if isinstance(event, Action) or event.action:
+        if isinstance(event, _Action) or event.action:
             return _ActionManager(self, event, state)
         return _EventManager(self, event, state)
 
