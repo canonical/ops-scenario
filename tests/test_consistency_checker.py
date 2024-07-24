@@ -110,6 +110,21 @@ def test_workload_event_without_container():
         ),
         _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
+    # Ensure the check is in the correct container.
+    assert_inconsistent(
+        State(containers={Container("foo", check_infos={check}), Container("bar")}),
+        _Event(
+            "foo-pebble-check-recovered", container=Container("bar"), check_info=check
+        ),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}, "bar": {}}}),
+    )
+    assert_inconsistent(
+        State(containers={Container("foo", check_infos={check}), Container("bar")}),
+        _Event(
+            "bar-pebble-check-recovered", container=Container("bar"), check_info=check
+        ),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}, "bar": {}}}),
+    )
 
 
 def test_container_meta_mismatch():
