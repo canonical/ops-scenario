@@ -132,7 +132,7 @@ class _Manager:
 
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: U100
         if not self._emitted:
-            logger.debug("event not emitted. Doing so implicitly...")
+            logger.debug("user didn't emit the event within the context manager scope. Doing so implicitly upon exit...")
             # The output is discarded so we can use the private method.
             self._run()
 
