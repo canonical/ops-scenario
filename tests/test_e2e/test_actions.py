@@ -98,6 +98,25 @@ def test_action_event_outputs(mycharm, res_value):
     assert task.status == "failed"
 
 
+def test_action_continues_after_fail():
+    class MyCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            framework.observe(self.on.foo_action, self._on_foo_action)
+
+        def _on_foo_action(self, event):
+            event.log("starting")
+            event.fail("oh no!")
+            event.set_results({"final": "result"})
+
+    ctx = Context(MyCharm, meta={"name": "foo"}, actions={"foo": {}})
+    with pytest.raises(ActionFailed) as exc_info:
+        ctx.run(ctx.on.action("foo"), State())
+    assert exc_info.value.message == "oh no!"
+    assert ctx.action_history[0].logs == ["starting"]
+    assert ctx.action_history[0].results == {"final": "result"}
+
+
 def _ops_less_than(wanted_major, wanted_minor):
     major, minor = (int(v) for v in ops_version.split(".")[:2])
     if major < wanted_major:

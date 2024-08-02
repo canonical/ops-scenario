@@ -72,12 +72,6 @@ class ActionMissingFromContextError(Exception):
     # this flow.
 
 
-class ActionFailed(Exception):
-    def __init__(self, message: str, state: "State"):
-        self.message = message
-        self.state = state
-
-
 class _MockExecProcess:
     def __init__(self, command: Tuple[str, ...], change_id: int, out: "ExecOutput"):
         self._command = command
@@ -543,7 +537,6 @@ class _MockModelBackend(_ModelBackend):
             )
         self._context.action_history[-1].set_status("failed")
         self._context.action_history[-1].set_failure_message(message)
-        raise ActionFailed(message, self._state)
 
     def action_log(self, message: str):
         if not self._event.action:

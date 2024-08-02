@@ -129,6 +129,14 @@ class MetadataNotFoundError(RuntimeError):
     """Raised when Scenario can't find a metadata.yaml file in the provided charm root."""
 
 
+class ActionFailed(Exception):
+    """Raised at the end of the hook if the charm has called `event.fail()`."""
+
+    def __init__(self, message: str, state: "State"):
+        self.message = message
+        self.state = state
+
+
 # This can be replaced with the KW_ONLY dataclasses functionality in Python 3.10+.
 def _max_posargs(n: int):
     class _MaxPositionalArgs:

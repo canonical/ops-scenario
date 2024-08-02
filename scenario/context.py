@@ -12,6 +12,7 @@ from ops import CharmBase, EventBase
 from scenario.logger import logger as scenario_logger
 from scenario.runtime import Runtime
 from scenario.state import (
+    ActionFailed,
     CheckInfo,
     Container,
     MetadataNotFoundError,
@@ -606,7 +607,10 @@ class Context:
         with self._run(event=event, state=state) as ops:
             ops.emit()
         if event.action:
-            self.action_history[-1].set_status("completed")
+            current_task = self.action_history[-1]
+            if current_task.status == "failed":
+                raise ActionFailed(current_task.failure_message, self.output_state)
+            current_task.set_status("completed")
         return self.output_state
 
     @contextmanager

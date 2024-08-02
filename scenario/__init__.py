@@ -2,8 +2,8 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 from scenario.context import Context, Task
-from scenario.mocking import ActionFailed
 from scenario.state import (
+    ActionFailed,
     ActiveStatus,
     Address,
     BindAddress,

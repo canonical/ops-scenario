@@ -19,9 +19,8 @@ from ops.storage import NoSnapshotError, SQLiteStorage
 
 from scenario.capture_events import capture_events
 from scenario.logger import logger as scenario_logger
-from scenario.mocking import ActionFailed
 from scenario.ops_main_mock import NoObserverError
-from scenario.state import DeferredEvent, PeerRelation, StoredState
+from scenario.state import ActionFailed, DeferredEvent, PeerRelation, StoredState
 
 if TYPE_CHECKING:  # pragma: no cover
     from ops.testing import CharmType
