@@ -1837,10 +1837,11 @@ class _Action(_max_posargs(1)):
 
         def test_backup_action():
             ctx = scenario.Context(MyCharm)
-            out: scenario.ActionOutput = ctx.run(
+            state = ctx.run(
                 ctx.on.action('do_backup', params={'filename': 'foo'}),
                 scenario.State()
             )
+            assert ctx.action_history[0].results == ...
     """
 
     name: str

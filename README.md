@@ -974,18 +974,31 @@ def test_backup_action():
 
     # If you didn't declare do_backup in the charm's metadata, 
     # the `ConsistencyChecker` will slap you on the wrist and refuse to proceed.
-    out: scenario.ActionOutput = ctx.run(ctx.on.action("do_backup"), scenario.State())
+    state = ctx.run(ctx.on.action("do_backup"), scenario.State())
 
-    # You can assert action results, logs, failure using the ActionOutput interface:
-    assert out.logs == ['baz', 'qux']
-    
-    if out.success:
-        # If the action did not fail, we can read the results:
-        assert out.results == {'foo': 'bar'}
+    # You can assert action results and logs using the action history:
+    assert ctx.action_history[0].logs == ['baz', 'qux']
+    assert ctx.action_history[0].results == {'foo': 'bar'}
+```
 
-    else:
-        # If the action fails, we can read a failure message:
-        assert out.failure == 'boo-hoo'
+## Failing Actions
+
+If the charm code calls `event.fail()` to indicate that the action has failed,
+a `ActionFailed` exception will be raised. This avoids having to include
+`assert ctx.action_history[0].status == "completed"` code in every test where
+the action is successful.
+
+```python
+def test_backup_action_failed():
+    ctx = scenario.Context(MyCharm)
+
+    with pytest.raises(ActionFailed) as exc_info:
+        ctx.run(ctx.on.action("do_backup"), scenario.State())
+    assert exc_info.value.message == "sorry, couldn't do the backup"
+
+    # You can still assert action results and logs that occured before the failure:
+    assert ctx.action_history[0].logs == ['baz', 'qux']
+    assert ctx.action_history[0].results == {'foo': 'bar'}
 ```
 
 ## Parametrized Actions
