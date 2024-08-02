@@ -984,7 +984,7 @@ def test_backup_action():
 ## Failing Actions
 
 If the charm code calls `event.fail()` to indicate that the action has failed,
-a `ActionFailed` exception will be raised. This avoids having to include
+an `ActionFailed` exception will be raised. This avoids having to include
 `assert ctx.action_history[0].status == "completed"` code in every test where
 the action is successful.
 
