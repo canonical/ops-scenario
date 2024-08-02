@@ -859,6 +859,28 @@ state = scenario.State(
 )
 ```
 
+When handling the `secret-expired` and `secret-remove` events, the charm must remove the specified revision of the secret. For `secret-remove`, the revision will no longer be in the `State`, because it's no longer in use (which is why the `secret-remove` event was triggered). To ensure that the charm is removing the secret, check the context for the history of secret removal:
+
+```python
+class SecretCharm(ops.CharmBase):
+    def __init__(self, framework):
+        super().__init__(framework)
+        self.framework.observe(self.on.secret_remove, self._on_secret_remove)
+
+    def _on_secret_remove(self, event):
+        event.secret.remove_revision(event.revision)
+
+
+ctx = Context(SecretCharm, meta={"name": "foo"})
+secret = Secret({"password": "xxxxxxxx"}, owner="app")
+old_revision = 42
+state = ctx.run(
+    ctx.on.secret_remove(secret, revision=old_revision),
+    State(leader=True, secrets={secret})
+)
+assert ctx.secret_removal_history == [old_revision]
+```
+
 ## StoredState
 
 Scenario can simulate StoredState. You can define it on the input side as:

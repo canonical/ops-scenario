@@ -285,21 +285,10 @@ class Secret(_max_posargs(1)):
     current: Optional["RawSecretRevisionContents"] = None
 
     id: str = dataclasses.field(default_factory=_generate_secret_id)
-    # CAUTION: ops-created Secrets (via .add_secret()) will have a canonicalized
-    #  secret id (`secret:` prefix)
-    #  but user-created ones will not. Using post-init to patch it in feels bad, but requiring the user to
-    #  add the prefix manually every time seems painful as well.
 
     # indicates if the secret is owned by THIS unit, THIS app or some other app/unit.
     # if None, the implication is that the secret has been granted to this unit.
     owner: Literal["unit", "app", None] = None
-
-    # what revision is currently tracked by this charm. Only meaningful if owner=False
-    tracked_revision: int = 1
-
-    # TODO: enforce that latest_revision >= tracked_revision
-    # what revision is the latest for this secret.
-    latest_revision: int = 1
 
     # mapping from relation IDs to remote unit/apps to which this secret has been granted.
     # Only applicable if owner
@@ -309,6 +298,12 @@ class Secret(_max_posargs(1)):
     description: Optional[str] = None
     expire: Optional[datetime.datetime] = None
     rotate: Optional[SecretRotate] = None
+
+    # what revision is currently tracked by this charm. Only meaningful if owner=False
+    _tracked_revision: int = 1
+
+    # what revision is the latest for this secret.
+    _latest_revision: int = 1
 
     def __hash__(self) -> int:
         return hash(self.id)
@@ -321,7 +316,8 @@ class Secret(_max_posargs(1)):
     def _track_latest_revision(self):
         """Set the current revision to the tracked revision."""
         # bypass frozen dataclass
-        object.__setattr__(self, "tracked_revision", self.latest_revision)
+        object.__setattr__(self, "_tracked_revision", self._latest_revision)
+        object.__setattr__(self, "current", self.latest)
 
     def _update_metadata(
         self,
@@ -333,7 +329,9 @@ class Secret(_max_posargs(1)):
     ):
         """Update the metadata."""
         # bypass frozen dataclass
-        object.__setattr__(self, "latest_revision", self.latest_revision + 1)
+        object.__setattr__(self, "_latest_revision", self._latest_revision + 1)
+        # TODO: if this is done twice in the same hook, then Juju ignores the
+        # first call, it doesn't continue to update like this does.
         if content:
             object.__setattr__(self, "latest", content)
         if label:
@@ -1361,11 +1359,6 @@ class State(_max_posargs(0)):
         object.__setattr__(self, "opened_ports", new_ports)
 
     def _update_secrets(self, new_secrets: FrozenSet[Secret]):
-        """Update the current secrets."""
-        # bypass frozen dataclass
-        object.__setattr__(self, "secrets", new_secrets)
-
-    def _update_secrets(self, new_secrets: List[Secret]):
         """Update the current secrets."""
         # bypass frozen dataclass
         object.__setattr__(self, "secrets", new_secrets)

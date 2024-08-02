@@ -36,9 +36,10 @@ def test_get_secret_no_secret(mycharm):
             assert mgr.charm.model.get_secret(label="foo")
 
 
-def test_get_secret(mycharm):
+@pytest.mark.parametrize("owner", ("app", "unit"))
+def test_get_secret(mycharm, owner):
     ctx = Context(mycharm, meta={"name": "local"})
-    secret = Secret({"a": "b"})
+    secret = Secret({"a": "b"}, owner=owner)
     with ctx.manager(
         state=State(secrets={secret}),
         event=ctx.on.update_status(),
@@ -81,6 +82,7 @@ def test_get_secret_nonowner_peek_update(mycharm, app):
         charm = mgr.charm
         assert charm.model.get_secret(id=secret.id).get_content()["a"] == "b"
         assert charm.model.get_secret(id=secret.id).peek_content()["a"] == "c"
+        # Verify that the peek has not refreshed:
         assert charm.model.get_secret(id=secret.id).get_content()["a"] == "b"
 
         assert (
@@ -106,6 +108,8 @@ def test_get_secret_owner_peek_update(mycharm, owner):
         charm = mgr.charm
         assert charm.model.get_secret(id=secret.id).get_content()["a"] == "b"
         assert charm.model.get_secret(id=secret.id).peek_content()["a"] == "c"
+        # Verify that the peek has not refreshed:
+        assert charm.model.get_secret(id=secret.id).get_content()["a"] == "b"
         assert (
             charm.model.get_secret(id=secret.id).get_content(refresh=True)["a"] == "c"
         )
@@ -115,11 +119,8 @@ def test_get_secret_owner_peek_update(mycharm, owner):
 def test_secret_changed_owner_evt_fails(mycharm, owner):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        id="foo",
-        contents={
-            0: {"a": "b"},
-            1: {"a": "c"},
-        },
+        current={"a": "b"},
+        latest={"a": "c"},
         owner=owner,
     )
     with pytest.raises(ValueError):
@@ -162,7 +163,7 @@ def test_add(mycharm, app):
 
     assert mgr.output.secrets
     secret = mgr.output.get_secret(label="mylabel")
-    assert secret.contents[0] == {"foo": "bar"}
+    assert secret.latest == secret.current == {"foo": "bar"}
     assert secret.label == "mylabel"
 
 
@@ -197,7 +198,11 @@ def test_set_legacy_behaviour(mycharm):
 
         state_out = mgr.run()
 
-    assert state_out.get_secret(label="mylabel").current == state_out.get_secret(label="mylabel").latest == rev2
+    assert (
+        state_out.get_secret(label="mylabel").current
+        == state_out.get_secret(label="mylabel").latest
+        == rev2
+    )
 
 
 def test_set(mycharm):
@@ -216,13 +221,20 @@ def test_set(mycharm):
             == rev1
         )
 
+        # TODO: if this is done in the same event hook, it's more complicated
+        # than this. Figure out what we should do here.
+        # Also the next test, for Juju 3.3
         secret.set_content(rev2)
         assert secret.get_content() == rev1
         assert secret.peek_content() == secret.get_content(refresh=True) == rev2
 
         state_out = mgr.run()
 
-    assert state_out.get_secret(label="mylabel").current == state_out.get_secret(label="mylabel").latest == rev2
+    assert (
+        state_out.get_secret(label="mylabel").current
+        == state_out.get_secret(label="mylabel").latest
+        == rev2
+    )
 
 
 def test_set_juju33(mycharm):
@@ -243,24 +255,28 @@ def test_set_juju33(mycharm):
 
         state_out = mgr.run()
 
-    assert state_out.get_secret(label="mylabel").current == state_out.get_secret(label="mylabel").latest == rev2
+    assert (
+        state_out.get_secret(label="mylabel").current
+        == state_out.get_secret(label="mylabel").latest
+        == rev2
+    )
 
 
 @pytest.mark.parametrize("app", (True, False))
 def test_meta(mycharm, app):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
+        {"a": "b"},
         owner="app" if app else "unit",
         label="mylabel",
         description="foobarbaz",
         rotate=SecretRotate.HOURLY,
-        latest={"a": "b"},
     )
     with ctx.manager(
         ctx.on.update_status(),
         State(
             leader=True,
-            secrets=[secret],
+            secrets={secret},
         ),
     ) as mgr:
         charm = mgr.charm
@@ -286,26 +302,25 @@ def test_secret_permission_model(mycharm, leader, owner):
 
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
+        {"a": "b"},
         label="mylabel",
+        owner=owner,
         description="foobarbaz",
         rotate=SecretRotate.HOURLY,
-        latest={"a": "b"},
     )
     secret_id = secret.id
     with ctx.manager(
         ctx.on.update_status(),
         State(
             leader=leader,
-            secrets=[secret],
+            secrets={secret},
         ),
     ) as mgr:
-        secret = mgr.charm.model.get_secret(id=secret_id)
+        # can always view
+        secret: ops_Secret = mgr.charm.model.get_secret(id=secret_id)
         assert secret.get_content()["a"] == "b"
         assert secret.peek_content()
         assert secret.get_content(refresh=True)
-
-        # can always view
-        secret: ops_Secret = mgr.charm.model.get_secret(id=secret_id)
 
         if expect_manage:
             assert secret.get_content()
@@ -335,11 +350,11 @@ def test_grant(mycharm, app):
         mycharm, meta={"name": "local", "requires": {"foo": {"interface": "bar"}}}
     )
     secret = Secret(
+        {"a": "b"},
         owner="unit",
         label="mylabel",
         description="foobarbaz",
         rotate=SecretRotate.HOURLY,
-        latest={"a": "b"},
     )
     with ctx.manager(
         ctx.on.update_status(),
@@ -364,9 +379,9 @@ def test_update_metadata(mycharm):
 
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
+        {"a": "b"},
         owner="unit",
         label="mylabel",
-        latest={"a": "b"},
     )
     with ctx.manager(
         ctx.on.update_status(),
@@ -403,7 +418,7 @@ def test_grant_after_add(leader):
                 secret = self.unit.add_secret({"foo": "bar"})
             secret.grant(self.model.relations["bar"][0])
 
-    state = State(leader=leader, relations=[Relation("bar")])
+    state = State(leader=leader, relations={Relation("bar")})
     ctx = Context(
         GrantingCharm, meta={"name": "foo", "provides": {"bar": {"interface": "bar"}}}
     )
@@ -412,10 +427,10 @@ def test_grant_after_add(leader):
 
 def test_grant_nonowner(mycharm):
     secret = Secret(
+        {"a": "b"},
         label="mylabel",
         description="foobarbaz",
         rotate=SecretRotate.HOURLY,
-        latest={"a": "b"},
     )
     secret_id = secret.id
 
@@ -480,7 +495,71 @@ def test_add_grant_revoke_remove():
         secret = charm.model.get_secret(label="mylabel")
         secret.remove_all_revisions()
 
-    assert not mgr.output.get_secret(label="mylabel").contents  # secret wiped
+    with pytest.raises(KeyError):
+        mgr.output.get_secret(label="mylabel")
+
+
+def test_secret_removed_event():
+    class SecretCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            self.framework.observe(self.on.secret_remove, self._on_secret_remove)
+
+        def _on_secret_remove(self, event):
+            event.secret.remove_revision(event.revision)
+
+    ctx = Context(SecretCharm, meta={"name": "foo"})
+    secret = Secret({"a": "b"}, owner="app")
+    old_revision = 42
+    state = ctx.run(
+        ctx.on.secret_remove(secret, revision=old_revision),
+        State(leader=True, secrets={secret}),
+    )
+    assert secret in state.secrets
+    assert ctx.secret_removal_history == [old_revision]
+
+
+def test_secret_expired_event():
+    class SecretCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            self.framework.observe(self.on.secret_expired, self._on_secret_expired)
+
+        def _on_secret_expired(self, event):
+            event.secret.set_content({"password": "newpass"})
+            event.secret.remove_revision(event.revision)
+
+    ctx = Context(SecretCharm, meta={"name": "foo"})
+    secret = Secret({"password": "oldpass"}, owner="app")
+    old_revision = 42
+    state = ctx.run(
+        ctx.on.secret_expired(secret, revision=old_revision),
+        State(leader=True, secrets={secret}),
+    )
+    assert state.get_secret(id=secret.id).latest == {"password": "newpass"}
+    assert ctx.secret_removal_history == [old_revision]
+
+
+def test_remove_bad_revision():
+    class SecretCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            self.framework.observe(self.on.secret_remove, self._on_secret_remove)
+
+        def _on_secret_remove(self, event):
+            with pytest.raises(ValueError):
+                event.secret.remove_revision(event.revision)
+
+    ctx = Context(SecretCharm, meta={"name": "foo"})
+    secret = Secret({"a": "b"}, owner="app")
+    ctx.run(
+        ctx.on.secret_remove(secret, revision=secret._latest_revision),
+        State(leader=True, secrets={secret}),
+    )
+    ctx.run(
+        ctx.on.secret_remove(secret, revision=secret._tracked_revision),
+        State(leader=True, secrets={secret}),
+    )
 
 
 def test_no_additional_positional_arguments():
@@ -490,12 +569,10 @@ def test_no_additional_positional_arguments():
 
 def test_default_values():
     contents = {"foo": "bar"}
-    id = "secret:1"
-    secret = Secret(contents, id=id)
-    assert secret.contents == contents
-    assert secret.id == id
+    secret = Secret(contents)
+    assert secret.latest == secret.current == contents
+    assert secret.id.startswith("secret:")
     assert secret.label is None
-    assert secret.revision == 0
     assert secret.description is None
     assert secret.owner is None
     assert secret.rotate is None

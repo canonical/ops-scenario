@@ -197,14 +197,14 @@ class _MockModelBackend(_ModelBackend):
                 if canonicalize_id(s.id) == canonicalize_id(id)
             ]
             if not secrets:
-                raise SecretNotFoundError(id)
+                raise SecretNotFoundError(id) from None
             return secrets[0]
 
         elif label:
-            secrets = [s for s in self._state.secrets if s.label == label]
-            if not secrets:
-                raise SecretNotFoundError(label)
-            return secrets[0]
+            try:
+                return self._state.get_secret(label=label)
+            except KeyError:
+                raise SecretNotFoundError(label) from None
 
         else:
             # if all goes well, this should never be reached. ops.model.Secret will check upon
@@ -371,9 +371,9 @@ class _MockModelBackend(_ModelBackend):
             owner=owner,
         )
         secrets = set(self._state.secrets)
-        secret_id = secrets.add(secret)
+        secrets.add(secret)
         self._state._update_secrets(frozenset(secrets))
-        return secret_id
+        return secret.id
 
     def _check_can_manage_secret(
         self,
@@ -414,6 +414,7 @@ class _MockModelBackend(_ModelBackend):
                 secret._track_latest_revision()
             return secret.latest
 
+        assert secret.current is not None
         return secret.current
 
     def secret_info_get(
@@ -430,7 +431,7 @@ class _MockModelBackend(_ModelBackend):
         return SecretInfo(
             id=secret.id,
             label=secret.label,
-            revision=secret.latest_revision,
+            revision=secret._latest_revision,
             expires=secret.expire,
             rotation=secret.rotate,
             rotates=None,  # not implemented yet.
@@ -450,8 +451,12 @@ class _MockModelBackend(_ModelBackend):
         self._check_can_manage_secret(secret)
 
         if content == secret.latest:
+            # In Juju 3.6 and higher, this is a no-op, but it's good to warn
+            # charmers if they are doing this, because it's not generally good
+            # practice.
+            # https://bugs.launchpad.net/juju/+bug/2069238
             logger.warning(
-                f"secret {id} contents set to the existing value: new revision created but not needed",
+                f"secret {id} contents set to the existing value: new revision not needed",
             )
 
         secret._update_metadata(
@@ -491,44 +496,33 @@ class _MockModelBackend(_ModelBackend):
     def secret_remove(self, id: str, *, revision: Optional[int] = None):
         secret = self._get_secret(id)
         self._check_can_manage_secret(secret)
-        # Removing all revisions is modelled as no content.
 
-        # If revision that is not the tracked or latest one is removed, then it
-        # doesn't make any difference to the charm, and this is not reflected
-        # in the output state. If a test needs to verify that this remove was
-        # called then it needs to mock the remove call, because this doesn't
-        # change the state *as it is visible to the unit executing the charm*.
-        if revision not in (secret.tracked_revision, secret.latest_revision):
+        # Removing all revisions means that the secret is removed, so is no
+        # longer in the state.
+        if revision is None:
+            secrets = set(self._state.secrets)
+            secrets.remove(secret)
+            self._state._update_secrets(frozenset(secrets))
             return
 
-        # If the *tracked* revision, which is not also the latest, is removed,
-        # then the secret is still accessible in the current hook (from the
-        # input state), but afterwards the unit will always get SecretNotFound
-        # when doing secret-get, even when using refresh=True.
-        # TODO: Juju will hopefully change things to make it possible to fix this:
-        # https://bugs.launchpad.net/juju/+bug/2063519
-        # If the *latest* revision is removed, then when using secret-get with
-        # peek SecretNotFound is returned, even if there are older revisions.
-        # secret-info will still show the same revision number. If using refresh
-        # or set, a "state is changing too quickly" error is returned.
-        # TODO: Is it possible to get out of this state?
+        # Juju does not prevent removing the tracked or latest revision, but it
+        # is always a mistake to do this. Rather than having the state model a
+        # secret where the tracked/latest revision cannot be retrieved but the
+        # secret still exists, we raise instead, so that charms know that there
+        # is a problem with their code.
+        if revision in (secret._tracked_revision, secret._latest_revision):
+            raise ValueError(
+                "Charms should not remove the latest revision of a secret. "
+                "Add a new revision with `set_content()` instead, and the previous "
+                "revision will be garbage collected when no longer used.",
+            )
 
-        if revision:
-            if revision == secret.tracked_revision:
-                # TODO We really need to remove the secret from the state somehow.
-                pass
-            # This is the latest revision.
-            #            if revision == TODO:
-            #                secret.latest.clear()
-            # This is the currently tracked revision.
-            if revision == secret.tracked_revision:
-                # TODO: figure out what to do here.
-                pass
-            # else this is some other revision: we don't need to do anything.
-        else:
-            if secret.current:
-                secret.current.clear()
-            secret.latest.clear()
+        # For all other revisions, the content is not visible to the charm
+        # (this is as designed: the secret is being removed, so it should no
+        # longer be in use). That means that the state does not need to be
+        # modified - however, unit tests should verify that the remove call was
+        # executed, so we track that in a history list in the context.
+        self._context.secret_removal_history.append(revision)
 
     def relation_remote_app_name(
         self,
