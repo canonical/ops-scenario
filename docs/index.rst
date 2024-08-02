@@ -16,7 +16,8 @@ scenario.Context
 ================
 
 .. automodule:: scenario.context
-
+   :members:
+   :private-members: _Manager
 
 scenario.consistency_checker
 ============================

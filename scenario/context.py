@@ -90,7 +90,7 @@ class AlreadyEmittedError(RuntimeError):
     """Raised when ``run()`` is called more than once."""
 
 
-class Manager:
+class _Manager:
     """Context manager to offer test code some runtime charm object introspection."""
 
     def __init__(
@@ -388,6 +388,16 @@ class Context:
         (local_path / 'foo' / 'bar.yaml').write_text('foo: bar')
         scenario.Context(... charm_root=virtual_root).run(...)
 
+    The class can also provide a context manager, like::
+
+        import scenario
+
+        def test_foo():
+            ctx = scenario.Context(MyCharm)
+            with ctx(ctx.on.start(), State()) as event:
+                event.charm._some_private_setup()
+                event.run()
+
     Args:
         charm_type: the CharmBase subclass to call :meth:`ops.main` on.
         meta: charm metadata to use. Needs to be a valid metadata.yaml format (as a dict).
@@ -589,7 +599,7 @@ class Context:
             event: the :class:`Event` that the charm will respond to.
             state: the :class:`State` instance to use when handling the Event.
         """
-        return Manager(self, event, state)
+        return _Manager(self, event, state)
 
     def run(self, event: "_Event", state: "State") -> "State":
         """Trigger a charm execution with an Event and a State.
