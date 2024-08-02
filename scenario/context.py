@@ -586,7 +586,7 @@ class Context:
                 assert event.charm._some_private_attribute == "bar"  # noqa
 
         Args:
-            event: the :class:`Event` or :class:`Action` that the charm will respond to.
+            event: the :class:`Event` that the charm will respond to.
             state: the :class:`State` instance to use when handling the Event.
         """
         return Manager(self, event, state)
