@@ -19,6 +19,7 @@ from ops.storage import NoSnapshotError, SQLiteStorage
 
 from scenario.capture_events import capture_events
 from scenario.logger import logger as scenario_logger
+from scenario.mocking import ActionFailed
 from scenario.ops_main_mock import NoObserverError
 from scenario.state import DeferredEvent, PeerRelation, StoredState
 
@@ -466,7 +467,7 @@ class Runtime:
                 # if the caller did not manually emit or commit: do that.
                 ops.finalize()
 
-            except NoObserverError:
+            except (NoObserverError, ActionFailed):
                 raise  # propagate along
             except Exception as e:
                 raise UncaughtCharmError(

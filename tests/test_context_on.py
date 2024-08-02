@@ -172,9 +172,9 @@ def test_storage_events(event_name, event_kind):
 def test_action_event_no_params():
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     # These look like:
-    #   ctx.run_action(ctx.on.action(action_name), state)
+    #   ctx.run(ctx.on.action(action_name), state)
     with ctx(ctx.on.action("act"), scenario.State()) as event:
-        event.run_action()
+        event.run()
         assert len(event.charm.observed) == 2
         assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
         event = event.charm.observed[0]
@@ -184,11 +184,11 @@ def test_action_event_no_params():
 def test_action_event_with_params():
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     # These look like:
-    #   ctx.run_action(ctx.on.action(action=action), state)
+    #   ctx.run(ctx.on.action(action=action), state)
     # So that any parameters can be included and the ID can be customised.
     call_event = ctx.on.action("act", params={"param": "hello"})
     with ctx(call_event, scenario.State()) as event:
-        event.run_action()
+        event.run()
         assert len(event.charm.observed) == 2
         assert isinstance(event.charm.observed[1], ops.CollectStatusEvent)
         event = event.charm.observed[0]

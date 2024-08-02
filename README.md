@@ -963,7 +963,6 @@ class MyVMCharm(ops.CharmBase):
 An action is a special sort of event, even though `ops` handles them almost identically.
 In most cases, you'll want to inspect the 'results' of an action, or whether it has failed or
 logged something while executing. Many actions don't have a direct effect on the output state.
-For this reason, the output state is less prominent in the return type of `Context.run_action`.
 
 How to test actions with scenario:
 
@@ -975,18 +974,18 @@ def test_backup_action():
 
     # If you didn't declare do_backup in the charm's metadata, 
     # the `ConsistencyChecker` will slap you on the wrist and refuse to proceed.
-    out: scenario.ActionOutput = ctx.run_action(ctx.on.action("do_backup"), scenario.State())
+    out: scenario.ActionOutput = ctx.run(ctx.on.action("do_backup"), scenario.State())
 
     # You can assert action results, logs, failure using the ActionOutput interface:
     assert out.logs == ['baz', 'qux']
     
     if out.success:
-      # If the action did not fail, we can read the results:
-      assert out.results == {'foo': 'bar'}
+        # If the action did not fail, we can read the results:
+        assert out.results == {'foo': 'bar'}
 
     else:
-      # If the action fails, we can read a failure message:
-      assert out.failure == 'boo-hoo'
+        # If the action fails, we can read a failure message:
+        assert out.failure == 'boo-hoo'
 ```
 
 ## Parametrized Actions
@@ -999,7 +998,7 @@ def test_backup_action():
 
     # If the parameters (or their type) don't match what is declared in the metadata, 
     # the `ConsistencyChecker` will slap you on the other wrist.
-    out: scenario.ActionOutput = ctx.run_action(
+    out: scenario.ActionOutput = ctx.run(
         ctx.on.action("do_backup", params={'a': 'b'}),
         scenario.State()
     )
@@ -1137,7 +1136,6 @@ def test_live_charm_introspection(mycharm):
         assert charm._stored.a == "a"
 
         # This will tell ops.main to proceed with normal execution and emit the "start" event on the charm:
-        # If you want to do this with actions, you should use `run_action` instead.
         state_out = event.run()
     
         # After that is done, we are handed back control, and we can again do some introspection:

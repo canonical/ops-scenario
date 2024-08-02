@@ -72,6 +72,11 @@ class ActionMissingFromContextError(Exception):
     # this flow.
 
 
+class ActionFailed(Exception):
+    def __init__(self, message: str):
+        self.message = message
+
+
 class _MockExecProcess:
     def __init__(self, command: Tuple[str, ...], change_id: int, out: "ExecOutput"):
         self._command = command
@@ -528,21 +533,23 @@ class _MockModelBackend(_ModelBackend):
         _format_action_result_dict(results)
         # but then we will store it in its unformatted,
         # original form for testing ease
-        self._context._action_results = results
+        self._context.action_history[-1].set_results(results)
 
     def action_fail(self, message: str = ""):
         if not self._event.action:
             raise ActionMissingFromContextError(
                 "not in the context of an action event: cannot action-fail",
             )
-        self._context._action_failure = message
+        self._context.action_history[-1].set_status("failed")
+        self._context.action_history[-1].set_failure_message(message)
+        raise ActionFailed(message)
 
     def action_log(self, message: str):
         if not self._event.action:
             raise ActionMissingFromContextError(
                 "not in the context of an action event: cannot action-log",
             )
-        self._context._action_logs.append(message)
+        self._context.action_history[-1].logs.append(message)
 
     def action_get(self):
         action = self._event.action

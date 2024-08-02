@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from ops import CharmBase
 
-from scenario import ActionOutput, Context, State
+from scenario import Context, State, Task
 from scenario.state import _Event, next_action_id
 
 
@@ -36,8 +36,8 @@ def test_run_action():
 
     with patch.object(ctx, "_run") as p:
         ctx._output_state = "foo"  # would normally be set within the _run call scope
-        output = ctx.run_action(ctx.on.action("do-foo"), state)
-        assert output.state == "foo"
+        output = ctx.run(ctx.on.action("do-foo"), state)
+        assert output == "foo"
 
     assert p.called
     e = p.call_args.kwargs["event"]
@@ -66,13 +66,13 @@ def test_context_manager():
         assert event.charm.meta.name == "foo"
 
     with ctx(ctx.on.action("act"), state) as event:
-        event.run_action()
+        event.run()
         assert event.charm.meta.name == "foo"
 
 
-def test_action_output_no_positional_arguments():
+def test_task_no_positional_arguments():
     with pytest.raises(TypeError):
-        ActionOutput(None, None)
+        Task(None)
 
 
 def test_action_output_no_results():
@@ -85,6 +85,9 @@ def test_action_output_no_results():
             pass
 
     ctx = Context(MyCharm, meta={"name": "foo"}, actions={"act": {}})
-    out = ctx.run_action(ctx.on.action("act"), State())
-    assert out.results is None
-    assert out.failure is None
+    ctx.run(ctx.on.action("act"), State())
+    assert len(ctx.action_history) == 1
+    task = ctx.action_history[0]
+    assert task.results is None
+    assert task.status == "completed"
+    assert task.failure_message == ""
