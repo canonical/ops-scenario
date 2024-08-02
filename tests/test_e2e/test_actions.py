@@ -106,6 +106,7 @@ def test_action_continues_after_fail():
 
         def _on_foo_action(self, event):
             event.log("starting")
+            event.set_results({"initial": "result"})
             event.fail("oh no!")
             event.set_results({"final": "result"})
 
@@ -114,7 +115,7 @@ def test_action_continues_after_fail():
         ctx.run(ctx.on.action("foo"), State())
     assert exc_info.value.message == "oh no!"
     assert ctx.action_history[0].logs == ["starting"]
-    assert ctx.action_history[0].results == {"final": "result"}
+    assert ctx.action_history[0].results == {"initial": "result", "final": "result"}
 
 
 def _ops_less_than(wanted_major, wanted_minor):

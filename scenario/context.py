@@ -65,13 +65,12 @@ class Task(_max_posargs(0)):
         # bypass frozen dataclass
         object.__setattr__(self, "failure_message", message)
 
-    def set_results(self, results: Dict[str, Any]):
-        """Set the results of the action."""
+    def update_results(self, results: Dict[str, Any]):
+        """Update the results of the action."""
         if self.results is None:
             # bypass frozen dataclass
             object.__setattr__(self, "results", results)
         else:
-            self.results.clear()
             self.results.update(results)
 
 

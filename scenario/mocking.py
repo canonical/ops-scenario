@@ -528,7 +528,7 @@ class _MockModelBackend(_ModelBackend):
         _format_action_result_dict(results)
         # but then we will store it in its unformatted,
         # original form for testing ease
-        self._context.action_history[-1].set_results(results)
+        self._context.action_history[-1].update_results(results)
 
     def action_fail(self, message: str = ""):
         if not self._event.action:
