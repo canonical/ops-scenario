@@ -812,7 +812,7 @@ state = scenario.State(
 ```
 
 The only mandatory arguments to Secret is the `latest` contents: that is, a `str:str` mapping
-representing the payload of the revision. If the unit that's handling the event
+representing the content of the revision. If the unit that's handling the event
 is tracking a different revision of the content, then `current` should also be
 provided - if it's not, then Scenario assumes that `current` is the `latest`.
 If there are other revisions of the content, simply don't include them: the
