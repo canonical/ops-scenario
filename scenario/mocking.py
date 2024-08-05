@@ -514,13 +514,13 @@ class _MockModelBackend(_ModelBackend):
             raise ValueError(
                 "Charms should not remove the latest revision of a secret. "
                 "Add a new revision with `set_content()` instead, and the previous "
-                "revision will be garbage collected when no longer used.",
+                "revision will be cleaned up by the secret owner when no longer in use.",
             )
 
         # For all other revisions, the content is not visible to the charm
         # (this is as designed: the secret is being removed, so it should no
         # longer be in use). That means that the state does not need to be
-        # modified - however, unit tests should verify that the remove call was
+        # modified - however, unit tests should be able to verify that the remove call was
         # executed, so we track that in a history list in the context.
         self._context.removed_secret_revisions.append(revision)
 
