@@ -878,7 +878,7 @@ state = ctx.run(
     ctx.on.secret_remove(secret, revision=old_revision),
     State(leader=True, secrets={secret})
 )
-assert ctx.secret_removal_history == [old_revision]
+assert ctx.removed_secret_revisions == [old_revision]
 ```
 
 ## StoredState

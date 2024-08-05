@@ -197,7 +197,7 @@ class _MockModelBackend(_ModelBackend):
                 if canonicalize_id(s.id) == canonicalize_id(id)
             ]
             if not secrets:
-                raise SecretNotFoundError(id) from None
+                raise SecretNotFoundError(id)
             return secrets[0]
 
         elif label:
@@ -522,7 +522,7 @@ class _MockModelBackend(_ModelBackend):
         # longer be in use). That means that the state does not need to be
         # modified - however, unit tests should verify that the remove call was
         # executed, so we track that in a history list in the context.
-        self._context.secret_removal_history.append(revision)
+        self._context.removed_secret_revisions.append(revision)
 
     def relation_remote_app_name(
         self,

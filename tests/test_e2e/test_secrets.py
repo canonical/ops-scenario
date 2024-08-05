@@ -516,7 +516,7 @@ def test_secret_removed_event():
         State(leader=True, secrets={secret}),
     )
     assert secret in state.secrets
-    assert ctx.secret_removal_history == [old_revision]
+    assert ctx.removed_secret_revisions == [old_revision]
 
 
 def test_secret_expired_event():
@@ -537,7 +537,7 @@ def test_secret_expired_event():
         State(leader=True, secrets={secret}),
     )
     assert state.get_secret(id=secret.id).latest == {"password": "newpass"}
-    assert ctx.secret_removal_history == [old_revision]
+    assert ctx.removed_secret_revisions == [old_revision]
 
 
 def test_remove_bad_revision():
