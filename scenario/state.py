@@ -442,7 +442,7 @@ def next_relation_id(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class _RelationBase(_max_posargs(2)):
+class RelationBase(_max_posargs(2)):
     endpoint: str
     """Relation endpoint name. Must match some endpoint name defined in metadata.yaml."""
 
@@ -481,9 +481,9 @@ class _RelationBase(_max_posargs(2)):
         raise NotImplementedError()
 
     def __post_init__(self):
-        if type(self) is _RelationBase:
+        if type(self) is RelationBase:
             raise RuntimeError(
-                "_RelationBase cannot be instantiated directly; "
+                "RelationBase cannot be instantiated directly; "
                 "please use Relation, PeerRelation, or SubordinateRelation",
             )
 
@@ -515,7 +515,7 @@ DEFAULT_JUJU_DATABAG = {
 
 
 @dataclasses.dataclass(frozen=True)
-class Relation(_RelationBase):
+class Relation(RelationBase):
     """An integration between the charm and another application."""
 
     remote_app_name: str = "remote"
@@ -559,7 +559,7 @@ class Relation(_RelationBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class SubordinateRelation(_RelationBase):
+class SubordinateRelation(RelationBase):
     remote_app_data: "RawDataBagContents" = dataclasses.field(default_factory=dict)
     remote_unit_data: "RawDataBagContents" = dataclasses.field(
         default_factory=lambda: DEFAULT_JUJU_DATABAG.copy(),
@@ -600,7 +600,7 @@ class SubordinateRelation(_RelationBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class PeerRelation(_RelationBase):
+class PeerRelation(RelationBase):
     """A relation to share data between units of the charm."""
 
     peers_data: Dict["UnitID", "RawDataBagContents"] = dataclasses.field(
@@ -1092,8 +1092,12 @@ _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
 
 
 @dataclasses.dataclass(frozen=True)
-class _Port(_max_posargs(1)):
-    """Represents a port on the charm host."""
+class Port(_max_posargs(1)):
+    """Represents a port on the charm host.
+
+    Port objects should not be instantiated directly: use TCPPort, UDPPort, or
+    ICMPPort instead.
+    """
 
     port: Optional[int] = None
     """The port to open. Required for TCP and UDP; not allowed for ICMP."""
@@ -1101,20 +1105,20 @@ class _Port(_max_posargs(1)):
     """The protocol that data transferred over the port will use."""
 
     def __post_init__(self):
-        if type(self) is _Port:
+        if type(self) is Port:
             raise RuntimeError(
-                "_Port cannot be instantiated directly; "
+                "Port cannot be instantiated directly; "
                 "please use TCPPort, UDPPort, or ICMPPort",
             )
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, (_Port, ops.Port)):
+        if isinstance(other, (Port, ops.Port)):
             return (self.protocol, self.port) == (other.protocol, other.port)
         return False
 
 
 @dataclasses.dataclass(frozen=True)
-class TCPPort(_Port):
+class TCPPort(Port):
     """Represents a TCP port on the charm host."""
 
     port: int
@@ -1131,7 +1135,7 @@ class TCPPort(_Port):
 
 
 @dataclasses.dataclass(frozen=True)
-class UDPPort(_Port):
+class UDPPort(Port):
     """Represents a UDP port on the charm host."""
 
     port: int
@@ -1148,7 +1152,7 @@ class UDPPort(_Port):
 
 
 @dataclasses.dataclass(frozen=True)
-class ICMPPort(_Port):
+class ICMPPort(Port):
     """Represents an ICMP port on the charm host."""
 
     protocol: _RawPortProtocolLiteral = "icmp"
@@ -1242,7 +1246,7 @@ class State(_max_posargs(0)):
     If a storage is not attached, omit it from this listing."""
 
     # we don't use sets to make json serialization easier
-    opened_ports: Iterable[_Port] = dataclasses.field(default_factory=frozenset)
+    opened_ports: Iterable[Port] = dataclasses.field(default_factory=frozenset)
     """Ports opened by juju on this charm."""
     leader: bool = False
     """Whether this charm has leadership."""
@@ -1288,7 +1292,7 @@ class State(_max_posargs(0)):
             else:
                 raise TypeError(f"Invalid status.{name}: {val!r}")
         normalised_ports = [
-            _Port(protocol=port.protocol, port=port.port)
+            Port(protocol=port.protocol, port=port.port)
             if isinstance(port, ops.Port)
             else port
             for port in self.opened_ports
@@ -1344,7 +1348,7 @@ class State(_max_posargs(0)):
         # bypass frozen dataclass
         object.__setattr__(self, name, new_status)
 
-    def _update_opened_ports(self, new_ports: FrozenSet[_Port]):
+    def _update_opened_ports(self, new_ports: FrozenSet[Port]):
         """Update the current opened ports."""
         # bypass frozen dataclass
         object.__setattr__(self, "opened_ports", new_ports)

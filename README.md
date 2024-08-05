@@ -726,8 +726,8 @@ storage = scenario.Storage("foo")
 # Setup storage with some content:
 (storage.get_filesystem(ctx) / "myfile.txt").write_text("helloworld")
 
-with ctx(ctx.on.update_status(), scenario.State(storages={storage})) as event:
-    foo = event.charm.model.storages["foo"][0]
+with ctx(ctx.on.update_status(), scenario.State(storages={storage})) as manager:
+    foo = manager.charm.model.storages["foo"][0]
     loc = foo.location
     path = loc / "myfile.txt"
     assert path.exists()
@@ -899,9 +899,9 @@ import pathlib
 
 ctx = scenario.Context(MyCharm, meta={'name': 'juliette', "resources": {"foo": {"type": "oci-image"}}})
 resource = scenario.Resource(name='foo', path='/path/to/resource.tar')
-with ctx(ctx.on.start(), scenario.State(resources={resource})) as event:
+with ctx(ctx.on.start(), scenario.State(resources={resource})) as manager:
     # If the charm, at runtime, were to call self.model.resources.fetch("foo"), it would get '/path/to/resource.tar' back.
-    path = event.charm.model.resources.fetch('foo')
+    path = manager.charm.model.resources.fetch('foo')
     assert path == pathlib.Path('/path/to/resource.tar')
 ```
 
@@ -1139,9 +1139,9 @@ class MyCharm(ops.CharmBase):
 
 def test_live_charm_introspection(mycharm):
     ctx = scenario.Context(mycharm, meta=mycharm.META)
-    with ctx(ctx.on.start(), scenario.State()) as event:
+    with ctx(ctx.on.start(), scenario.State()) as manager:
         # This is your charm instance, after ops has set it up:
-        charm: MyCharm = event.charm
+        charm: MyCharm = manager.charm
         
         # We can check attributes on nested Objects or the charm itself:
         assert charm.my_charm_lib.foo == "foo"
@@ -1149,7 +1149,7 @@ def test_live_charm_introspection(mycharm):
         assert charm._stored.a == "a"
 
         # This will tell ops.main to proceed with normal execution and emit the "start" event on the charm:
-        state_out = event.run()
+        state_out = manager.run()
     
         # After that is done, we are handed back control, and we can again do some introspection:
         assert charm.my_charm_lib.foo == "bar"
@@ -1160,7 +1160,7 @@ def test_live_charm_introspection(mycharm):
     assert state_out.unit_status == ...
 ```
 
-Note that you can't call `event.run()` multiple times: the object is a context that ensures that `ops.main` 'pauses' right
+Note that you can't call `manager.run()` multiple times: the object is a context that ensures that `ops.main` 'pauses' right
 before emitting the event to hand you some introspection hooks, but for the rest this is a regular Scenario test: you
 can't emit multiple events in a single charm execution.
 

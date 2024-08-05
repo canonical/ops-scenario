@@ -29,11 +29,11 @@ def mycharm():
 
 def test_get_secret_no_secret(mycharm):
     ctx = Context(mycharm, meta={"name": "local"})
-    with ctx(ctx.on.update_status(), State()) as event:
+    with ctx(ctx.on.update_status(), State()) as mgr:
         with pytest.raises(SecretNotFoundError):
-            assert event.charm.model.get_secret(id="foo")
+            assert mgr.charm.model.get_secret(id="foo")
         with pytest.raises(SecretNotFoundError):
-            assert event.charm.model.get_secret(label="foo")
+            assert mgr.charm.model.get_secret(label="foo")
 
 
 def test_get_secret(mycharm):
@@ -41,8 +41,8 @@ def test_get_secret(mycharm):
     with ctx(
         state=State(secrets={Secret(id="foo", contents={0: {"a": "b"}})}),
         event=ctx.on.update_status(),
-    ) as event:
-        assert event.charm.model.get_secret(id="foo").get_content()["a"] == "b"
+    ) as mgr:
+        assert mgr.charm.model.get_secret(id="foo").get_content()["a"] == "b"
 
 
 @pytest.mark.parametrize("owner", ("app", "unit"))
@@ -62,8 +62,8 @@ def test_get_secret_get_refresh(mycharm, owner):
                 )
             }
         ),
-    ) as event:
-        charm = event.charm
+    ) as mgr:
+        charm = mgr.charm
         assert charm.model.get_secret(id="foo").get_content(refresh=True)["a"] == "c"
 
 
@@ -84,8 +84,8 @@ def test_get_secret_nonowner_peek_update(mycharm, app):
                 ),
             },
         ),
-    ) as event:
-        charm = event.charm
+    ) as mgr:
+        charm = mgr.charm
         assert charm.model.get_secret(id="foo").get_content()["a"] == "b"
         assert charm.model.get_secret(id="foo").peek_content()["a"] == "c"
         assert charm.model.get_secret(id="foo").get_content()["a"] == "b"
@@ -111,8 +111,8 @@ def test_get_secret_owner_peek_update(mycharm, owner):
                 )
             }
         ),
-    ) as event:
-        charm = event.charm
+    ) as mgr:
+        charm = mgr.charm
         assert charm.model.get_secret(id="foo").get_content()["a"] == "b"
         assert charm.model.get_secret(id="foo").peek_content()["a"] == "c"
         assert charm.model.get_secret(id="foo").get_content(refresh=True)["a"] == "c"
@@ -163,13 +163,13 @@ def test_add(mycharm, app):
     with ctx(
         ctx.on.update_status(),
         State(leader=app),
-    ) as event:
-        charm = event.charm
+    ) as mgr:
+        charm = mgr.charm
         if app:
             charm.app.add_secret({"foo": "bar"}, label="mylabel")
         else:
             charm.unit.add_secret({"foo": "bar"}, label="mylabel")
-        output = event.run()
+        output = mgr.run()
 
     assert output.secrets
     secret = output.get_secret(label="mylabel")
@@ -185,8 +185,8 @@ def test_set_legacy_behaviour(mycharm):
     with ctx(
         ctx.on.update_status(),
         State(),
-    ) as event:
-        charm = event.charm
+    ) as mgr:
+        charm = mgr.charm
         secret: ops_Secret = charm.unit.add_secret(rev1, label="mylabel")
         assert (
             secret.get_content()
@@ -207,7 +207,7 @@ def test_set_legacy_behaviour(mycharm):
         )
 
         secret.set_content(rev3)
-        state_out = event.run()
+        state_out = mgr.run()
         secret = charm.model.get_secret(label="mylabel")
         assert (
             secret.get_content()
@@ -229,8 +229,8 @@ def test_set(mycharm):
     with ctx(
         ctx.on.update_status(),
         State(),
-    ) as event:
-        charm = event.charm
+    ) as mgr:
+        charm = mgr.charm
         secret: ops_Secret = charm.unit.add_secret(rev1, label="mylabel")
         assert (
             secret.get_content()
@@ -244,7 +244,7 @@ def test_set(mycharm):
         assert secret.peek_content() == secret.get_content(refresh=True) == rev2
 
         secret.set_content(rev3)
-        state_out = event.run()
+        state_out = mgr.run()
         assert secret.get_content() == rev2
         assert secret.peek_content() == secret.get_content(refresh=True) == rev3
 
@@ -261,8 +261,8 @@ def test_set_juju33(mycharm):
     with ctx(
         ctx.on.update_status(),
         State(),
-    ) as event:
-        charm = event.charm
+    ) as mgr:
+        charm = mgr.charm
         secret: ops_Secret = charm.unit.add_secret(rev1, label="mylabel")
         assert secret.get_content() == rev1
 
@@ -272,7 +272,7 @@ def test_set_juju33(mycharm):
         assert secret.get_content(refresh=True) == rev2
 
         secret.set_content(rev3)
-        state_out = event.run()
+        state_out = mgr.run()
         assert secret.get_content() == rev2
         assert secret.peek_content() == rev3
         assert secret.get_content(refresh=True) == rev3
@@ -304,8 +304,8 @@ def test_meta(mycharm, app):
                 )
             },
         ),
-    ) as event:
-        charm = event.charm
+    ) as mgr:
+        charm = mgr.charm
         assert charm.model.get_secret(label="mylabel")
 
         secret = charm.model.get_secret(id="foo")
@@ -344,14 +344,14 @@ def test_secret_permission_model(mycharm, leader, owner):
                 )
             },
         ),
-    ) as event:
-        secret = event.charm.model.get_secret(id="foo")
+    ) as mgr:
+        secret = mgr.charm.model.get_secret(id="foo")
         assert secret.get_content()["a"] == "b"
         assert secret.peek_content()
         assert secret.get_content(refresh=True)
 
         # can always view
-        secret: ops_Secret = event.charm.model.get_secret(id="foo")
+        secret: ops_Secret = mgr.charm.model.get_secret(id="foo")
 
         if expect_manage:
             assert secret.get_content()
@@ -397,15 +397,15 @@ def test_grant(mycharm, app):
                 )
             },
         ),
-    ) as event:
-        charm = event.charm
+    ) as mgr:
+        charm = mgr.charm
         secret = charm.model.get_secret(label="mylabel")
         foo = charm.model.get_relation("foo")
         if app:
             secret.grant(relation=foo)
         else:
             secret.grant(relation=foo, unit=foo.units.pop())
-        output = event.run()
+        output = mgr.run()
     vals = list(output.get_secret(label="mylabel").remote_grants.values())
     assert vals == [{"remote"}] if app else [{"remote/0"}]
 
@@ -428,15 +428,15 @@ def test_update_metadata(mycharm):
                 )
             },
         ),
-    ) as event:
-        secret = event.charm.model.get_secret(label="mylabel")
+    ) as mgr:
+        secret = mgr.charm.model.get_secret(label="mylabel")
         secret.set_info(
             label="babbuccia",
             description="blu",
             expire=exp,
             rotate=SecretRotate.DAILY,
         )
-        output = event.run()
+        output = mgr.run()
 
     secret_out = output.get_secret(label="babbuccia")
     assert secret_out.label == "babbuccia"
@@ -516,32 +516,32 @@ def test_add_grant_revoke_remove():
         },
     )
 
-    with ctx(ctx.on.start(), state) as event:
-        charm = event.charm
+    with ctx(ctx.on.start(), state) as mgr:
+        charm = mgr.charm
         secret = charm.app.add_secret({"foo": "bar"}, label="mylabel")
         bar_relation = charm.model.relations["bar"][0]
 
         secret.grant(bar_relation)
-        output = event.run()
+        output = mgr.run()
 
     assert output.secrets
     scenario_secret = output.get_secret(label="mylabel")
     assert relation_remote_app in scenario_secret.remote_grants[relation_id]
 
-    with ctx(ctx.on.start(), output) as event:
-        charm: GrantingCharm = event.charm
+    with ctx(ctx.on.start(), output) as mgr:
+        charm: GrantingCharm = mgr.charm
         secret = charm.model.get_secret(label="mylabel")
         secret.revoke(bar_relation)
-        output = event.run()
+        output = mgr.run()
 
     scenario_secret = output.get_secret(label="mylabel")
     assert scenario_secret.remote_grants == {}
 
-    with ctx(ctx.on.start(), output) as event:
-        charm: GrantingCharm = event.charm
+    with ctx(ctx.on.start(), output) as mgr:
+        charm: GrantingCharm = mgr.charm
         secret = charm.model.get_secret(label="mylabel")
         secret.remove_all_revisions()
-        output = event.run()
+        output = mgr.run()
 
     assert not output.get_secret(label="mylabel").contents  # secret wiped
 

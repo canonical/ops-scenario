@@ -27,8 +27,8 @@ def test_get_resource():
     resource2 = Resource(name="bar", path=pathlib.Path("~/bar"))
     with ctx(
         ctx.on.update_status(), state=State(resources={resource1, resource2})
-    ) as event:
-        assert event.charm.model.resources.fetch("foo") == resource1.path
-        assert event.charm.model.resources.fetch("bar") == resource2.path
+    ) as mgr:
+        assert mgr.charm.model.resources.fetch("foo") == resource1.path
+        assert mgr.charm.model.resources.fetch("bar") == resource2.path
         with pytest.raises(NameError):
-            event.charm.model.resources.fetch("baz")
+            mgr.charm.model.resources.fetch("baz")

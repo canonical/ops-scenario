@@ -58,12 +58,12 @@ def trigger(
             event = getattr(ctx.on, event)(tuple(state.containers)[0])
         else:
             event = getattr(ctx.on, event)()
-    with ctx(event, state=state) as event:
+    with ctx(event, state=state) as mgr:
         if pre_event:
-            pre_event(event.charm)
-        state_out = event.run()
+            pre_event(mgr.charm)
+        state_out = mgr.run()
         if post_event:
-            post_event(event.charm)
+            post_event(mgr.charm)
     return state_out
 
 

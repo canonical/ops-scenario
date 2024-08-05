@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
-from scenario.context import Context, Task
+from scenario.context import Context, Manager, Task
 from scenario.state import (
     ActionFailed,
     ActiveStatus,
@@ -22,6 +22,7 @@ from scenario.state import (
     Network,
     Notice,
     PeerRelation,
+    Port,
     Relation,
     Resource,
     Secret,
@@ -58,6 +59,7 @@ __all__ = [
     "Address",
     "BindAddress",
     "Network",
+    "Port",
     "ICMPPort",
     "TCPPort",
     "UDPPort",
@@ -72,4 +74,5 @@ __all__ = [
     "MaintenanceStatus",
     "ActiveStatus",
     "UnknownStatus",
+    "Manager",
 ]

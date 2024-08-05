@@ -53,21 +53,21 @@ def test_run_action():
 @pytest.mark.parametrize("unit_id", (1, 2, 42))
 def test_app_name(app_name, unit_id):
     ctx = Context(MyCharm, meta={"name": "foo"}, app_name=app_name, unit_id=unit_id)
-    with ctx(ctx.on.start(), State()) as event:
-        assert event.charm.app.name == app_name
-        assert event.charm.unit.name == f"{app_name}/{unit_id}"
+    with ctx(ctx.on.start(), State()) as mgr:
+        assert mgr.charm.app.name == app_name
+        assert mgr.charm.unit.name == f"{app_name}/{unit_id}"
 
 
 def test_context_manager():
     ctx = Context(MyCharm, meta={"name": "foo"}, actions={"act": {}})
     state = State()
-    with ctx(ctx.on.start(), state) as event:
-        event.run()
-        assert event.charm.meta.name == "foo"
+    with ctx(ctx.on.start(), state) as mgr:
+        mgr.run()
+        assert mgr.charm.meta.name == "foo"
 
-    with ctx(ctx.on.action("act"), state) as event:
-        event.run()
-        assert event.charm.meta.name == "foo"
+    with ctx(ctx.on.action("act"), state) as mgr:
+        mgr.run()
+        assert mgr.charm.meta.name == "foo"
 
 
 def test_task_no_positional_arguments():
