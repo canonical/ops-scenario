@@ -51,8 +51,8 @@ def test_get_secret(mycharm, owner):
 def test_get_secret_get_refresh(mycharm, owner):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        current={"a": "b"},
-        latest={"a": "c"},
+        tracked_content={"a": "b"},
+        latest_content={"a": "c"},
         owner=owner,
     )
     with ctx.manager(
@@ -69,8 +69,8 @@ def test_get_secret_get_refresh(mycharm, owner):
 def test_get_secret_nonowner_peek_update(mycharm, app):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        current={"a": "b"},
-        latest={"a": "c"},
+        {"a": "b"},
+        {"a": "c"},
     )
     with ctx.manager(
         ctx.on.update_status(),
@@ -95,8 +95,8 @@ def test_get_secret_nonowner_peek_update(mycharm, app):
 def test_get_secret_owner_peek_update(mycharm, owner):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        current={"a": "b"},
-        latest={"a": "c"},
+        {"a": "b"},
+        {"a": "c"},
         owner=owner,
     )
     with ctx.manager(
@@ -119,8 +119,8 @@ def test_get_secret_owner_peek_update(mycharm, owner):
 def test_secret_changed_owner_evt_fails(mycharm, owner):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        current={"a": "b"},
-        latest={"a": "c"},
+        {"a": "b"},
+        {"a": "c"},
         owner=owner,
     )
     with pytest.raises(ValueError):
@@ -138,8 +138,8 @@ def test_secret_changed_owner_evt_fails(mycharm, owner):
 def test_consumer_events_failures(mycharm, evt_suffix, revision):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        current={"a": "b"},
-        latest={"a": "c"},
+        {"a": "b"},
+        {"a": "c"},
     )
     kwargs = {"secret": secret}
     if revision is not None:
@@ -163,7 +163,7 @@ def test_add(mycharm, app):
 
     assert mgr.output.secrets
     secret = mgr.output.get_secret(label="mylabel")
-    assert secret.latest == secret.current == {"foo": "bar"}
+    assert secret.latest_content == secret.tracked_content == {"foo": "bar"}
     assert secret.label == "mylabel"
 
 
@@ -199,8 +199,8 @@ def test_set_legacy_behaviour(mycharm):
         state_out = mgr.run()
 
     assert (
-        state_out.get_secret(label="mylabel").current
-        == state_out.get_secret(label="mylabel").latest
+        state_out.get_secret(label="mylabel").tracked_content
+        == state_out.get_secret(label="mylabel").latest_content
         == rev2
     )
 
@@ -231,8 +231,8 @@ def test_set(mycharm):
         state_out = mgr.run()
 
     assert (
-        state_out.get_secret(label="mylabel").current
-        == state_out.get_secret(label="mylabel").latest
+        state_out.get_secret(label="mylabel").tracked_content
+        == state_out.get_secret(label="mylabel").latest_content
         == rev2
     )
 
@@ -256,8 +256,8 @@ def test_set_juju33(mycharm):
         state_out = mgr.run()
 
     assert (
-        state_out.get_secret(label="mylabel").current
-        == state_out.get_secret(label="mylabel").latest
+        state_out.get_secret(label="mylabel").tracked_content
+        == state_out.get_secret(label="mylabel").latest_content
         == rev2
     )
 
@@ -536,7 +536,7 @@ def test_secret_expired_event():
         ctx.on.secret_expired(secret, revision=old_revision),
         State(leader=True, secrets={secret}),
     )
-    assert state.get_secret(id=secret.id).latest == {"password": "newpass"}
+    assert state.get_secret(id=secret.id).latest_content == {"password": "newpass"}
     assert ctx.removed_secret_revisions == [old_revision]
 
 
@@ -564,13 +564,13 @@ def test_remove_bad_revision():
 
 def test_no_additional_positional_arguments():
     with pytest.raises(TypeError):
-        Secret({}, None)
+        Secret({}, {}, None)
 
 
 def test_default_values():
     contents = {"foo": "bar"}
     secret = Secret(contents)
-    assert secret.latest == secret.current == contents
+    assert secret.latest_content == secret.tracked_content == contents
     assert secret.id.startswith("secret:")
     assert secret.label is None
     assert secret.description is None

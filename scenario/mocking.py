@@ -363,7 +363,7 @@ class _MockModelBackend(_ModelBackend):
         from scenario.state import Secret
 
         secret = Secret(
-            latest=content,
+            content,
             label=label,
             description=description,
             expire=expire,
@@ -412,10 +412,10 @@ class _MockModelBackend(_ModelBackend):
         if peek or refresh:
             if refresh:
                 secret._track_latest_revision()
-            return secret.latest
+            assert secret.latest_content is not None
+            return secret.latest_content
 
-        assert secret.current is not None
-        return secret.current
+        return secret.tracked_content
 
     def secret_info_get(
         self,
@@ -450,7 +450,7 @@ class _MockModelBackend(_ModelBackend):
         secret = self._get_secret(id, label)
         self._check_can_manage_secret(secret)
 
-        if content == secret.latest:
+        if content == secret.latest_content:
             # In Juju 3.6 and higher, this is a no-op, but it's good to warn
             # charmers if they are doing this, because it's not generally good
             # practice.

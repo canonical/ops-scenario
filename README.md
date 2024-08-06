@@ -804,19 +804,20 @@ Scenario has secrets. Here's how you use them.
 state = scenario.State(
     secrets={
         scenario.Secret(
-            current={'key': 'public'},
-            latest={'key': 'public', 'cert': 'private'},
+            tracked_content={'key': 'public'},
+            latest_content={'key': 'public', 'cert': 'private'},
         )
     ]
 )
 ```
 
-The only mandatory arguments to Secret is the `latest` contents: that is, a `str:str` mapping
-representing the content of the revision. If the unit that's handling the event
-is tracking a different revision of the content, then `current` should also be
-provided - if it's not, then Scenario assumes that `current` is the `latest`.
-If there are other revisions of the content, simply don't include them: the
-unit has no way of knowing about these.
+The only mandatory arguments to Secret is the `tracked_content` dict: a `str:str`
+mapping representing the content of the revision. If there is a newer revision
+of the content than the one the unit that's handling the event is tracking, then
+`latest_content` should also be provided - if it's not, then Scenario assumes
+that `latest_content` is the `tracked_content`. If there are other revisions of
+the content, simply don't include them: the unit has no way of knowing about
+these.
 
 There are three cases:
 - the secret is owned by this app but not this unit, in which case this charm can only manage it if we are the leader
@@ -837,7 +838,7 @@ To specify a secret owned by this unit (or app):
 state = scenario.State(
     secrets={
         scenario.Secret(
-            latest={'key': 'private'},
+            {'key': 'private'},
             owner='unit',  # or 'app'
             # The secret owner has granted access to the "remote" app over some relation with ID 0:
             remote_grants={0: {"remote"}}
@@ -852,7 +853,7 @@ To specify a secret owned by some other application, or a user secret, and give 
 state = scenario.State(
     secrets={
         scenario.Secret(
-            latest={'key': 'public'},
+            {'key': 'public'},
             # owner=None, which is the default
         )
     }

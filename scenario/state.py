@@ -280,9 +280,9 @@ def _generate_secret_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class Secret(_max_posargs(1)):
-    latest: "RawSecretRevisionContents"
-    current: Optional["RawSecretRevisionContents"] = None
+class Secret(_max_posargs(2)):
+    tracked_content: "RawSecretRevisionContents"
+    latest_content: Optional["RawSecretRevisionContents"] = None
 
     id: str = dataclasses.field(default_factory=_generate_secret_id)
 
@@ -309,15 +309,15 @@ class Secret(_max_posargs(1)):
         return hash(self.id)
 
     def __post_init__(self):
-        if self.current is None:
+        if self.latest_content is None:
             # bypass frozen dataclass
-            object.__setattr__(self, "current", self.latest)
+            object.__setattr__(self, "latest_content", self.tracked_content)
 
     def _track_latest_revision(self):
         """Set the current revision to the tracked revision."""
         # bypass frozen dataclass
         object.__setattr__(self, "_tracked_revision", self._latest_revision)
-        object.__setattr__(self, "current", self.latest)
+        object.__setattr__(self, "tracked_content", self.latest_content)
 
     def _update_metadata(
         self,
@@ -333,7 +333,7 @@ class Secret(_max_posargs(1)):
         # TODO: if this is done twice in the same hook, then Juju ignores the
         # first call, it doesn't continue to update like this does.
         if content:
-            object.__setattr__(self, "latest", content)
+            object.__setattr__(self, "latest_content", content)
         if label:
             object.__setattr__(self, "label", label)
         if description:
