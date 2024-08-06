@@ -563,6 +563,10 @@ class Context:
             charm will invoke when handling the Event.
         """
         if event.action:
+            # Create an ActionOutput object now so that there is somewhere to
+            # store the logs and results while the charm is processing the
+            # action handler(s). This is not accessible until run() finishes and
+            # the handlers have finished.
             self.action_output = ActionOutput()
         with self._run(event=event, state=state) as ops:
             ops.emit()
