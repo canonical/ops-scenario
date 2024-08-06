@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 from ops import CharmBase
 
-from scenario import Context, State, Task
+from scenario import ActionOutput, Context, State
 from scenario.state import _Event, next_action_id
 
 
@@ -70,9 +70,9 @@ def test_context_manager():
         assert mgr.charm.meta.name == "foo"
 
 
-def test_task_no_positional_arguments():
+def test_action_output_no_positional_arguments():
     with pytest.raises(TypeError):
-        Task(None)
+        ActionOutput(None)
 
 
 def test_action_output_no_results():
@@ -86,8 +86,7 @@ def test_action_output_no_results():
 
     ctx = Context(MyCharm, meta={"name": "foo"}, actions={"act": {}})
     ctx.run(ctx.on.action("act"), State())
-    assert len(ctx.action_history) == 1
-    task = ctx.action_history[0]
-    assert task.results is None
-    assert task.status == "completed"
-    assert task.failure_message == ""
+    action_output = ctx.action_output
+    assert action_output.results is None
+    assert action_output.status == "completed"
+    assert action_output.failure_message == ""

@@ -977,15 +977,15 @@ def test_backup_action():
     state = ctx.run(ctx.on.action("do_backup"), scenario.State())
 
     # You can assert action results and logs using the action history:
-    assert ctx.action_history[0].logs == ['baz', 'qux']
-    assert ctx.action_history[0].results == {'foo': 'bar'}
+    assert ctx.action_output.logs == ['baz', 'qux']
+    assert ctx.action_output.results == {'foo': 'bar'}
 ```
 
 ## Failing Actions
 
 If the charm code calls `event.fail()` to indicate that the action has failed,
 an `ActionFailed` exception will be raised. This avoids having to include
-`assert ctx.action_history[0].status == "completed"` code in every test where
+`assert ctx.action_output.status == "completed"` code in every test where
 the action is successful.
 
 ```python
@@ -997,8 +997,8 @@ def test_backup_action_failed():
     assert exc_info.value.message == "sorry, couldn't do the backup"
 
     # You can still assert action results and logs that occured before the failure:
-    assert ctx.action_history[0].logs == ['baz', 'qux']
-    assert ctx.action_history[0].results == {'foo': 'bar'}
+    assert ctx.action_output.logs == ['baz', 'qux']
+    assert ctx.action_output.results == {'foo': 'bar'}
 ```
 
 ## Parametrized Actions

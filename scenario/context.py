@@ -39,11 +39,11 @@ DEFAULT_JUJU_VERSION = "3.4"
 
 
 @dataclasses.dataclass(frozen=True)
-class Task(_max_posargs(0)):
+class ActionOutput(_max_posargs(0)):
     """Wraps the results of running an action event on a unit.
 
     Tests should generally not create instances of this class directly, but
-    rather use the :attr:`Context.action_history` attribute to inspect the
+    rather use the :attr:`Context.action_output` attribute to inspect the
     results of running actions.
     """
 
@@ -496,7 +496,7 @@ class Context:
         self._output_state: Optional["State"] = None
 
         # operations (and embedded tasks) from running actions
-        self.action_history: List[Task] = []
+        self.action_output: Optional[ActionOutput] = None
 
         self.on = _CharmEvents()
 
@@ -563,11 +563,12 @@ class Context:
             charm will invoke when handling the Event.
         """
         if event.action:
-            self.action_history.append(Task())
+            self.action_output = ActionOutput()
         with self._run(event=event, state=state) as ops:
             ops.emit()
         if event.action:
-            current_task = self.action_history[-1]
+            current_task = self.action_output
+            assert current_task is not None
             if current_task.status == "failed":
                 raise ActionFailed(current_task.failure_message, self.output_state)
             current_task.set_status("completed")

@@ -68,9 +68,8 @@ def test_action_event_results_valid(mycharm, res_value):
 
     ctx.run(ctx.on.action("foo"), State())
 
-    assert len(ctx.action_history) == 1
-    assert ctx.action_history[0].results == res_value
-    assert ctx.action_history[0].status == "completed"
+    assert ctx.action_output.results == res_value
+    assert ctx.action_output.status == "completed"
 
 
 @pytest.mark.parametrize("res_value", ({"a": {"b": {"c"}}}, {"d": "e"}))
@@ -90,8 +89,7 @@ def test_action_event_outputs(mycharm, res_value):
     with pytest.raises(ActionFailed) as out:
         ctx.run(ctx.on.action("foo"), State())
     assert out.value.message == "failed becozz"
-    assert len(ctx.action_history) == 1
-    task = ctx.action_history[0]
+    task = ctx.action_output
     assert task.results == {"my-res": res_value}
     assert task.logs == ["log1", "log2"]
     assert task.failure_message == "failed becozz"
@@ -114,8 +112,8 @@ def test_action_continues_after_fail():
     with pytest.raises(ActionFailed) as exc_info:
         ctx.run(ctx.on.action("foo"), State())
     assert exc_info.value.message == "oh no!"
-    assert ctx.action_history[0].logs == ["starting"]
-    assert ctx.action_history[0].results == {"initial": "result", "final": "result"}
+    assert ctx.action_output.logs == ["starting"]
+    assert ctx.action_output.results == {"initial": "result", "final": "result"}
 
 
 def _ops_less_than(wanted_major, wanted_minor):
