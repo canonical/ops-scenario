@@ -496,7 +496,7 @@ If you want to, you can override any of these relation or extra-binding associat
 
 ```python
 state = scenario.State(networks={
-  scenario.Network("foo", [BindAddress([Address('192.0.2.1')])])
+  scenario.Network("foo", [scenario.BindAddress([scenario.Address('192.0.2.1')])])
 })
 ```
 
@@ -663,7 +663,7 @@ def test_pebble_exec():
         ctx.on.pebble_ready(container),
         state_in,
     )
-    assert state_out.containers["foo"].get_exec(('ls', '-ll')).stdin = "..."
+    assert state_out.containers["foo"].get_exec(('ls', '-ll')).stdin == "..."
 ```
 
 Scenario will attempt to find the right `Exec` object by matching the provided
@@ -726,9 +726,9 @@ check doesn't have to match the event being generated: by the time that Juju
 sends a pebble-check-failed event the check might have started passing again.
 
 ```python
-ctx = scenario.Context(MyCharm, meta={"name": "foo", "containers": {"my-container": {}}})
+ctx = scenario.Context(MyCharm, meta={"name": "foo", "containers": {"my_container": {}}})
 check_info = scenario.CheckInfo("http-check", failures=7, status=ops.pebble.CheckStatus.DOWN)
-container = scenario.Container("my-container", check_infos={check_info})
+container = scenario.Container("my_container", check_infos={check_info})
 state = scenario.State(containers={container})
 ctx.run(ctx.on.pebble_check_failed(info=check_info, container=container), state=state)
 ```

@@ -599,7 +599,7 @@ def check_containers_consistency(
         ):
             errors.append(
                 f"the event being processed concerns check {event.check_info.name}, but that "
-                "check is not the {evt_container_name} container.",
+                f"check is not the {evt_container_name} container.",
             )
 
     # - a container in state.containers is not in meta.containers
