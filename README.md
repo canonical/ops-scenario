@@ -705,9 +705,9 @@ check doesn't have to match the event being generated: by the time that Juju
 sends a pebble-check-failed event the check might have started passing again.
 
 ```python
-ctx = scenario.Context(MyCharm, meta={"name": "foo", "containers": {"my-container": {}}})
+ctx = scenario.Context(MyCharm, meta={"name": "foo", "containers": {"my_container": {}}})
 check_info = scenario.CheckInfo("http-check", failures=7, status=ops.pebble.CheckStatus.DOWN)
-container = scenario.Container("my-container", check_infos={check_info})
+container = scenario.Container("my_container", check_infos={check_info})
 state = scenario.State(containers={container})
 ctx.run(ctx.on.pebble_check_failed(info=check_info, container=container), state=state)
 ```
@@ -807,7 +807,7 @@ state = scenario.State(
             tracked_content={'key': 'public'},
             latest_content={'key': 'public', 'cert': 'private'},
         )
-    ]
+    }
 )
 ```
 
@@ -872,12 +872,12 @@ class SecretCharm(ops.CharmBase):
         event.secret.remove_revision(event.revision)
 
 
-ctx = Context(SecretCharm, meta={"name": "foo"})
-secret = Secret({"password": "xxxxxxxx"}, owner="app")
+ctx = scenario.Context(SecretCharm, meta={"name": "foo"})
+secret = scenario.Secret({"password": "xxxxxxxx"}, owner="app")
 old_revision = 42
 state = ctx.run(
     ctx.on.secret_remove(secret, revision=old_revision),
-    State(leader=True, secrets={secret})
+    scenario.State(leader=True, secrets={secret})
 )
 assert ctx.removed_secret_revisions == [old_revision]
 ```
