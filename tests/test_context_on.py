@@ -112,8 +112,8 @@ def test_simple_secret_events(as_kwarg, event_name, event_kind, owner):
 def test_revision_secret_events(event_name, event_kind):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     secret = scenario.Secret(
-        {"password": "yyyy"},
-        {"password": "xxxx"},
+        tracked_content={"password": "yyyy"},
+        latest_content={"password": "xxxx"},
         owner="app",
     )
     state_in = scenario.State(secrets={secret})
@@ -135,8 +135,8 @@ def test_revision_secret_events(event_name, event_kind):
 def test_revision_secret_events_as_positional_arg(event_name):
     ctx = scenario.Context(ContextCharm, meta=META, actions=ACTIONS)
     secret = scenario.Secret(
-        {"password": "yyyy"},
-        {"password": "xxxx"},
+        tracked_content={"password": "yyyy"},
+        latest_content={"password": "xxxx"},
         owner=None,
     )
     state_in = scenario.State(secrets={secret})

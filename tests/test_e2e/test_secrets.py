@@ -1,5 +1,4 @@
 import datetime
-import warnings
 
 import pytest
 from ops.charm import CharmBase
@@ -69,8 +68,8 @@ def test_get_secret_get_refresh(mycharm, owner):
 def test_get_secret_nonowner_peek_update(mycharm, app):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        {"a": "b"},
-        {"a": "c"},
+        tracked_content={"a": "b"},
+        latest_content={"a": "c"},
     )
     with ctx.manager(
         ctx.on.update_status(),
@@ -95,8 +94,8 @@ def test_get_secret_nonowner_peek_update(mycharm, app):
 def test_get_secret_owner_peek_update(mycharm, owner):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        {"a": "b"},
-        {"a": "c"},
+        tracked_content={"a": "b"},
+        latest_content={"a": "c"},
         owner=owner,
     )
     with ctx.manager(
@@ -119,8 +118,8 @@ def test_get_secret_owner_peek_update(mycharm, owner):
 def test_secret_changed_owner_evt_fails(mycharm, owner):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        {"a": "b"},
-        {"a": "c"},
+        tracked_content={"a": "b"},
+        latest_content={"a": "c"},
         owner=owner,
     )
     with pytest.raises(ValueError):
@@ -138,8 +137,8 @@ def test_secret_changed_owner_evt_fails(mycharm, owner):
 def test_consumer_events_failures(mycharm, evt_suffix, revision):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret(
-        {"a": "b"},
-        {"a": "c"},
+        tracked_content={"a": "b"},
+        latest_content={"a": "c"},
     )
     kwargs = {"secret": secret}
     if revision is not None:

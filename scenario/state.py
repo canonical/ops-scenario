@@ -280,7 +280,7 @@ def _generate_secret_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class Secret(_max_posargs(2)):
+class Secret(_max_posargs(1)):
     tracked_content: "RawSecretRevisionContents"
     latest_content: Optional["RawSecretRevisionContents"] = None
 
