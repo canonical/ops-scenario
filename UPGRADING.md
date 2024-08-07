@@ -89,6 +89,44 @@ state = State(
 )
 ```
 
+### Only pass the tracked and latest content to Secrets
+
+Rather than having a dictionary of many revisions as part of `Secret` objects,
+only the tracked and latest revision content needs to be included. These are the
+only revisions that the charm has access to, so any other revisions are not
+required. In addition, there's no longer a requirement to pass in an ID.
+
+```python
+# Older Scenario code.
+state = State(
+    secrets=[
+        scenario.Secret(
+            id='foo',
+            contents={0: {'certificate': 'xxxx'}}
+        ),
+        scenario.Secret(
+            id='foo',
+            contents={
+                0: {'password': '1234'},
+                1: {'password': 'abcd'},
+                2: {'password': 'admin'},
+            }
+        ),
+    ]
+)
+
+# Scenario 7.x
+state = State(
+    secrets={
+        scenario.Secret({'certificate': 'xxxx'}),
+        scenario.Secret(
+            tracked_content={'password': '1234'},
+            latest_content={'password': 'admin'},
+        ),
+    }
+)
+```
+
 ### Trigger custom events by triggering the underlying Juju event
 
 Scenario no longer supports explicitly running custom events. Instead, you
