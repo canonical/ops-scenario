@@ -836,7 +836,7 @@ class Container(_max_posargs(1)):
     execs: Iterable[Exec] = frozenset()
     """Simulate executing commands in the container.
 
-    Specify each command the charm might run in the container and a :class:`Exec`
+    Specify each command the charm might run in the container and an :class:`Exec`
     containing its return code and any stdout/stderr.
 
     For example::
