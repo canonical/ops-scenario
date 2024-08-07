@@ -660,6 +660,13 @@ class Exec(_max_posargs(1)):
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
 
+    def __post_init__(self):
+        # The command prefix can be any sequence type, and a list is tidier to
+        # write when there's only one string. However, this object needs to be
+        # hashable, so can't contain a list. We 'freeze' the sequence to a tuple
+        # to support that.
+        object.__setattr__(self, "command_prefix", tuple(self.command_prefix))
+
     def _run(self) -> int:
         return self._change_id
 
@@ -844,9 +851,9 @@ class Container(_max_posargs(1)):
         container = scenario.Container(
             name='foo',
             execs={
-                scenario.Exec(('whoami', ), return_code=0, stdout='ubuntu'),
+                scenario.Exec(['whoami'], return_code=0, stdout='ubuntu'),
                 scenario.Exec(
-                    ('dig', '+short', 'canonical.com'),
+                    ['dig', '+short', 'canonical.com'],
                     return_code=0,
                     stdout='185.125.190.20\\n185.125.190.21',
                 ),

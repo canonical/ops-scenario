@@ -201,7 +201,7 @@ def test_exec(charm_cls, cmd, out):
                 Container(
                     name="foo",
                     can_connect=True,
-                    execs={Exec((cmd,), stdout=out)},
+                    execs={Exec([cmd], stdout=out)},
                 )
             }
         ),
@@ -224,7 +224,7 @@ def test_get_exec():
             proc.wait_output()
 
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
-    exec = Exec((), stdout=LS)
+    exec = Exec([], stdout=LS)
     container = Container(name="foo", can_connect=True, execs={exec})
     state_out = ctx.run(
         ctx.on.pebble_ready(container=container), State(containers={container})
@@ -332,7 +332,7 @@ def test_exec_wait_error(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                execs={Exec(("foo",), stdout="hello pebble", return_code=1)},
+                execs={Exec(["foo"], stdout="hello pebble", return_code=1)},
             )
         }
     )
@@ -352,7 +352,7 @@ def test_exec_wait_output(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                execs={Exec(("foo",), stdout="hello pebble", stderr="oepsie")},
+                execs={Exec(["foo"], stdout="hello pebble", stderr="oepsie")},
             )
         }
     )
@@ -372,7 +372,7 @@ def test_exec_wait_output_error(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                execs={Exec(("foo",), stdout="hello pebble", return_code=1)},
+                execs={Exec(["foo"], stdout="hello pebble", return_code=1)},
             )
         }
     )

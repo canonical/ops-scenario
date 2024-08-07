@@ -648,7 +648,7 @@ def test_pebble_exec():
         name='foo',
         execs={
             scenario.Exec(
-                command_prefix=('ls', '-ll'),
+                command_prefix=['ls', '-ll'],
                 return_code=0,
                 stdout=LS_LL,
             ),
@@ -663,7 +663,7 @@ def test_pebble_exec():
         ctx.on.pebble_ready(container),
         state_in,
     )
-    assert state_out.containers["foo"].get_exec(('ls', '-ll')).stdin == "..."
+    assert state_out.containers["foo"].get_exec(['ls', '-ll']).stdin == "..."
 ```
 
 Scenario will attempt to find the right `Exec` object by matching the provided
