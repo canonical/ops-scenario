@@ -683,11 +683,6 @@ class Context:
         return ao
 
     @contextmanager
-    def _run_action(self, action: "Action", state: "State"):
-        with self._run(event=action.event, state=state) as ops:
-            yield ops
-
-    @contextmanager
     def _run(self, event: "_Event", state: "State"):
         runtime = Runtime(
             charm_spec=self.charm_spec,

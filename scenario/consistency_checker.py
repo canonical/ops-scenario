@@ -193,26 +193,27 @@ def _check_workload_event(
             "cannot construct a workload event without the container instance. "
             "Please pass one.",
         )
-    elif not event.name.startswith(normalize_name(event.container.name)):
-        errors.append(
-            f"workload event should start with container name. {event.name} does "
-            f"not start with {event.container.name}.",
-        )
-        if event.container not in state.containers:
+    else:
+        if not event.name.startswith(normalize_name(event.container.name)):
             errors.append(
-                f"cannot emit {event.name} because container {event.container.name} "
-                f"is not in the state.",
+                f"workload event should start with container name. {event.name} does "
+                f"not start with {event.container.name}.",
             )
-        if not event.container.can_connect:
-            warnings.append(
-                "you **can** fire fire pebble-ready while the container cannot connect, "
-                "but that's most likely not what you want.",
+            if event.container not in state.containers:
+                errors.append(
+                    f"cannot emit {event.name} because container {event.container.name} "
+                    f"is not in the state.",
+                )
+            if not event.container.can_connect:
+                warnings.append(
+                    "you **can** fire fire pebble-ready while the container cannot connect, "
+                    "but that's most likely not what you want.",
+                )
+        names = Counter(exec.command_prefix for exec in event.container.execs)
+        if dupes := [n for n in names if names[n] > 1]:
+            errors.append(
+                f"container {event.container.name} has duplicate command prefixes: {dupes}",
             )
-    names = Counter(exec.command_prefix for exec in event.container.execs)
-    if dupes := [n for n in names if names[n] > 1]:
-        errors.append(
-            f"container {event.container.name} has duplicate command prefixes: {dupes}",
-        )
 
 
 def _check_action_event(
@@ -654,37 +655,6 @@ def check_storedstate_consistency(
 
     # The content must be marshallable.
     for ss in state.stored_states:
-        # We don't need the marshalled state, just to know that it can be.
-        # This is the same "only simple types" check that ops does.
-        try:
-            marshal.dumps(ss.content)
-        except ValueError:
-            errors.append(
-                f"The StoredState object {ss.owner_path}.{ss.name} should contain only simple types.",
-            )
-    return Results(errors, [])
-
-
-def check_storedstate_consistency(
-    *,
-    state: "State",
-    **_kwargs,  # noqa: U101
-) -> Results:
-    """Check the internal consistency of `state.storedstate`."""
-    errors = []
-
-    # Attribute names must be unique on each object.
-    names = defaultdict(list)
-    for ss in state.stored_state:
-        names[ss.owner_path].append(ss.name)
-    for owner, owner_names in names.items():
-        if len(owner_names) != len(set(owner_names)):
-            errors.append(
-                f"{owner} has multiple StoredState objects with the same name.",
-            )
-
-    # The content must be marshallable.
-    for ss in state.stored_state:
         # We don't need the marshalled state, just to know that it can be.
         # This is the same "only simple types" check that ops does.
         try:

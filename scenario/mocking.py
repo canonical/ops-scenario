@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
-import dataclasses
 import datetime
 import random
 import shutil
@@ -79,7 +78,6 @@ class _MockExecProcess:
         command: Tuple[str, ...],
         change_id: int,
         exec: "Exec",
-        container: "ContainerSpec",
     ):
         self._command = command
         self._change_id = change_id
@@ -89,17 +87,9 @@ class _MockExecProcess:
         self.stderr = StringIO(self._exec.stderr)
         # You can't pass *in* the stdin, the charm is responsible for that.
         self.stdin = StringIO()
-        self._container = container
 
     def _store_stdin(self):
-        execs = {
-            e
-            for e in self._container.execs
-            if e.command_prefix != self._exec.command_prefix
-        }
-        exec = dataclasses.replace(self._exec, stdin=self.stdin.read())
-        execs.add(exec)
-        self._container._update_execs(execs)
+        self._exec._update_stdin(self.stdin.getvalue())
 
     def wait(self):
         self._waited = True
@@ -786,7 +776,6 @@ class _MockPebbleClient(_TestingPebbleClient):
             change_id=change_id,
             command=command,
             exec=handler,
-            container=self._container,
         )
 
     def _check_connection(self):

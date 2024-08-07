@@ -12,8 +12,8 @@ from scenario.state import (
     CloudCredential,
     CloudSpec,
     Container,
-    Model,
     Exec,
+    Model,
     Network,
     Notice,
     PeerRelation,
@@ -359,6 +359,7 @@ def test_secret_not_in_state():
         _Event("secret_changed", secret=secret),
         _CharmSpec(MyCharm, {}),
     )
+
 
 def test_peer_relation_consistency():
     assert_inconsistent(
