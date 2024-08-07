@@ -88,19 +88,16 @@ class _MockExecProcess:
         # You can't pass *in* the stdin, the charm is responsible for that.
         self.stdin = StringIO()
 
-    def _store_stdin(self):
-        self._exec._update_stdin(self.stdin.getvalue())
-
     def wait(self):
         self._waited = True
-        self._store_stdin()
+        self._exec._update_stdin(self.stdin.getvalue())
         exit_code = self._exec.return_code
         if exit_code != 0:
             raise ExecError(list(self._command), exit_code, None, None)
 
     def wait_output(self):
         exec = self._exec
-        self._store_stdin()
+        self._exec._update_stdin(self.stdin.getvalue())
         exit_code = exec.return_code
         if exit_code != 0:
             raise ExecError(
