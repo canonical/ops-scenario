@@ -844,9 +844,12 @@ class Container(_max_posargs(1)):
         container = scenario.Container(
             name='foo',
             execs={
-                ('whoami', ): scenario.Exec(return_code=0, stdout='ubuntu')
-                ('dig', '+short', 'canonical.com'):
-                    scenario.Exec(return_code=0, stdout='185.125.190.20\\n185.125.190.21')
+                scenario.Exec(('whoami', ), return_code=0, stdout='ubuntu'),
+                scenario.Exec(
+                    ('dig', '+short', 'canonical.com'),
+                    return_code=0,
+                    stdout='185.125.190.20\\n185.125.190.21',
+                ),
             }
         )
     """
