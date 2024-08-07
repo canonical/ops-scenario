@@ -835,13 +835,14 @@ If this charm does not own the secret, but also it was not granted view rights b
 To specify a secret owned by this unit (or app):
 
 ```python
+rel = scenario.Relation("web")
 state = scenario.State(
     secrets={
         scenario.Secret(
             {'key': 'private'},
             owner='unit',  # or 'app'
-            # The secret owner has granted access to the "remote" app over some relation with ID 0:
-            remote_grants={0: {"remote"}}
+            # The secret owner has granted access to the "remote" app over some relation:
+            remote_grants={rel.id: {"remote"}}
         )
     }
 )
