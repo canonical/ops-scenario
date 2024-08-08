@@ -488,7 +488,7 @@ remote_unit_2_is_joining_event = ctx.on.relation_joined(relation, remote_unit=2)
 Simplifying a bit the Juju "spaces" model, each integration endpoint a charm defines in its metadata is associated with a network. Regardless of whether there is a living relation over that endpoint, that is.  
 
 If your charm has a relation `"foo"` (defined in its metadata), then the charm will be able at runtime to do `self.model.get_binding("foo").network`.
-The network you'll get by doing so is heavily defaulted (see `state.Network.default`) and good for most use-cases because the charm should typically not be concerned about what IP it gets. 
+The network you'll get by doing so is heavily defaulted (see `state.Network`) and good for most use-cases because the charm should typically not be concerned about what IP it gets. 
 
 On top of the relation-provided network bindings, a charm can also define some `extra-bindings` in its metadata and access them at runtime. Note that this is a deprecated feature that should not be relied upon. For completeness, we support it in Scenario.
 
@@ -496,7 +496,7 @@ If you want to, you can override any of these relation or extra-binding associat
 
 ```python
 state = scenario.State(networks={
-  scenario.Network.default("foo", private_address='192.0.2.1')
+  scenario.Network("foo", [BindAddress([Address('192.0.2.1')])])
 })
 ```
 
@@ -804,22 +804,27 @@ Scenario has secrets. Here's how you use them.
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'public'}},
-            id='foo',
-        ),
-    },
+            tracked_content={'key': 'public'},
+            latest_content={'key': 'public', 'cert': 'private'},
+        )
+    }
 )
 ```
 
-The only mandatory arguments to Secret are its secret ID (which should be unique) and its 'contents': that is, a mapping
-from revision numbers (integers) to a `str:str` dict representing the payload of the revision.
+The only mandatory arguments to Secret is the `tracked_content` dict: a `str:str`
+mapping representing the content of the revision. If there is a newer revision
+of the content than the one the unit that's handling the event is tracking, then
+`latest_content` should also be provided - if it's not, then Scenario assumes
+that `latest_content` is the `tracked_content`. If there are other revisions of
+the content, simply don't include them: the unit has no way of knowing about
+these.
 
 There are three cases:
 - the secret is owned by this app but not this unit, in which case this charm can only manage it if we are the leader
 - the secret is owned by this unit, in which case this charm can always manage it (leader or not)
-- (default) the secret is not owned by this app nor unit, which means we can't manage it but only view it
+- (default) the secret is not owned by this app nor unit, which means we can't manage it but only view it (this includes user secrets)
 
-Thus by default, the secret is not owned by **this charm**, but, implicitly, by some unknown 'other charm', and that other charm has granted us view rights.
+Thus by default, the secret is not owned by **this charm**, but, implicitly, by some unknown 'other charm' (or a user), and that other has granted us view rights.
 
 The presence of the secret in `State.secrets` entails that we have access to it, either as owners or as grantees. Therefore, if we're not owners, we must be grantees. Absence of a Secret from the known secrets list means we are not entitled to obtaining it in any way. The charm, indeed, shouldn't even know it exists.
 
@@ -830,32 +835,52 @@ If this charm does not own the secret, but also it was not granted view rights b
 To specify a secret owned by this unit (or app):
 
 ```python
+rel = scenario.Relation("web")
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'private'}},
-            id='foo',
+            {'key': 'private'},
             owner='unit',  # or 'app'
-            remote_grants={0: {"remote"}}
-            # the secret owner has granted access to the "remote" app over some relation with ID 0
-        ),
-    },
+            # The secret owner has granted access to the "remote" app over some relation:
+            remote_grants={rel.id: {"remote"}}
+        )
+    }
 )
 ```
 
-To specify a secret owned by some other application and give this unit (or app) access to it:
+To specify a secret owned by some other application, or a user secret, and give this unit (or app) access to it:
 
 ```python
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'public'}},
-            id='foo',
+            {'key': 'public'},
             # owner=None, which is the default
-            revision=0,  # the revision that this unit (or app) is currently tracking
-        ),
-    },
+        )
+    }
 )
+```
+
+When handling the `secret-expired` and `secret-remove` events, the charm must remove the specified revision of the secret. For `secret-remove`, the revision will no longer be in the `State`, because it's no longer in use (which is why the `secret-remove` event was triggered). To ensure that the charm is removing the secret, check the context for the history of secret removal:
+
+```python
+class SecretCharm(ops.CharmBase):
+    def __init__(self, framework):
+        super().__init__(framework)
+        self.framework.observe(self.on.secret_remove, self._on_secret_remove)
+
+    def _on_secret_remove(self, event):
+        event.secret.remove_revision(event.revision)
+
+
+ctx = scenario.Context(SecretCharm, meta={"name": "foo"})
+secret = scenario.Secret({"password": "xxxxxxxx"}, owner="app")
+old_revision = 42
+state = ctx.run(
+    ctx.on.secret_remove(secret, revision=old_revision),
+    scenario.State(leader=True, secrets={secret})
+)
+assert ctx.removed_secret_revisions == [old_revision]
 ```
 
 ## StoredState

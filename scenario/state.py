@@ -5,7 +5,9 @@
 import dataclasses
 import datetime
 import inspect
+import random
 import re
+import string
 from collections import namedtuple
 from enum import Enum
 from itertools import chain
@@ -276,23 +278,25 @@ class CloudSpec(_max_posargs(1)):
         )
 
 
+def _generate_secret_id():
+    # This doesn't account for collisions, but the odds are so low that it
+    # should not be possible in any realistic test run.
+    secret_id = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(20)
+    )
+    return f"secret:{secret_id}"
+
+
 @dataclasses.dataclass(frozen=True)
 class Secret(_max_posargs(1)):
-    # mapping from revision IDs to each revision's contents
-    contents: Dict[int, "RawSecretRevisionContents"]
+    tracked_content: "RawSecretRevisionContents"
+    latest_content: Optional["RawSecretRevisionContents"] = None
 
-    id: str
-    # CAUTION: ops-created Secrets (via .add_secret()) will have a canonicalized
-    #  secret id (`secret:` prefix)
-    #  but user-created ones will not. Using post-init to patch it in feels bad, but requiring the user to
-    #  add the prefix manually every time seems painful as well.
+    id: str = dataclasses.field(default_factory=_generate_secret_id)
 
     # indicates if the secret is owned by THIS unit, THIS app or some other app/unit.
     # if None, the implication is that the secret has been granted to this unit.
     owner: Literal["unit", "app", None] = None
-
-    # what revision is currently tracked by this charm. Only meaningful if owner=False
-    revision: int = 0
 
     # mapping from relation IDs to remote unit/apps to which this secret has been granted.
     # Only applicable if owner
@@ -303,13 +307,25 @@ class Secret(_max_posargs(1)):
     expire: Optional[datetime.datetime] = None
     rotate: Optional[SecretRotate] = None
 
+    # what revision is currently tracked by this charm. Only meaningful if owner=False
+    _tracked_revision: int = 1
+
+    # what revision is the latest for this secret.
+    _latest_revision: int = 1
+
     def __hash__(self) -> int:
         return hash(self.id)
 
-    def _set_revision(self, revision: int):
-        """Set a new tracked revision."""
+    def __post_init__(self):
+        if self.latest_content is None:
+            # bypass frozen dataclass
+            object.__setattr__(self, "latest_content", self.tracked_content)
+
+    def _track_latest_revision(self):
+        """Set the current revision to the tracked revision."""
         # bypass frozen dataclass
-        object.__setattr__(self, "revision", revision)
+        object.__setattr__(self, "_tracked_revision", self._latest_revision)
+        object.__setattr__(self, "tracked_content", self.latest_content)
 
     def _update_metadata(
         self,
@@ -320,11 +336,12 @@ class Secret(_max_posargs(1)):
         rotate: Optional[SecretRotate] = None,
     ):
         """Update the metadata."""
-        revision = max(self.contents.keys())
-        if content:
-            self.contents[revision + 1] = content
-
         # bypass frozen dataclass
+        object.__setattr__(self, "_latest_revision", self._latest_revision + 1)
+        # TODO: if this is done twice in the same hook, then Juju ignores the
+        # first call, it doesn't continue to update like this does.
+        if content:
+            object.__setattr__(self, "latest_content", content)
         if label:
             object.__setattr__(self, "label", label)
         if description:
@@ -346,11 +363,11 @@ def normalize_name(s: str):
 class Address(_max_posargs(1)):
     """An address in a Juju network space."""
 
-    hostname: str
-    """A host name that maps to the address in :attr:`value`."""
     value: str
     """The IP address in the space."""
-    cidr: str
+    hostname: str = ""
+    """A host name that maps to the address in :attr:`value`."""
+    cidr: str = ""
     """The CIDR of the address in :attr:`value`."""
 
     @property
@@ -384,11 +401,17 @@ class BindAddress(_max_posargs(1)):
 
 
 @dataclasses.dataclass(frozen=True)
-class Network(_max_posargs(1)):
+class Network(_max_posargs(2)):
     binding_name: str
-    bind_addresses: List[BindAddress]
-    ingress_addresses: List[str]
-    egress_subnets: List[str]
+    bind_addresses: List[BindAddress] = dataclasses.field(
+        default_factory=lambda: [BindAddress([Address("192.0.2.0")])],
+    )
+    ingress_addresses: List[str] = dataclasses.field(
+        default_factory=lambda: ["192.0.2.0"],
+    )
+    egress_subnets: List[str] = dataclasses.field(
+        default_factory=lambda: ["192.0.2.0/24"],
+    )
 
     def __hash__(self) -> int:
         return hash(self.binding_name)
@@ -400,34 +423,6 @@ class Network(_max_posargs(1)):
             "egress-subnets": self.egress_subnets,
             "ingress-addresses": self.ingress_addresses,
         }
-
-    @classmethod
-    def default(
-        cls,
-        binding_name: str,
-        private_address: str = "192.0.2.0",
-        hostname: str = "",
-        cidr: str = "",
-        interface_name: str = "",
-        mac_address: Optional[str] = None,
-        egress_subnets=("192.0.2.0/24",),
-        ingress_addresses=("192.0.2.0",),
-    ) -> "Network":
-        """Helper to create a minimal, heavily defaulted Network."""
-        return cls(
-            binding_name=binding_name,
-            bind_addresses=[
-                BindAddress(
-                    interface_name=interface_name,
-                    mac_address=mac_address,
-                    addresses=[
-                        Address(hostname=hostname, value=private_address, cidr=cidr),
-                    ],
-                ),
-            ],
-            egress_subnets=list(egress_subnets),
-            ingress_addresses=list(ingress_addresses),
-        )
 
 
 _next_relation_id_counter = 1

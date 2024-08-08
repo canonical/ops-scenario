@@ -326,6 +326,7 @@ class Context:
     - :attr:`app_status_history`: record of the app statuses the charm has set
     - :attr:`unit_status_history`: record of the unit statuses the charm has set
     - :attr:`workload_version_history`: record of the workload versions the charm has set
+    - :attr:`removed_secret_revisions`: record of the secret revisions the charm has removed
     - :attr:`emitted_events`: record of the events (including custom) that the charm has processed
     - :attr:`action_logs`: logs associated with the action output, set by the charm with
         :meth:`ops.ActionEvent.log`
@@ -450,6 +451,7 @@ class Context:
         self.app_status_history: List["_EntityStatus"] = []
         self.unit_status_history: List["_EntityStatus"] = []
         self.workload_version_history: List[str] = []
+        self.removed_secret_revisions: List[int] = []
         self.emitted_events: List[EventBase] = []
         self.requested_storages: Dict[str, int] = {}
 
