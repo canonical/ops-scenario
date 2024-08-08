@@ -496,7 +496,7 @@ If you want to, you can override any of these relation or extra-binding associat
 
 ```python
 state = scenario.State(networks={
-  scenario.Network("foo", [BindAddress([Address('192.0.2.1')])])
+  scenario.Network("foo", [scenario.BindAddress([scenario.Address('192.0.2.1')])])
 })
 ```
 
