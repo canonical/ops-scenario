@@ -761,11 +761,15 @@ class _MockPebbleClient(_TestingPebbleClient):
     def exec(self, command, **kwargs):  # noqa: U100 type: ignore
         handler = self._find_exec_handler(command)
         if not handler:
-            raise RuntimeError(
-                f"mock for cmd {command} not found. Please pass to the Container "
-                f"{self._container.name} a scenario.Exec mock for the "
-                f"command your charm is attempting to run, or patch "
-                f"out whatever leads to the call.",
+            raise ExecError(
+                command,
+                127,
+                "",
+                f"mock for cmd {command} not found. Please patch out whatever "
+                f"leads to the call, or pass to the Container {self._container.name} "
+                f"a scenario.Exec mock for the command your charm is attempting "
+                f"to run, such as "
+                f"'Container(..., execs={{scenario.Exec({list(command)}, ...)}})'",
             )
 
         change_id = handler._run()

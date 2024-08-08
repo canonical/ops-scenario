@@ -649,13 +649,28 @@ class Exec(_max_posargs(1)):
 
     command_prefix: Sequence[str]
     return_code: int = 0
-    """The return code of the process (0 is success)."""
+    """The return code of the process.
+
+    Use 0 to mock the process ending successfully, and other values for failure.
+    """
     stdout: str = ""
-    """Any content written to stdout by the process."""
+    """Any content written to stdout by the process.
+
+    Provide content that the real process would write to stdout, which can be
+    read by the charm.
+    """
     stderr: str = ""
-    """Any content written to stderr by the process."""
+    """Any content written to stderr by the process.
+
+    Provide content that the real process would write to stderr, which can be
+    read by the charm.
+    """
     stdin: Optional[str] = None
-    """Any content written to stdin by the charm."""
+    """stdin content the charm wrote to the process.
+
+    Cannot be provided in the input state - the output state will contain the
+    content the charm wrote to the process, to use in assertions.
+    """
 
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
@@ -666,6 +681,14 @@ class Exec(_max_posargs(1)):
         # hashable, so can't contain a list. We 'freeze' the sequence to a tuple
         # to support that.
         object.__setattr__(self, "command_prefix", tuple(self.command_prefix))
+
+        # The process is being mocked - it can't start with existing stdin
+        # content; the charm is able to write that.
+        if self.stdin:
+            raise ValueError(
+                "processes cannot start with existing stdin content - write to "
+                "the process in your charm",
+            )
 
     def _run(self) -> int:
         return self._change_id

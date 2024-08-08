@@ -588,18 +588,20 @@ def check_containers_consistency(
                 f"container with that name is not present in the state. It's odd, but "
                 f"consistent, if it cannot connect; but it should at least be there.",
             )
+        # - you're processing a Notice event and that notice is not in any of the containers
         if event.notice and event.notice.id not in all_notices:
             errors.append(
                 f"the event being processed concerns notice {event.notice!r}, but that "
                 "notice is not in any of the containers present in the state.",
             )
+        # - you're processing a Check event and that check is not in the check's container
         if (
             event.check_info
             and (evt_container_name, event.check_info.name) not in all_checks
         ):
             errors.append(
                 f"the event being processed concerns check {event.check_info.name}, but that "
-                f"check is not the {evt_container_name} container.",
+                f"check is not in the {evt_container_name} container.",
             )
 
     # - a container in state.containers is not in meta.containers
