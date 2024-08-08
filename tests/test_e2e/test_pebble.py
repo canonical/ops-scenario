@@ -229,7 +229,7 @@ def test_get_exec():
     state_out = ctx.run(
         ctx.on.pebble_ready(container=container), State(containers={container})
     )
-    assert state_out.get_container(container.name).get_exec(()).stdin == "hello world!"
+    assert state_out.get_container(container.name).get_exec(())._stdin == "hello world!"
 
 
 def test_pebble_ready(charm_cls):

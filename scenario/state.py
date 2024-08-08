@@ -665,7 +665,7 @@ class Exec(_max_posargs(1)):
     Provide content that the real process would write to stderr, which can be
     read by the charm.
     """
-    stdin: Optional[str] = None
+    _stdin: Optional[str] = None
     """stdin content the charm wrote to the process.
 
     Cannot be provided in the input state - the output state will contain the
@@ -684,7 +684,7 @@ class Exec(_max_posargs(1)):
 
         # The process is being mocked - it can't start with existing stdin
         # content; the charm is able to write that.
-        if self.stdin:
+        if self._stdin:
             raise ValueError(
                 "processes cannot start with existing stdin content - write to "
                 "the process in your charm",
@@ -695,7 +695,12 @@ class Exec(_max_posargs(1)):
 
     def _update_stdin(self, stdin: str):
         # bypass frozen dataclass
-        object.__setattr__(self, "stdin", stdin)
+        object.__setattr__(self, "_stdin", stdin)
+
+    @property
+    def stdin(self):
+        """The content the charm wrote to the mock process's stdin."""
+        return self._stdin
 
 
 @dataclasses.dataclass(frozen=True)
