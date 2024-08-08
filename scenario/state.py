@@ -25,6 +25,7 @@ from typing import (
     List,
     Literal,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Type,
@@ -668,24 +669,63 @@ def _generate_new_change_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class ExecOutput(_max_posargs(0)):
+class Exec(_max_posargs(1)):
     """Mock data for simulated :meth:`ops.Container.exec` calls."""
 
+    command_prefix: Sequence[str]
     return_code: int = 0
-    """The return code of the process (0 is success)."""
+    """The return code of the process.
+
+    Use 0 to mock the process ending successfully, and other values for failure.
+    """
     stdout: str = ""
-    """Any content written to stdout by the process."""
+    """Any content written to stdout by the process.
+
+    Provide content that the real process would write to stdout, which can be
+    read by the charm.
+    """
     stderr: str = ""
-    """Any content written to stderr by the process."""
+    """Any content written to stderr by the process.
+
+    Provide content that the real process would write to stderr, which can be
+    read by the charm.
+    """
+    _stdin: Optional[str] = None
+    """stdin content the charm wrote to the process.
+
+    Cannot be provided in the input state - the output state will contain the
+    content the charm wrote to the process, to use in assertions.
+    """
 
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
 
+    def __post_init__(self):
+        # The command prefix can be any sequence type, and a list is tidier to
+        # write when there's only one string. However, this object needs to be
+        # hashable, so can't contain a list. We 'freeze' the sequence to a tuple
+        # to support that.
+        object.__setattr__(self, "command_prefix", tuple(self.command_prefix))
+
+        # The process is being mocked - it can't start with existing stdin
+        # content; the charm is able to write that.
+        if self._stdin:
+            raise ValueError(
+                "processes cannot start with existing stdin content - write to "
+                "the process in your charm",
+            )
+
     def _run(self) -> int:
         return self._change_id
 
+    def _update_stdin(self, stdin: str):
+        # bypass frozen dataclass
+        object.__setattr__(self, "_stdin", stdin)
 
-_ExecMock = Dict[Tuple[str, ...], ExecOutput]
+    @property
+    def stdin(self):
+        """The content the charm wrote to the mock process's stdin."""
+        return self._stdin
 
 
 @dataclasses.dataclass(frozen=True)
@@ -828,7 +868,7 @@ class Container(_max_posargs(1)):
     layers: Dict[str, pebble.Layer] = dataclasses.field(default_factory=dict)
     """All :class:`ops.pebble.Layer` definitions that have already been added to the container."""
 
-    service_status: Dict[str, pebble.ServiceStatus] = dataclasses.field(
+    service_statuses: Dict[str, pebble.ServiceStatus] = dataclasses.field(
         default_factory=dict,
     )
     """The current status of each Pebble service running in the container."""
@@ -853,20 +893,23 @@ class Container(_max_posargs(1)):
         }
     """
 
-    exec_mock: _ExecMock = dataclasses.field(default_factory=dict)
+    execs: Iterable[Exec] = frozenset()
     """Simulate executing commands in the container.
 
-    Specify each command the charm might run in the container and a :class:`ExecOutput`
+    Specify each command the charm might run in the container and an :class:`Exec`
     containing its return code and any stdout/stderr.
 
     For example::
 
         container = scenario.Container(
             name='foo',
-            exec_mock={
-                ('whoami', ): scenario.ExecOutput(return_code=0, stdout='ubuntu')
-                ('dig', '+short', 'canonical.com'):
-                    scenario.ExecOutput(return_code=0, stdout='185.125.190.20\\n185.125.190.21')
+            execs={
+                scenario.Exec(['whoami'], return_code=0, stdout='ubuntu'),
+                scenario.Exec(
+                    ['dig', '+short', 'canonical.com'],
+                    return_code=0,
+                    stdout='185.125.190.20\\n185.125.190.21',
+                ),
             }
         )
     """
@@ -877,6 +920,11 @@ class Container(_max_posargs(1)):
 
     def __hash__(self) -> int:
         return hash(self.name)
+
+    def __post_init__(self):
+        if not isinstance(self.execs, frozenset):
+            # Allow passing a regular set (or other iterable) of Execs.
+            object.__setattr__(self, "execs", frozenset(self.execs))
 
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
@@ -918,7 +966,7 @@ class Container(_max_posargs(1)):
                 # in pebble, it just returns "nothing matched" if there are 0 matches,
                 # but it ignores services it doesn't recognize
                 continue
-            status = self.service_status.get(name, pebble.ServiceStatus.INACTIVE)
+            status = self.service_statuses.get(name, pebble.ServiceStatus.INACTIVE)
             if service.startup == "":
                 startup = pebble.ServiceStartup.DISABLED
             else:
@@ -939,6 +987,13 @@ class Container(_max_posargs(1)):
             charm pushed to the container.
         """
         return ctx._get_container_root(self.name)
+
+    def get_exec(self, command_prefix: Sequence[str]):
+        """Get the Exec object from the container with the given command prefix."""
+        for exec in self.execs:
+            if exec.command_prefix == command_prefix:
+                return exec
+        raise KeyError(f"no exec found with command prefix {command_prefix}")
 
 
 _RawStatusLiteral = Literal[

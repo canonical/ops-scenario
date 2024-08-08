@@ -52,7 +52,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from scenario.context import Context
     from scenario.state import Container as ContainerSpec
     from scenario.state import (
-        ExecOutput,
+        Exec,
         Relation,
         Secret,
         State,
@@ -72,26 +72,40 @@ class ActionMissingFromContextError(Exception):
 
 
 class _MockExecProcess:
-    def __init__(self, command: Tuple[str, ...], change_id: int, out: "ExecOutput"):
+    def __init__(
+        self,
+        command: Tuple[str, ...],
+        change_id: int,
+        exec: "Exec",
+    ):
         self._command = command
         self._change_id = change_id
-        self._out = out
+        self._exec = exec
         self._waited = False
-        self.stdout = StringIO(self._out.stdout)
-        self.stderr = StringIO(self._out.stderr)
+        self.stdout = StringIO(self._exec.stdout)
+        self.stderr = StringIO(self._exec.stderr)
+        # You can't pass *in* the stdin, the charm is responsible for that.
+        self.stdin = StringIO()
 
     def wait(self):
         self._waited = True
-        exit_code = self._out.return_code
+        self._exec._update_stdin(self.stdin.getvalue())
+        exit_code = self._exec.return_code
         if exit_code != 0:
             raise ExecError(list(self._command), exit_code, None, None)
 
     def wait_output(self):
-        out = self._out
-        exit_code = out.return_code
+        exec = self._exec
+        self._exec._update_stdin(self.stdin.getvalue())
+        exit_code = exec.return_code
         if exit_code != 0:
-            raise ExecError(list(self._command), exit_code, None, None)
-        return out.stdout, out.stderr
+            raise ExecError(
+                list(self._command),
+                exit_code,
+                self.stdout.read(),
+                self.stderr.read(),
+            )
+        return exec.stdout, exec.stderr
 
     def send_signal(self, sig: Union[int, str]):  # noqa: U100
         raise NotImplementedError()
@@ -753,21 +767,43 @@ class _MockPebbleClient(_TestingPebbleClient):
 
     @property
     def _service_status(self) -> Dict[str, pebble.ServiceStatus]:
-        return self._container.service_status
+        return self._container.service_statuses
 
-    def exec(self, *args, **kwargs):  # noqa: U100 type: ignore
-        cmd = tuple(args[0])
-        out = self._container.exec_mock.get(cmd)
-        if not out:
-            raise RuntimeError(
-                f"mock for cmd {cmd} not found. Please pass to the Container "
-                f"{self._container.name} a scenario.ExecOutput mock for the "
-                f"command your charm is attempting to run, or patch "
-                f"out whatever leads to the call.",
+    # Based on a method of the same name from ops.testing.
+    def _find_exec_handler(self, command) -> Optional["Exec"]:
+        handlers = {exec.command_prefix: exec for exec in self._container.execs}
+        # Start with the full command and, each loop iteration, drop the last
+        # element, until it matches one of the command prefixes in the execs.
+        # This includes matching against the empty list, which will match any
+        # command, if there is not a more specific match.
+        for prefix_len in reversed(range(len(command) + 1)):
+            command_prefix = tuple(command[:prefix_len])
+            if command_prefix in handlers:
+                return handlers[command_prefix]
+        # None of the command prefixes in the execs matched the command, no
+        # matter how much of it was used, so we have failed to find a handler.
+        return None
+
+    def exec(self, command, **kwargs):  # noqa: U100 type: ignore
+        handler = self._find_exec_handler(command)
+        if not handler:
+            raise ExecError(
+                command,
+                127,
+                "",
+                f"mock for cmd {command} not found. Please patch out whatever "
+                f"leads to the call, or pass to the Container {self._container.name} "
+                f"a scenario.Exec mock for the command your charm is attempting "
+                f"to run, such as "
+                f"'Container(..., execs={{scenario.Exec({list(command)}, ...)}})'",
             )
 
-        change_id = out._run()
-        return _MockExecProcess(change_id=change_id, command=cmd, out=out)
+        change_id = handler._run()
+        return _MockExecProcess(
+            change_id=change_id,
+            command=command,
+            exec=handler,
+        )
 
     def _check_connection(self):
         if not self._container.can_connect:
