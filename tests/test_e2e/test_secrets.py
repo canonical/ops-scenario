@@ -501,7 +501,7 @@ def test_add_grant_revoke_remove():
         output = mgr.run()
 
     with pytest.raises(KeyError):
-        mgr.output.get_secret(label="mylabel")
+        output.get_secret(label="mylabel")
 
 
 def test_secret_removed_event():
