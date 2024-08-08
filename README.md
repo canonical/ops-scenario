@@ -639,7 +639,8 @@ class MyCharm(ops.CharmBase):
     def _on_start(self, _):
         foo = self.unit.get_container('foo')
         proc = foo.exec(['ls', '-ll'])
-        stdout, _ = proc.wait_output("...")
+        proc.stdin.write("...")
+        stdout, _ = proc.wait_output()
         assert stdout == LS_LL
 
 
