@@ -28,7 +28,7 @@ def mycharm():
 
 def test_get_secret_no_secret(mycharm):
     ctx = Context(mycharm, meta={"name": "local"})
-    with ctx.manager(ctx.on.update_status(), State()) as mgr:
+    with ctx(ctx.on.update_status(), State()) as mgr:
         with pytest.raises(SecretNotFoundError):
             assert mgr.charm.model.get_secret(id="foo")
         with pytest.raises(SecretNotFoundError):
@@ -39,7 +39,7 @@ def test_get_secret_no_secret(mycharm):
 def test_get_secret(mycharm, owner):
     ctx = Context(mycharm, meta={"name": "local"})
     secret = Secret({"a": "b"}, owner=owner)
-    with ctx.manager(
+    with ctx(
         state=State(secrets={secret}),
         event=ctx.on.update_status(),
     ) as mgr:
@@ -54,7 +54,7 @@ def test_get_secret_get_refresh(mycharm, owner):
         latest_content={"a": "c"},
         owner=owner,
     )
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(secrets={secret}),
     ) as mgr:
@@ -71,7 +71,7 @@ def test_get_secret_nonowner_peek_update(mycharm, app):
         tracked_content={"a": "b"},
         latest_content={"a": "c"},
     )
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(
             leader=app,
@@ -98,7 +98,7 @@ def test_get_secret_owner_peek_update(mycharm, owner):
         latest_content={"a": "c"},
         owner=owner,
     )
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(
             secrets={secret},
@@ -150,7 +150,7 @@ def test_consumer_events_failures(mycharm, evt_suffix, revision):
 @pytest.mark.parametrize("app", (True, False))
 def test_add(mycharm, app):
     ctx = Context(mycharm, meta={"name": "local"})
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(leader=app),
     ) as mgr:
@@ -159,9 +159,10 @@ def test_add(mycharm, app):
             charm.app.add_secret({"foo": "bar"}, label="mylabel")
         else:
             charm.unit.add_secret({"foo": "bar"}, label="mylabel")
+        output = mgr.run()
 
-    assert mgr.output.secrets
-    secret = mgr.output.get_secret(label="mylabel")
+    assert output.secrets
+    secret = output.get_secret(label="mylabel")
     assert secret.latest_content == secret.tracked_content == {"foo": "bar"}
     assert secret.label == "mylabel"
 
@@ -171,7 +172,7 @@ def test_set_legacy_behaviour(mycharm):
     # ref: https://bugs.launchpad.net/juju/+bug/2037120
     ctx = Context(mycharm, meta={"name": "local"}, juju_version="3.1.6")
     rev1, rev2 = {"foo": "bar"}, {"foo": "baz", "qux": "roz"}
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(),
     ) as mgr:
@@ -207,7 +208,7 @@ def test_set_legacy_behaviour(mycharm):
 def test_set(mycharm):
     ctx = Context(mycharm, meta={"name": "local"})
     rev1, rev2 = {"foo": "bar"}, {"foo": "baz", "qux": "roz"}
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(),
     ) as mgr:
@@ -239,7 +240,7 @@ def test_set(mycharm):
 def test_set_juju33(mycharm):
     ctx = Context(mycharm, meta={"name": "local"}, juju_version="3.3.1")
     rev1, rev2 = {"foo": "bar"}, {"foo": "baz", "qux": "roz"}
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(),
     ) as mgr:
@@ -271,7 +272,7 @@ def test_meta(mycharm, app):
         description="foobarbaz",
         rotate=SecretRotate.HOURLY,
     )
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(
             leader=True,
@@ -308,7 +309,7 @@ def test_secret_permission_model(mycharm, leader, owner):
         rotate=SecretRotate.HOURLY,
     )
     secret_id = secret.id
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(
             leader=leader,
@@ -355,7 +356,7 @@ def test_grant(mycharm, app):
         description="foobarbaz",
         rotate=SecretRotate.HOURLY,
     )
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(
             relations=[Relation("foo", "remote")],
@@ -369,7 +370,8 @@ def test_grant(mycharm, app):
             secret.grant(relation=foo)
         else:
             secret.grant(relation=foo, unit=foo.units.pop())
-    vals = list(mgr.output.get_secret(label="mylabel").remote_grants.values())
+        output = mgr.run()
+    vals = list(output.get_secret(label="mylabel").remote_grants.values())
     assert vals == [{"remote"}] if app else [{"remote/0"}]
 
 
@@ -382,7 +384,7 @@ def test_update_metadata(mycharm):
         owner="unit",
         label="mylabel",
     )
-    with ctx.manager(
+    with ctx(
         ctx.on.update_status(),
         State(
             secrets={secret},
@@ -395,8 +397,9 @@ def test_update_metadata(mycharm):
             expire=exp,
             rotate=SecretRotate.DAILY,
         )
+        output = mgr.run()
 
-    secret_out = mgr.output.get_secret(label="babbuccia")
+    secret_out = output.get_secret(label="babbuccia")
     assert secret_out.label == "babbuccia"
     assert secret_out.rotate == SecretRotate.DAILY
     assert secret_out.description == "blu"
@@ -470,32 +473,35 @@ def test_add_grant_revoke_remove():
         },
     )
 
-    with ctx.manager(ctx.on.start(), state) as mgr:
+    with ctx(ctx.on.start(), state) as mgr:
         charm = mgr.charm
         secret = charm.app.add_secret({"foo": "bar"}, label="mylabel")
         bar_relation = charm.model.relations["bar"][0]
 
         secret.grant(bar_relation)
+        output = mgr.run()
 
-    assert mgr.output.secrets
-    scenario_secret = mgr.output.get_secret(label="mylabel")
+    assert output.secrets
+    scenario_secret = output.get_secret(label="mylabel")
     assert relation_remote_app in scenario_secret.remote_grants[relation_id]
 
-    with ctx.manager(ctx.on.start(), mgr.output) as mgr:
+    with ctx(ctx.on.start(), output) as mgr:
         charm: GrantingCharm = mgr.charm
         secret = charm.model.get_secret(label="mylabel")
         secret.revoke(bar_relation)
+        output = mgr.run()
 
-    scenario_secret = mgr.output.get_secret(label="mylabel")
+    scenario_secret = output.get_secret(label="mylabel")
     assert scenario_secret.remote_grants == {}
 
-    with ctx.manager(ctx.on.start(), mgr.output) as mgr:
+    with ctx(ctx.on.start(), output) as mgr:
         charm: GrantingCharm = mgr.charm
         secret = charm.model.get_secret(label="mylabel")
         secret.remove_all_revisions()
+        output = mgr.run()
 
     with pytest.raises(KeyError):
-        mgr.output.get_secret(label="mylabel")
+        output.get_secret(label="mylabel")
 
 
 def test_secret_removed_event():
