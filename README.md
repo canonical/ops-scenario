@@ -705,9 +705,9 @@ check doesn't have to match the event being generated: by the time that Juju
 sends a pebble-check-failed event the check might have started passing again.
 
 ```python
-ctx = scenario.Context(MyCharm, meta={"name": "foo", "containers": {"my-container": {}}})
+ctx = scenario.Context(MyCharm, meta={"name": "foo", "containers": {"my_container": {}}})
 check_info = scenario.CheckInfo("http-check", failures=7, status=ops.pebble.CheckStatus.DOWN)
-container = scenario.Container("my-container", check_infos={check_info})
+container = scenario.Container("my_container", check_infos={check_info})
 state = scenario.State(containers={container})
 ctx.run(ctx.on.pebble_check_failed(info=check_info, container=container), state=state)
 ```
@@ -976,17 +976,16 @@ def test_backup_action():
     # the `ConsistencyChecker` will slap you on the wrist and refuse to proceed.
     state = ctx.run(ctx.on.action("do_backup"), scenario.State())
 
-    # You can assert action results and logs using the action history:
-    assert ctx.action_output.logs == ['baz', 'qux']
-    assert ctx.action_output.results == {'foo': 'bar'}
+    # You can assert on action results and logs using the context:
+    assert ctx.action_logs == ['baz', 'qux']
+    assert ctx.action_results == {'foo': 'bar'}
 ```
 
 ## Failing Actions
 
 If the charm code calls `event.fail()` to indicate that the action has failed,
 an `ActionFailed` exception will be raised. This avoids having to include
-`assert ctx.action_output.status == "completed"` code in every test where
-the action is successful.
+success checks in every test where the action is successful.
 
 ```python
 def test_backup_action_failed():
@@ -995,10 +994,12 @@ def test_backup_action_failed():
     with pytest.raises(ActionFailed) as exc_info:
         ctx.run(ctx.on.action("do_backup"), scenario.State())
     assert exc_info.value.message == "sorry, couldn't do the backup"
+    # The state is also available if that's required:
+    assert exc_info.value.state.get_container(...)
 
-    # You can still assert action results and logs that occured before the failure:
-    assert ctx.action_output.logs == ['baz', 'qux']
-    assert ctx.action_output.results == {'foo': 'bar'}
+    # You can still assert action results and logs that occured as well as the failure:
+    assert ctx.action_logs == ['baz', 'qux']
+    assert ctx.action_results == {'foo': 'bar'}
 ```
 
 ## Parametrized Actions
@@ -1011,7 +1012,7 @@ def test_backup_action():
 
     # If the parameters (or their type) don't match what is declared in the metadata, 
     # the `ConsistencyChecker` will slap you on the other wrist.
-    out: scenario.ActionOutput = ctx.run(
+    state = ctx.run(
         ctx.on.action("do_backup", params={'a': 'b'}),
         scenario.State()
     )

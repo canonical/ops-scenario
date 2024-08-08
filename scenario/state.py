@@ -1853,7 +1853,7 @@ class _Action(_max_posargs(1)):
                 ctx.on.action('do_backup', params={'filename': 'foo'}),
                 scenario.State()
             )
-            assert ctx.action_output.results == ...
+            assert ctx.action_results == ...
     """
 
     name: str

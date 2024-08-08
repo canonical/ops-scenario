@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
-from scenario.context import ActionOutput, Context, Manager
+from scenario.context import Context, Manager
 from scenario.state import (
     ActionFailed,
     ActiveStatus,
@@ -39,7 +39,6 @@ from scenario.state import (
 )
 
 __all__ = [
-    "ActionOutput",
     "ActionFailed",
     "CheckInfo",
     "CloudCredential",

@@ -41,6 +41,21 @@ def test_action_event(mycharm, baz_value):
     assert evt.params["baz"] is baz_value
 
 
+def test_action_no_results():
+    class MyCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            framework.observe(self.on.act_action, self._on_act_action)
+
+        def _on_act_action(self, _):
+            pass
+
+    ctx = Context(MyCharm, meta={"name": "foo"}, actions={"act": {}})
+    ctx.run(ctx.on.action("act"), State())
+    assert ctx.action_results is None
+    assert ctx.action_logs == []
+
+
 @pytest.mark.parametrize("res_value", ("one", 1, [2], ["bar"], (1,), {1, 2}))
 def test_action_event_results_invalid(mycharm, res_value):
     def handle_evt(charm: CharmBase, evt: ActionEvent):
@@ -68,8 +83,7 @@ def test_action_event_results_valid(mycharm, res_value):
 
     ctx.run(ctx.on.action("foo"), State())
 
-    assert ctx.action_output.results == res_value
-    assert ctx.action_output.status == "completed"
+    assert ctx.action_results == res_value
 
 
 @pytest.mark.parametrize("res_value", ({"a": {"b": {"c"}}}, {"d": "e"}))
@@ -86,14 +100,11 @@ def test_action_event_outputs(mycharm, res_value):
     mycharm._evt_handler = handle_evt
 
     ctx = Context(mycharm, meta={"name": "foo"}, actions={"foo": {}})
-    with pytest.raises(ActionFailed) as out:
+    with pytest.raises(ActionFailed) as exc_info:
         ctx.run(ctx.on.action("foo"), State())
-    assert out.value.message == "failed becozz"
-    task = ctx.action_output
-    assert task.results == {"my-res": res_value}
-    assert task.logs == ["log1", "log2"]
-    assert task.failure_message == "failed becozz"
-    assert task.status == "failed"
+    assert exc_info.value.message == "failed becozz"
+    assert ctx.action_results == {"my-res": res_value}
+    assert ctx.action_logs == ["log1", "log2"]
 
 
 def test_action_continues_after_fail():
@@ -112,8 +123,8 @@ def test_action_continues_after_fail():
     with pytest.raises(ActionFailed) as exc_info:
         ctx.run(ctx.on.action("foo"), State())
     assert exc_info.value.message == "oh no!"
-    assert ctx.action_output.logs == ["starting"]
-    assert ctx.action_output.results == {"initial": "result", "final": "result"}
+    assert ctx.action_logs == ["starting"]
+    assert ctx.action_results == {"initial": "result", "final": "result"}
 
 
 def _ops_less_than(wanted_major, wanted_minor):
@@ -155,6 +166,31 @@ def test_action_event_has_override_id(mycharm):
 
     ctx = Context(mycharm, meta={"name": "foo"}, actions={"foo": {}})
     ctx.run(ctx.on.action("foo", id=uuid), State())
+
+
+def test_two_actions_same_context():
+    class MyCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            framework.observe(self.on.foo_action, self._on_foo_action)
+            framework.observe(self.on.bar_action, self._on_bar_action)
+
+        def _on_foo_action(self, event):
+            event.log("foo")
+            event.set_results({"foo": "result"})
+
+        def _on_bar_action(self, event):
+            event.log("bar")
+            event.set_results({"bar": "result"})
+
+    ctx = Context(MyCharm, meta={"name": "foo"}, actions={"foo": {}, "bar": {}})
+    ctx.run(ctx.on.action("foo"), State())
+    assert ctx.action_results == {"foo": "result"}
+    assert ctx.action_logs == ["foo"]
+    # Not recommended, but run another action in the same context.
+    ctx.run(ctx.on.action("bar"), State())
+    assert ctx.action_results == {"bar": "result"}
+    assert ctx.action_logs == ["bar"]
 
 
 def test_positional_arguments():

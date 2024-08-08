@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
-import dataclasses
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -22,7 +21,6 @@ from scenario.state import (
     _Action,
     _CharmSpec,
     _Event,
-    _max_posargs,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -36,47 +34,6 @@ if TYPE_CHECKING:  # pragma: no cover
 logger = scenario_logger.getChild("runtime")
 
 DEFAULT_JUJU_VERSION = "3.4"
-
-
-@dataclasses.dataclass(frozen=True)
-class ActionOutput(_max_posargs(0)):
-    """Wraps the results of running an action event on a unit.
-
-    Tests should generally not create instances of this class directly, but
-    rather use the :attr:`Context.action_output` attribute to inspect the
-    results of running actions.
-    """
-
-    logs: List[str] = dataclasses.field(default_factory=list)
-    """Any logs associated with the action output, set by the charm with
-    :meth:`ops.ActionEvent.log`."""
-
-    results: Optional[Dict[str, Any]] = None
-    """Key-value mapping assigned by the charm as a result of the action.
-    Will be None if the charm never calls :meth:`ops.ActionEvent.set_results`."""
-
-    status: str = "pending"
-
-    # Note that in the Juju struct, this is called "fail".
-    failure_message: str = ""
-
-    def set_status(self, status):
-        """Set the status of the task."""
-        # bypass frozen dataclass
-        object.__setattr__(self, "status", status)
-
-    def set_failure_message(self, message):
-        """Record an explanation of why this task failed."""
-        # bypass frozen dataclass
-        object.__setattr__(self, "failure_message", message)
-
-    def update_results(self, results: Dict[str, Any]):
-        """Update the results of the action."""
-        if self.results is None:
-            # bypass frozen dataclass
-            object.__setattr__(self, "results", results)
-        else:
-            self.results.update(results)
 
 
 class InvalidEventError(RuntimeError):
@@ -370,6 +327,10 @@ class Context:
     - :attr:`unit_status_history`: record of the unit statuses the charm has set
     - :attr:`workload_version_history`: record of the workload versions the charm has set
     - :attr:`emitted_events`: record of the events (including custom) that the charm has processed
+    - :attr:`action_logs`: logs associated with the action output, set by the charm with
+        :meth:`ops.ActionEvent.log`
+    - :attr:`action_results`: key-value mapping assigned by the charm as a result of the action.
+        Will be None if the charm never calls :meth:`ops.ActionEvent.set_results`
 
     This allows you to write assertions not only on the output state, but also, to some
     extent, on the path the charm took to get there.
@@ -496,7 +457,9 @@ class Context:
         self._output_state: Optional["State"] = None
 
         # operations (and embedded tasks) from running actions
-        self.action_output: Optional[ActionOutput] = None
+        self.action_logs: List[str] = []
+        self.action_results: Optional[Dict[str, Any]] = None
+        self._action_failure_message: Optional[str] = None
 
         self.on = _CharmEvents()
 
@@ -563,19 +526,17 @@ class Context:
             charm will invoke when handling the Event.
         """
         if event.action:
-            # Create an ActionOutput object now so that there is somewhere to
-            # store the logs and results while the charm is processing the
-            # action handler(s). This is not accessible until run() finishes and
-            # the handlers have finished.
-            self.action_output = ActionOutput()
+            # Reset the logs, failure status, and results, in case the context
+            # is reused.
+            self.action_logs.clear()
+            if self.action_results is not None:
+                self.action_results.clear()
+            self._action_failure_message = None
         with self._run(event=event, state=state) as ops:
             ops.emit()
         if event.action:
-            current_task = self.action_output
-            assert current_task is not None
-            if current_task.status == "failed":
-                raise ActionFailed(current_task.failure_message, self.output_state)
-            current_task.set_status("completed")
+            if self._action_failure_message is not None:
+                raise ActionFailed(self._action_failure_message, self.output_state)
         return self.output_state
 
     @contextmanager
