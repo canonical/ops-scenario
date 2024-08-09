@@ -25,23 +25,23 @@ def capture_events(
     include_framework=False,
     include_deferred=True,
 ):
-    """Capture all events of type `*types` (using instance checks).
-
-    Arguments exposed so that you can define your own fixtures if you want to.
+    """Capture all events of type ``*types`` (using instance checks).
 
     Example::
-    >>> from ops.charm import StartEvent
-    >>> from scenario import Event, State
-    >>> from charm import MyCustomEvent, MyCharm  # noqa
-    >>>
-    >>> def test_my_event():
-    >>>     with capture_events(StartEvent, MyCustomEvent) as captured:
-    >>>         trigger(State(), ("start", MyCharm, meta=MyCharm.META)
-    >>>
-    >>>     assert len(captured) == 2
-    >>>     e1, e2 = captured
-    >>>     assert isinstance(e2, MyCustomEvent)
-    >>>     assert e2.custom_attr == 'foo'
+
+        from ops.charm import StartEvent
+        from scenario import Event, State
+        from charm import MyCustomEvent, MyCharm  # noqa
+
+        def test_my_event():
+            ctx = Context(MyCharm, meta=MyCharm.META)
+            with capture_events(StartEvent, MyCustomEvent) as captured:
+                ctx.run(ctx.on.start(), State())
+
+            assert len(captured) == 2
+            e1, e2 = captured
+            assert isinstance(e2, MyCustomEvent)
+            assert e2.custom_attr == 'foo'
     """
     allowed_types = types or (EventBase,)
 

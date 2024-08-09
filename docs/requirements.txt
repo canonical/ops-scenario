@@ -61,7 +61,7 @@ mdurl==0.1.2
     # via markdown-it-py
 myst-parser==2.0.0
     # via ops-scenario (pyproject.toml)
-ops==2.12.0
+ops==2.15.0
     # via ops-scenario (pyproject.toml)
 packaging==24.0
     # via sphinx

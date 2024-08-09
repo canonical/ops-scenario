@@ -8,7 +8,6 @@ import inspect
 import random
 import re
 import string
-from collections import namedtuple
 from enum import Enum
 from itertools import chain
 from pathlib import Path, PurePosixPath
@@ -43,8 +42,6 @@ from ops.model import CloudSpec as CloudSpec_Ops
 from ops.model import SecretRotate, StatusBase
 
 from scenario.logger import logger as scenario_logger
-
-JujuLogLine = namedtuple("JujuLogLine", ("level", "message"))
 
 if TYPE_CHECKING:  # pragma: no cover
     from scenario import Context
@@ -128,11 +125,11 @@ class StateValidationError(RuntimeError):
 
 
 class MetadataNotFoundError(RuntimeError):
-    """Raised when Scenario can't find a metadata.yaml file in the provided charm root."""
+    """Raised when Scenario can't find a metadata YAML file in the provided charm root."""
 
 
 class ActionFailed(Exception):
-    """Raised at the end of the hook if the charm has called `event.fail()`."""
+    """Raised at the end of the hook if the charm has called ``event.fail()``."""
 
     def __init__(self, message: str, state: "State"):
         self.message = message
@@ -209,7 +206,19 @@ def _max_posargs(n: int):
 
 
 @dataclasses.dataclass(frozen=True)
+class JujuLogLine(_max_posargs(2)):
+    """An entry in the Juju debug-log."""
+
+    level: str
+    """The level of the message, for example ``INFO`` or ``ERROR``."""
+    message: str
+    """The log message."""
+
+
+@dataclasses.dataclass(frozen=True)
 class CloudCredential(_max_posargs(0)):
+    __doc__ = ops.CloudCredential.__doc__
+
     auth_type: str
     """Authentication type."""
 
@@ -233,6 +242,8 @@ class CloudCredential(_max_posargs(0)):
 
 @dataclasses.dataclass(frozen=True)
 class CloudSpec(_max_posargs(1)):
+    __doc__ = ops.CloudSpec.__doc__
+
     type: str
     """Type of the cloud."""
 
@@ -289,23 +300,51 @@ def _generate_secret_id():
 
 @dataclasses.dataclass(frozen=True)
 class Secret(_max_posargs(1)):
+    """A Juju secret.
+
+    This class is used for both user and charm secrets.
+    """
+
     tracked_content: "RawSecretRevisionContents"
+    """The content of the secret that the charm is currently tracking.
+
+    This is the content the charm will receive with a
+    :meth:`ops.Secret.get_content` call."""
     latest_content: Optional["RawSecretRevisionContents"] = None
+    """The content of the latest revision of the secret.
+
+    This is the content the charm will receive with a
+    :meth:`ops.Secret.peek_content` call."""
 
     id: str = dataclasses.field(default_factory=_generate_secret_id)
+    """The Juju ID of the secret.
 
-    # indicates if the secret is owned by THIS unit, THIS app or some other app/unit.
-    # if None, the implication is that the secret has been granted to this unit.
+    This is automatically assigned and should not usually need to be explicitly set.
+    """
+
     owner: Literal["unit", "app", None] = None
+    """Indicates if the secret is owned by *this* unit, *this* application, or
+    another application/unit.
 
-    # mapping from relation IDs to remote unit/apps to which this secret has been granted.
-    # Only applicable if owner
+    If None, the implication is that read access to the secret has been granted
+    to this unit.
+    """
+
     remote_grants: Dict[int, Set[str]] = dataclasses.field(default_factory=dict)
+    """Mapping from relation IDs to remote units and applications to which this
+    secret has been granted."""
 
     label: Optional[str] = None
+    """A human-readable label the charm can use to retrieve the secret.
+
+    If this is set, it implies that the charm has previously set the label.
+    """
     description: Optional[str] = None
+    """A human-readable description of the secret."""
     expire: Optional[datetime.datetime] = None
+    """The time at which the secret will expire."""
     rotate: Optional[SecretRotate] = None
+    """The rotation policy for the secret."""
 
     # what revision is currently tracked by this charm. Only meaningful if owner=False
     _tracked_revision: int = 1
@@ -354,7 +393,7 @@ class Secret(_max_posargs(1)):
             object.__setattr__(self, "rotate", rotate)
 
 
-def normalize_name(s: str):
+def _normalize_name(s: str):
     """Event names, in Scenario, uniformly use underscores instead of dashes."""
     return s.replace("-", "_")
 
@@ -385,10 +424,13 @@ class BindAddress(_max_posargs(1)):
     """An address bound to a network interface in a Juju space."""
 
     addresses: List[Address]
+    """The addresses in the space."""
     interface_name: str = ""
+    """The name of the network interface."""
     mac_address: Optional[str] = None
+    """The MAC address of the interface."""
 
-    def hook_tool_output_fmt(self):
+    def _hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
         # todo support for legacy (deprecated) `interfacename` and `macaddress` fields?
         dct = {
@@ -402,24 +444,32 @@ class BindAddress(_max_posargs(1)):
 
 @dataclasses.dataclass(frozen=True)
 class Network(_max_posargs(2)):
+    """A Juju network space."""
+
     binding_name: str
+    """The name of the network space."""
     bind_addresses: List[BindAddress] = dataclasses.field(
         default_factory=lambda: [BindAddress([Address("192.0.2.0")])],
     )
+    """Addresses that the charm's application should bind to."""
     ingress_addresses: List[str] = dataclasses.field(
         default_factory=lambda: ["192.0.2.0"],
     )
+    """Addresses other applications should use to connect to the unit."""
     egress_subnets: List[str] = dataclasses.field(
         default_factory=lambda: ["192.0.2.0/24"],
     )
+    """Subnets that other units will see the charm connecting from."""
 
     def __hash__(self) -> int:
         return hash(self.binding_name)
 
-    def hook_tool_output_fmt(self):
+    def _hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
         return {
-            "bind-addresses": [ba.hook_tool_output_fmt() for ba in self.bind_addresses],
+            "bind-addresses": [
+                ba._hook_tool_output_fmt() for ba in self.bind_addresses
+            ],
             "egress-subnets": self.egress_subnets,
             "ingress-addresses": self.ingress_addresses,
         }
@@ -439,11 +489,11 @@ def next_relation_id(*, update=True):
 @dataclasses.dataclass(frozen=True)
 class RelationBase(_max_posargs(2)):
     endpoint: str
-    """Relation endpoint name. Must match some endpoint name defined in metadata.yaml."""
+    """Relation endpoint name. Must match some endpoint name defined in the metadata."""
 
     interface: Optional[str] = None
-    """Interface name. Must match the interface name attached to this endpoint in metadata.yaml.
-    If left empty, it will be automatically derived from metadata.yaml."""
+    """Interface name. Must match the interface name attached to this endpoint in the metadata.
+    If left empty, it will be automatically derived from the metadata."""
 
     id: int = dataclasses.field(default_factory=next_relation_id)
     """Juju relation ID. Every new Relation instance gets a unique one,
@@ -715,6 +765,8 @@ def next_notice_id(*, update=True):
 
 @dataclasses.dataclass(frozen=True)
 class Notice(_max_posargs(1)):
+    """A Pebble notice."""
+
     key: str
     """The notice key, a string that differentiates notices of this type.
 
@@ -774,6 +826,8 @@ class Notice(_max_posargs(1)):
 
 @dataclasses.dataclass(frozen=True)
 class CheckInfo(_max_posargs(1)):
+    """A health check for a Pebble workload container."""
+
     name: str
     """Name of the check."""
 
@@ -783,9 +837,10 @@ class CheckInfo(_max_posargs(1)):
     status: pebble.CheckStatus = pebble.CheckStatus.UP
     """Status of the check.
 
-    CheckStatus.UP means the check is healthy (the number of failures is less
-    than the threshold), CheckStatus.DOWN means the check is unhealthy
-    (the number of failures has reached the threshold).
+    :attr:`ops.pebble.CheckStatus.UP` means the check is healthy (the number of
+    failures is fewer than the threshold), :attr:`ops.pebble.CheckStatus.DOWN`
+    means the check is unhealthy (the number of failures has reached the
+    threshold).
     """
 
     failures: int = 0
@@ -794,7 +849,7 @@ class CheckInfo(_max_posargs(1)):
     threshold: int = 3
     """Failure threshold.
 
-    This is how many consecutive failures for the check to be considered “down”.
+    This is how many consecutive failures for the check to be considered 'down'.
     """
 
     def _to_ops(self) -> pebble.CheckInfo:
@@ -824,7 +879,7 @@ class Container(_max_posargs(1)):
     # will be unknown. all that we can know is the resulting plan (the 'computed plan').
     _base_plan: dict = dataclasses.field(default_factory=dict)
     # We expect most of the user-facing testing to be covered by this 'layers' attribute,
-    # as all will be known when unit-testing.
+    # as it is all that will be known when unit-testing.
     layers: Dict[str, pebble.Layer] = dataclasses.field(default_factory=dict)
     """All :class:`ops.pebble.Layer` definitions that have already been added to the container."""
 
@@ -848,8 +903,8 @@ class Container(_max_posargs(1)):
     this becomes::
 
         mounts = {
-            'foo': scenario.Mount('/home/foo',  Path('/path/to/local/dir/containing/bar/py/')),
-            'bin': Mount('/bin/', Path('/path/to/local/dir/containing/bash/and/baz/')),
+            'foo': Mount('/home/foo', pathlib.Path('/path/to/local/dir/containing/bar/py/')),
+            'bin': Mount('/bin/', pathlib.Path('/path/to/local/dir/containing/bash/and/baz/')),
         }
     """
 
@@ -861,19 +916,21 @@ class Container(_max_posargs(1)):
 
     For example::
 
-        container = scenario.Container(
+        container = Container(
             name='foo',
             exec_mock={
-                ('whoami', ): scenario.ExecOutput(return_code=0, stdout='ubuntu')
+                ('whoami', ): ExecOutput(return_code=0, stdout='ubuntu')
                 ('dig', '+short', 'canonical.com'):
-                    scenario.ExecOutput(return_code=0, stdout='185.125.190.20\\n185.125.190.21')
+                    ExecOutput(return_code=0, stdout='185.125.190.20\\n185.125.190.21')
             }
         )
     """
 
     notices: List[Notice] = dataclasses.field(default_factory=list)
+    """Any Pebble notices that already exist in the container."""
 
     check_infos: FrozenSet[CheckInfo] = frozenset()
+    """All Pebble health checks that have been added to the container."""
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -891,9 +948,9 @@ class Container(_max_posargs(1)):
     def plan(self) -> pebble.Plan:
         """The 'computed' Pebble plan.
 
-        i.e. the base plan plus the layers that have been added on top.
-        You should run your assertions on this plan, not so much on the layers, as those are
-        input data.
+        This is the base plan plus the layers that have been added on top.
+        You should run your assertions on this plan, not so much on the layers,
+        as those are input data.
         """
 
         # copied over from ops.testing._TestingPebbleClient.get_plan().
@@ -1090,8 +1147,8 @@ _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
 class Port(_max_posargs(1)):
     """Represents a port on the charm host.
 
-    Port objects should not be instantiated directly: use TCPPort, UDPPort, or
-    ICMPPort instead.
+    Port objects should not be instantiated directly: use :class:`TCPPort`,
+    :class:`UDPPort`, or :class:`ICMPPort` instead.
     """
 
     port: Optional[int] = None
@@ -1208,7 +1265,9 @@ class Resource(_max_posargs(0)):
     """Represents a resource made available to the charm."""
 
     name: str
+    """The name of the resource, as found in the charm metadata."""
     path: "PathLike"
+    """A local path that will be provided to the charm as the content of the resource."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1447,11 +1506,11 @@ class State(_max_posargs(0)):
         #   foo-bar: ...
         #   foo_bar: ...
 
-        normalized_endpoint = normalize_name(endpoint)
+        normalized_endpoint = _normalize_name(endpoint)
         return tuple(
             r
             for r in self.relations
-            if normalize_name(r.endpoint) == normalized_endpoint
+            if _normalize_name(r.endpoint) == normalized_endpoint
         )
 
 
@@ -1591,7 +1650,7 @@ class _EventPath(str):
         type: _EventType
 
     def __new__(cls, string):
-        string = normalize_name(string)
+        string = _normalize_name(string)
         instance = super().__new__(cls, string)
 
         instance.name = name = string.split(".")[-1]
