@@ -39,7 +39,7 @@ action = Action("backup", params={...})
 ctx.run_action(action, state)
 
 # Scenario 7.x
-ctx.run_action(ctx.on.action("backup", params={...}), state)
+ctx.run(ctx.on.action("backup", params={...}), state)
 ```
 
 ### State components are (frozen) sets
@@ -66,6 +66,60 @@ state_in = State(containers={c1, c2}, relations={r1, r2})
 assert state_out.get_container(c2.name)...
 assert state_out.get_relation(id=r1.id)...
 new_state = dataclasses.replace(state_out, relations=state_out.relations + {r3})
+```
+
+### Run action events in the same way as other events.
+
+The `run_action()` method (top-level and on the context manager) has been
+unified with the `run()` method. All events, including action events, are run
+with `run()` and return a `State` objects. The action logs and history are
+available via the `Context` object, and if the charm calls `event.fail()`, an
+exception will be raised.
+
+```python
+# Older Scenario Code
+action = Action("backup", params={...})
+out = ctx.run_action(action, state)
+assert out.logs == ["baz", "qux"]
+assert not out.success
+assert out.results == {"foo": "bar"}
+assert out.failure == "boo-hoo"
+
+# Scenario 7.x
+with pytest.raises(ActionFailure) as exc_info:
+    ctx.run(ctx.on.action("backup", params={...}), State())
+assert ctx.action_logs == ['baz', 'qux']
+assert ctx.action_results == {"foo": "bar"}
+assert exc_info.value.message == "boo-hoo"
+```
+
+### Use the Context object as a context manager
+
+The deprecated `pre_event` and `post_event` arguments to `run`
+(and `run_action`) have been removed: use the context handler instead. In
+addition, the `Context` object itself is now used for a context manager, rather
+than having `.manager()` and `action_manager()` methods.
+
+In addition, the `.output` attribute of the context manager has been removed.
+The state should be accessed explicitly by using the return value of the
+`run()` method.
+
+```python
+# Older Scenario code.
+ctx = Context(MyCharm)
+state = ctx.run("start", pre_event=lambda charm: charm.prepare(), state=State())
+
+ctx = Context(MyCharm)
+with ctx.manager("start", State()) as mgr:
+    mgr.charm.prepare()
+assert mgr.output....
+
+# Scenario 7.x
+ctx = Context(MyCharm)
+with ctx(ctx.on.start(), State()) as manager:
+    manager.charm.prepare()
+    out = manager.run()
+    assert out...
 ```
 
 ### State components are passed by keyword
@@ -160,31 +214,6 @@ new_container = dataclasses.replace(container, can_connect=True)
 duplicate_relation = copy.deepcopy(relation)
 ```
 
-### Use the Context object as a context manager
-
-The deprecated `pre_event` and `post_event` arguments to `run` and `run_action`
-have been removed: use the appropriate context handler instead. In addition, the
-`Context` object itself is now used for a context manager, rather than having
-`.manager()` and `action_manager()` methods.
-
-```python
-# Older Scenario code.
-ctx = Context(MyCharm)
-state = ctx.run("start", pre_event=lambda charm: charm.prepare(), state=State())
-
-ctx = Context(MyCharm)
-with ctx.manager("start", State()) as mgr:
-    mgr.charm.prepare()
-assert mgr.output....
-
-# Scenario 7.x
-ctx = Context(MyCharm)
-with ctx(ctx.on.start(), State()) as event:
-    event.charm.prepare()
-    out = event.run()  # Or run_action() for an action event.
-    assert out...
-```
-
 ### Define resources with the Resource class
 
 The resources in State objects were previously plain dictionaryes, and are now
@@ -248,13 +277,12 @@ container = Container(
 )
 ```
 
-### Don't use `RelationBase`, `Event`, or `StoredState.data_type_name`
+### Don't use `Event`, or `StoredState.data_type_name`
 
 Several attributes and classes that were never intended for end users have been
 made private:
 
 * The `data_type_name` attribute of `StoredState` is now private.
-* The `RelationBase` class is now private.
 * The `Event` class is now private.
 
 ### Catan replaces `scenario.sequences`
