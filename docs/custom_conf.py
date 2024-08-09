@@ -308,6 +308,8 @@ nitpick_ignore = [
     # Please keep this list sorted alphabetically.
     ('py:class', '_CharmSpec'),
     ('py:class', '_Event'),
+    ('py:class', '_EntityStatus'),
+    ('py:class', 'ModelError'),
     ('py:class', 'scenario.state._EntityStatus'),
     ('py:class', 'scenario.state._Event'),
     ('py:class', 'scenario.state._max_posargs.<locals>._MaxPositionalArgs'),

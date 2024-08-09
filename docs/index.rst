@@ -1,21 +1,21 @@
-
 Scenario API reference
 ======================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
 
-scenario.State
-==============
+   context
+   state
+   capture_events
+   consistency_checker
 
-.. automodule:: scenario.state
 
+scenario
+========
 
-scenario.Context
-================
-
-.. automodule:: scenario.context
+.. automodule:: scenario
+   :special-members: __call__
 
 
 Indices
