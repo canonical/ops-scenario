@@ -664,8 +664,8 @@ def test_pebble_exec():
         ctx.on.pebble_ready(container),
         state_in,
     )
-    assert ctx.exec_history[container.name].command == ['ls', '-ll']
-    assert ctx.exec_history[container.name].stdin == "..."
+    assert ctx.exec_history[container.name][0].command == ['ls', '-ll']
+    assert ctx.exec_history[container.name][0].stdin == "..."
 ```
 
 Scenario will attempt to find the right `Exec` object by matching the provided

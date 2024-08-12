@@ -844,19 +844,22 @@ class _MockPebbleClient(_TestingPebbleClient):
             stderr.write(handler.stderr)
 
         args = ExecArgs(
-            command,
-            environment or {},
-            working_dir,
-            timeout,
-            user_id,
-            user,
-            group_id,
-            group,
-            stdin,  # type:ignore  # If None, will be replaced by proc_stdin.read() later.
-            encoding,
-            combine_stderr,
+            command=command,
+            environment=environment or {},
+            working_dir=working_dir,
+            timeout=timeout,
+            user_id=user_id,
+            user=user,
+            group_id=group_id,
+            group=group,
+            stdin=stdin,  # type:ignore  # If None, will be replaced by proc_stdin.read() later.
+            encoding=encoding,
+            combine_stderr=combine_stderr,
         )
-        self._context.exec_history[self._container_name].append(args)
+        try:
+            self._context.exec_history[self._container_name].append(args)
+        except KeyError:
+            self._context.exec_history[self._container_name] = [args]
 
         change_id = handler._run()
         return cast(
