@@ -2,7 +2,6 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 import datetime
-import random
 import shutil
 from pathlib import Path
 from typing import (
@@ -224,20 +223,15 @@ class _MockModelBackend(_ModelBackend):
             return secrets[0]
 
         elif label:
-            secrets = [s for s in self._state.secrets if s.label == label]
-            if not secrets:
-                raise SecretNotFoundError(label)
-            return secrets[0]
+            try:
+                return self._state.get_secret(label=label)
+            except KeyError:
+                raise SecretNotFoundError(label) from None
 
         else:
             # if all goes well, this should never be reached. ops.model.Secret will check upon
             # instantiation that either an id or a label are set, and raise a TypeError if not.
             raise RuntimeError("need id or label.")
-
-    @staticmethod
-    def _generate_secret_id():
-        id = "".join(map(str, [random.choice(list(range(10))) for _ in range(20)]))
-        return f"secret:{id}"
 
     def _check_app_data_access(self, is_app: bool):
         if not isinstance(is_app, bool):
@@ -390,10 +384,8 @@ class _MockModelBackend(_ModelBackend):
     ) -> str:
         from scenario.state import Secret
 
-        secret_id = self._generate_secret_id()
         secret = Secret(
-            id=secret_id,
-            contents={0: content},
+            content,
             label=label,
             description=description,
             expire=expire,
@@ -403,7 +395,7 @@ class _MockModelBackend(_ModelBackend):
         secrets = set(self._state.secrets)
         secrets.add(secret)
         self._state._update_secrets(frozenset(secrets))
-        return secret_id
+        return secret.id
 
     def _check_can_manage_secret(
         self,
@@ -433,19 +425,19 @@ class _MockModelBackend(_ModelBackend):
         secret = self._get_secret(id, label)
         juju_version = self._context.juju_version
         if not (juju_version == "3.1.7" or juju_version >= "3.3.1"):
-            # in this medieval juju chapter,
+            # In this medieval Juju chapter,
             # secret owners always used to track the latest revision.
             # ref: https://bugs.launchpad.net/juju/+bug/2037120
             if secret.owner is not None:
                 refresh = True
 
-        revision = secret.revision
         if peek or refresh:
-            revision = max(secret.contents.keys())
             if refresh:
-                secret._set_revision(revision)
+                secret._track_latest_revision()
+            assert secret.latest_content is not None
+            return secret.latest_content
 
-        return secret.contents[revision]
+        return secret.tracked_content
 
     def secret_info_get(
         self,
@@ -461,7 +453,7 @@ class _MockModelBackend(_ModelBackend):
         return SecretInfo(
             id=secret.id,
             label=secret.label,
-            revision=max(secret.contents),
+            revision=secret._latest_revision,
             expires=secret.expire,
             rotation=secret.rotate,
             rotates=None,  # not implemented yet.
@@ -479,6 +471,15 @@ class _MockModelBackend(_ModelBackend):
     ):
         secret = self._get_secret(id, label)
         self._check_can_manage_secret(secret)
+
+        if content == secret.latest_content:
+            # In Juju 3.6 and higher, this is a no-op, but it's good to warn
+            # charmers if they are doing this, because it's not generally good
+            # practice.
+            # https://bugs.launchpad.net/juju/+bug/2069238
+            logger.warning(
+                f"secret {id} contents set to the existing value: new revision not needed",
+            )
 
         secret._update_metadata(
             content=content,
@@ -518,10 +519,32 @@ class _MockModelBackend(_ModelBackend):
         secret = self._get_secret(id)
         self._check_can_manage_secret(secret)
 
-        if revision:
-            del secret.contents[revision]
-        else:
-            secret.contents.clear()
+        # Removing all revisions means that the secret is removed, so is no
+        # longer in the state.
+        if revision is None:
+            secrets = set(self._state.secrets)
+            secrets.remove(secret)
+            self._state._update_secrets(frozenset(secrets))
+            return
+
+        # Juju does not prevent removing the tracked or latest revision, but it
+        # is always a mistake to do this. Rather than having the state model a
+        # secret where the tracked/latest revision cannot be retrieved but the
+        # secret still exists, we raise instead, so that charms know that there
+        # is a problem with their code.
+        if revision in (secret._tracked_revision, secret._latest_revision):
+            raise ValueError(
+                "Charms should not remove the latest revision of a secret. "
+                "Add a new revision with `set_content()` instead, and the previous "
+                "revision will be cleaned up by the secret owner when no longer in use.",
+            )
+
+        # For all other revisions, the content is not visible to the charm
+        # (this is as designed: the secret is being removed, so it should no
+        # longer be in use). That means that the state does not need to be
+        # modified - however, unit tests should be able to verify that the remove call was
+        # executed, so we track that in a history list in the context.
+        self._context.removed_secret_revisions.append(revision)
 
     def relation_remote_app_name(
         self,
@@ -550,21 +573,24 @@ class _MockModelBackend(_ModelBackend):
         _format_action_result_dict(results)
         # but then we will store it in its unformatted,
         # original form for testing ease
-        self._context._action_results = results
+        if self._context.action_results:
+            self._context.action_results.update(results)
+        else:
+            self._context.action_results = results
 
     def action_fail(self, message: str = ""):
         if not self._event.action:
             raise ActionMissingFromContextError(
                 "not in the context of an action event: cannot action-fail",
             )
-        self._context._action_failure = message
+        self._context._action_failure_message = message
 
     def action_log(self, message: str):
         if not self._event.action:
             raise ActionMissingFromContextError(
                 "not in the context of an action event: cannot action-log",
             )
-        self._context._action_logs.append(message)
+        self._context.action_logs.append(message)
 
     def action_get(self):
         action = self._event.action

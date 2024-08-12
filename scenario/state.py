@@ -5,7 +5,9 @@
 import dataclasses
 import datetime
 import inspect
+import random
 import re
+import string
 from collections import namedtuple
 from enum import Enum
 from itertools import chain
@@ -128,6 +130,14 @@ class StateValidationError(RuntimeError):
 
 class MetadataNotFoundError(RuntimeError):
     """Raised when Scenario can't find a metadata.yaml file in the provided charm root."""
+
+
+class ActionFailed(Exception):
+    """Raised at the end of the hook if the charm has called `event.fail()`."""
+
+    def __init__(self, message: str, state: "State"):
+        self.message = message
+        self.state = state
 
 
 # This can be replaced with the KW_ONLY dataclasses functionality in Python 3.10+.
@@ -269,23 +279,25 @@ class CloudSpec(_max_posargs(1)):
         )
 
 
+def _generate_secret_id():
+    # This doesn't account for collisions, but the odds are so low that it
+    # should not be possible in any realistic test run.
+    secret_id = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in range(20)
+    )
+    return f"secret:{secret_id}"
+
+
 @dataclasses.dataclass(frozen=True)
 class Secret(_max_posargs(1)):
-    # mapping from revision IDs to each revision's contents
-    contents: Dict[int, "RawSecretRevisionContents"]
+    tracked_content: "RawSecretRevisionContents"
+    latest_content: Optional["RawSecretRevisionContents"] = None
 
-    id: str
-    # CAUTION: ops-created Secrets (via .add_secret()) will have a canonicalized
-    #  secret id (`secret:` prefix)
-    #  but user-created ones will not. Using post-init to patch it in feels bad, but requiring the user to
-    #  add the prefix manually every time seems painful as well.
+    id: str = dataclasses.field(default_factory=_generate_secret_id)
 
     # indicates if the secret is owned by THIS unit, THIS app or some other app/unit.
     # if None, the implication is that the secret has been granted to this unit.
     owner: Literal["unit", "app", None] = None
-
-    # what revision is currently tracked by this charm. Only meaningful if owner=False
-    revision: int = 0
 
     # mapping from relation IDs to remote unit/apps to which this secret has been granted.
     # Only applicable if owner
@@ -296,13 +308,25 @@ class Secret(_max_posargs(1)):
     expire: Optional[datetime.datetime] = None
     rotate: Optional[SecretRotate] = None
 
+    # what revision is currently tracked by this charm. Only meaningful if owner=False
+    _tracked_revision: int = 1
+
+    # what revision is the latest for this secret.
+    _latest_revision: int = 1
+
     def __hash__(self) -> int:
         return hash(self.id)
 
-    def _set_revision(self, revision: int):
-        """Set a new tracked revision."""
+    def __post_init__(self):
+        if self.latest_content is None:
+            # bypass frozen dataclass
+            object.__setattr__(self, "latest_content", self.tracked_content)
+
+    def _track_latest_revision(self):
+        """Set the current revision to the tracked revision."""
         # bypass frozen dataclass
-        object.__setattr__(self, "revision", revision)
+        object.__setattr__(self, "_tracked_revision", self._latest_revision)
+        object.__setattr__(self, "tracked_content", self.latest_content)
 
     def _update_metadata(
         self,
@@ -313,11 +337,12 @@ class Secret(_max_posargs(1)):
         rotate: Optional[SecretRotate] = None,
     ):
         """Update the metadata."""
-        revision = max(self.contents.keys())
-        if content:
-            self.contents[revision + 1] = content
-
         # bypass frozen dataclass
+        object.__setattr__(self, "_latest_revision", self._latest_revision + 1)
+        # TODO: if this is done twice in the same hook, then Juju ignores the
+        # first call, it doesn't continue to update like this does.
+        if content:
+            object.__setattr__(self, "latest_content", content)
         if label:
             object.__setattr__(self, "label", label)
         if description:
@@ -413,7 +438,7 @@ def next_relation_id(*, update=True):
 
 
 @dataclasses.dataclass(frozen=True)
-class _RelationBase(_max_posargs(2)):
+class RelationBase(_max_posargs(2)):
     endpoint: str
     """Relation endpoint name. Must match some endpoint name defined in metadata.yaml."""
 
@@ -452,9 +477,9 @@ class _RelationBase(_max_posargs(2)):
         raise NotImplementedError()
 
     def __post_init__(self):
-        if type(self) is _RelationBase:
+        if type(self) is RelationBase:
             raise RuntimeError(
-                "_RelationBase cannot be instantiated directly; "
+                "RelationBase cannot be instantiated directly; "
                 "please use Relation, PeerRelation, or SubordinateRelation",
             )
 
@@ -486,7 +511,7 @@ DEFAULT_JUJU_DATABAG = {
 
 
 @dataclasses.dataclass(frozen=True)
-class Relation(_RelationBase):
+class Relation(RelationBase):
     """An integration between the charm and another application."""
 
     remote_app_name: str = "remote"
@@ -530,7 +555,7 @@ class Relation(_RelationBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class SubordinateRelation(_RelationBase):
+class SubordinateRelation(RelationBase):
     remote_app_data: "RawDataBagContents" = dataclasses.field(default_factory=dict)
     remote_unit_data: "RawDataBagContents" = dataclasses.field(
         default_factory=lambda: DEFAULT_JUJU_DATABAG.copy(),
@@ -571,7 +596,7 @@ class SubordinateRelation(_RelationBase):
 
 
 @dataclasses.dataclass(frozen=True)
-class PeerRelation(_RelationBase):
+class PeerRelation(RelationBase):
     """A relation to share data between units of the charm."""
 
     peers_data: Dict["UnitID", "RawDataBagContents"] = dataclasses.field(
@@ -1087,8 +1112,12 @@ _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
 
 
 @dataclasses.dataclass(frozen=True)
-class _Port(_max_posargs(1)):
-    """Represents a port on the charm host."""
+class Port(_max_posargs(1)):
+    """Represents a port on the charm host.
+
+    Port objects should not be instantiated directly: use TCPPort, UDPPort, or
+    ICMPPort instead.
+    """
 
     port: Optional[int] = None
     """The port to open. Required for TCP and UDP; not allowed for ICMP."""
@@ -1096,20 +1125,20 @@ class _Port(_max_posargs(1)):
     """The protocol that data transferred over the port will use."""
 
     def __post_init__(self):
-        if type(self) is _Port:
+        if type(self) is Port:
             raise RuntimeError(
-                "_Port cannot be instantiated directly; "
+                "Port cannot be instantiated directly; "
                 "please use TCPPort, UDPPort, or ICMPPort",
             )
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, (_Port, ops.Port)):
+        if isinstance(other, (Port, ops.Port)):
             return (self.protocol, self.port) == (other.protocol, other.port)
         return False
 
 
 @dataclasses.dataclass(frozen=True)
-class TCPPort(_Port):
+class TCPPort(Port):
     """Represents a TCP port on the charm host."""
 
     port: int
@@ -1126,7 +1155,7 @@ class TCPPort(_Port):
 
 
 @dataclasses.dataclass(frozen=True)
-class UDPPort(_Port):
+class UDPPort(Port):
     """Represents a UDP port on the charm host."""
 
     port: int
@@ -1143,7 +1172,7 @@ class UDPPort(_Port):
 
 
 @dataclasses.dataclass(frozen=True)
-class ICMPPort(_Port):
+class ICMPPort(Port):
     """Represents an ICMP port on the charm host."""
 
     protocol: _RawPortProtocolLiteral = "icmp"
@@ -1237,7 +1266,7 @@ class State(_max_posargs(0)):
     If a storage is not attached, omit it from this listing."""
 
     # we don't use sets to make json serialization easier
-    opened_ports: Iterable[_Port] = dataclasses.field(default_factory=frozenset)
+    opened_ports: Iterable[Port] = dataclasses.field(default_factory=frozenset)
     """Ports opened by juju on this charm."""
     leader: bool = False
     """Whether this charm has leadership."""
@@ -1283,7 +1312,7 @@ class State(_max_posargs(0)):
             else:
                 raise TypeError(f"Invalid status.{name}: {val!r}")
         normalised_ports = [
-            _Port(protocol=port.protocol, port=port.port)
+            Port(protocol=port.protocol, port=port.port)
             if isinstance(port, ops.Port)
             else port
             for port in self.opened_ports
@@ -1339,7 +1368,7 @@ class State(_max_posargs(0)):
         # bypass frozen dataclass
         object.__setattr__(self, name, new_status)
 
-    def _update_opened_ports(self, new_ports: FrozenSet[_Port]):
+    def _update_opened_ports(self, new_ports: FrozenSet[Port]):
         """Update the current opened ports."""
         # bypass frozen dataclass
         object.__setattr__(self, "opened_ports", new_ports)
@@ -1840,10 +1869,11 @@ class _Action(_max_posargs(1)):
 
         def test_backup_action():
             ctx = scenario.Context(MyCharm)
-            out: scenario.ActionOutput = ctx.run_action(
+            state = ctx.run(
                 ctx.on.action('do_backup', params={'filename': 'foo'}),
                 scenario.State()
             )
+            assert ctx.action_results == ...
     """
 
     name: str

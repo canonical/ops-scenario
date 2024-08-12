@@ -741,8 +741,8 @@ storage = scenario.Storage("foo")
 # Setup storage with some content:
 (storage.get_filesystem(ctx) / "myfile.txt").write_text("helloworld")
 
-with ctx.manager(ctx.on.update_status(), scenario.State(storages={storage})) as mgr:
-    foo = mgr.charm.model.storages["foo"][0]
+with ctx(ctx.on.update_status(), scenario.State(storages={storage})) as manager:
+    foo = manager.charm.model.storages["foo"][0]
     loc = foo.location
     path = loc / "myfile.txt"
     assert path.exists()
@@ -819,22 +819,27 @@ Scenario has secrets. Here's how you use them.
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'public'}},
-            id='foo',
-        ),
-    },
+            tracked_content={'key': 'public'},
+            latest_content={'key': 'public', 'cert': 'private'},
+        )
+    }
 )
 ```
 
-The only mandatory arguments to Secret are its secret ID (which should be unique) and its 'contents': that is, a mapping
-from revision numbers (integers) to a `str:str` dict representing the payload of the revision.
+The only mandatory arguments to Secret is the `tracked_content` dict: a `str:str`
+mapping representing the content of the revision. If there is a newer revision
+of the content than the one the unit that's handling the event is tracking, then
+`latest_content` should also be provided - if it's not, then Scenario assumes
+that `latest_content` is the `tracked_content`. If there are other revisions of
+the content, simply don't include them: the unit has no way of knowing about
+these.
 
 There are three cases:
 - the secret is owned by this app but not this unit, in which case this charm can only manage it if we are the leader
 - the secret is owned by this unit, in which case this charm can always manage it (leader or not)
-- (default) the secret is not owned by this app nor unit, which means we can't manage it but only view it
+- (default) the secret is not owned by this app nor unit, which means we can't manage it but only view it (this includes user secrets)
 
-Thus by default, the secret is not owned by **this charm**, but, implicitly, by some unknown 'other charm', and that other charm has granted us view rights.
+Thus by default, the secret is not owned by **this charm**, but, implicitly, by some unknown 'other charm' (or a user), and that other has granted us view rights.
 
 The presence of the secret in `State.secrets` entails that we have access to it, either as owners or as grantees. Therefore, if we're not owners, we must be grantees. Absence of a Secret from the known secrets list means we are not entitled to obtaining it in any way. The charm, indeed, shouldn't even know it exists.
 
@@ -845,32 +850,52 @@ If this charm does not own the secret, but also it was not granted view rights b
 To specify a secret owned by this unit (or app):
 
 ```python
+rel = scenario.Relation("web")
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'private'}},
-            id='foo',
+            {'key': 'private'},
             owner='unit',  # or 'app'
-            remote_grants={0: {"remote"}}
-            # the secret owner has granted access to the "remote" app over some relation with ID 0
-        ),
-    },
+            # The secret owner has granted access to the "remote" app over some relation:
+            remote_grants={rel.id: {"remote"}}
+        )
+    }
 )
 ```
 
-To specify a secret owned by some other application and give this unit (or app) access to it:
+To specify a secret owned by some other application, or a user secret, and give this unit (or app) access to it:
 
 ```python
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'public'}},
-            id='foo',
+            {'key': 'public'},
             # owner=None, which is the default
-            revision=0,  # the revision that this unit (or app) is currently tracking
-        ),
-    },
+        )
+    }
 )
+```
+
+When handling the `secret-expired` and `secret-remove` events, the charm must remove the specified revision of the secret. For `secret-remove`, the revision will no longer be in the `State`, because it's no longer in use (which is why the `secret-remove` event was triggered). To ensure that the charm is removing the secret, check the context for the history of secret removal:
+
+```python
+class SecretCharm(ops.CharmBase):
+    def __init__(self, framework):
+        super().__init__(framework)
+        self.framework.observe(self.on.secret_remove, self._on_secret_remove)
+
+    def _on_secret_remove(self, event):
+        event.secret.remove_revision(event.revision)
+
+
+ctx = scenario.Context(SecretCharm, meta={"name": "foo"})
+secret = scenario.Secret({"password": "xxxxxxxx"}, owner="app")
+old_revision = 42
+state = ctx.run(
+    ctx.on.secret_remove(secret, revision=old_revision),
+    scenario.State(leader=True, secrets={secret})
+)
+assert ctx.removed_secret_revisions == [old_revision]
 ```
 
 ## StoredState
@@ -914,9 +939,9 @@ import pathlib
 
 ctx = scenario.Context(MyCharm, meta={'name': 'juliette', "resources": {"foo": {"type": "oci-image"}}})
 resource = scenario.Resource(name='foo', path='/path/to/resource.tar')
-with ctx.manager(ctx.on.start(), scenario.State(resources={resource})) as mgr:
+with ctx(ctx.on.start(), scenario.State(resources={resource})) as manager:
     # If the charm, at runtime, were to call self.model.resources.fetch("foo"), it would get '/path/to/resource.tar' back.
-    path = mgr.charm.model.resources.fetch('foo')
+    path = manager.charm.model.resources.fetch('foo')
     assert path == pathlib.Path('/path/to/resource.tar')
 ```
 
@@ -978,7 +1003,6 @@ class MyVMCharm(ops.CharmBase):
 An action is a special sort of event, even though `ops` handles them almost identically.
 In most cases, you'll want to inspect the 'results' of an action, or whether it has failed or
 logged something while executing. Many actions don't have a direct effect on the output state.
-For this reason, the output state is less prominent in the return type of `Context.run_action`.
 
 How to test actions with scenario:
 
@@ -990,18 +1014,32 @@ def test_backup_action():
 
     # If you didn't declare do_backup in the charm's metadata, 
     # the `ConsistencyChecker` will slap you on the wrist and refuse to proceed.
-    out: scenario.ActionOutput = ctx.run_action(ctx.on.action("do_backup"), scenario.State())
+    state = ctx.run(ctx.on.action("do_backup"), scenario.State())
 
-    # You can assert action results, logs, failure using the ActionOutput interface:
-    assert out.logs == ['baz', 'qux']
-    
-    if out.success:
-      # If the action did not fail, we can read the results:
-      assert out.results == {'foo': 'bar'}
+    # You can assert on action results and logs using the context:
+    assert ctx.action_logs == ['baz', 'qux']
+    assert ctx.action_results == {'foo': 'bar'}
+```
 
-    else:
-      # If the action fails, we can read a failure message:
-      assert out.failure == 'boo-hoo'
+## Failing Actions
+
+If the charm code calls `event.fail()` to indicate that the action has failed,
+an `ActionFailed` exception will be raised. This avoids having to include
+success checks in every test where the action is successful.
+
+```python
+def test_backup_action_failed():
+    ctx = scenario.Context(MyCharm)
+
+    with pytest.raises(ActionFailed) as exc_info:
+        ctx.run(ctx.on.action("do_backup"), scenario.State())
+    assert exc_info.value.message == "sorry, couldn't do the backup"
+    # The state is also available if that's required:
+    assert exc_info.value.state.get_container(...)
+
+    # You can still assert action results and logs that occured as well as the failure:
+    assert ctx.action_logs == ['baz', 'qux']
+    assert ctx.action_results == {'foo': 'bar'}
 ```
 
 ## Parametrized Actions
@@ -1014,7 +1052,7 @@ def test_backup_action():
 
     # If the parameters (or their type) don't match what is declared in the metadata, 
     # the `ConsistencyChecker` will slap you on the other wrist.
-    out: scenario.ActionOutput = ctx.run_action(
+    state = ctx.run(
         ctx.on.action("do_backup", params={'a': 'b'}),
         scenario.State()
     )
@@ -1120,7 +1158,7 @@ Scenario is a black-box, state-transition testing framework. It makes it trivial
 B, but not to assert that, in the context of this charm execution, with this state, a certain charm-internal method was called and returned a
 given piece of data, or would return this and that _if_ it had been called.
 
-Scenario offers a cheekily-named context manager for this use case specifically:
+The Scenario `Context` object can be used as a context manager for this use case specifically:
 
 ```python notest
 from charms.bar.lib_name.v1.charm_lib import CharmLib
@@ -1142,8 +1180,7 @@ class MyCharm(ops.CharmBase):
 
 def test_live_charm_introspection(mycharm):
     ctx = scenario.Context(mycharm, meta=mycharm.META)
-    # If you want to do this with actions, you can use `Context.action_manager` instead.
-    with ctx.manager("start", scenario.State()) as manager:
+    with ctx(ctx.on.start(), scenario.State()) as manager:
         # This is your charm instance, after ops has set it up:
         charm: MyCharm = manager.charm
         
@@ -1164,8 +1201,8 @@ def test_live_charm_introspection(mycharm):
     assert state_out.unit_status == ...
 ```
 
-Note that you can't call `manager.run()` multiple times: the manager is a context that ensures that `ops.main` 'pauses' right
-before emitting the event to hand you some introspection hooks, but for the rest this is a regular scenario test: you
+Note that you can't call `manager.run()` multiple times: the object is a context that ensures that `ops.main` 'pauses' right
+before emitting the event to hand you some introspection hooks, but for the rest this is a regular Scenario test: you
 can't emit multiple events in a single charm execution.
 
 # The virtual charm root
