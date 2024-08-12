@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
+import collections
 import dataclasses
 import tempfile
 from contextlib import contextmanager
@@ -550,6 +551,7 @@ class Context:
         self.juju_log: List["JujuLogLine"] = []
         self.app_status_history: List["_EntityStatus"] = []
         self.unit_status_history: List["_EntityStatus"] = []
+        self.exec_history = collections.defaultdict(list)
         self.workload_version_history: List[str] = []
         self.emitted_events: List[EventBase] = []
         self.requested_storages: Dict[str, int] = {}

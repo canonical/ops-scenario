@@ -665,12 +665,6 @@ class Exec(_max_posargs(1)):
     Provide content that the real process would write to stderr, which can be
     read by the charm.
     """
-    _stdin: Optional[str] = None
-    """stdin content the charm wrote to the process.
-
-    Cannot be provided in the input state - the output state will contain the
-    content the charm wrote to the process, to use in assertions.
-    """
 
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
@@ -682,25 +676,8 @@ class Exec(_max_posargs(1)):
         # to support that.
         object.__setattr__(self, "command_prefix", tuple(self.command_prefix))
 
-        # The process is being mocked - it can't start with existing stdin
-        # content; the charm is able to write that.
-        if self._stdin:
-            raise ValueError(
-                "processes cannot start with existing stdin content - write to "
-                "the process in your charm",
-            )
-
     def _run(self) -> int:
         return self._change_id
-
-    def _update_stdin(self, stdin: str):
-        # bypass frozen dataclass
-        object.__setattr__(self, "_stdin", stdin)
-
-    @property
-    def stdin(self):
-        """The content the charm wrote to the mock process's stdin."""
-        return self._stdin
 
 
 @dataclasses.dataclass(frozen=True)
@@ -962,13 +939,6 @@ class Container(_max_posargs(1)):
             charm pushed to the container.
         """
         return ctx._get_container_root(self.name)
-
-    def get_exec(self, command_prefix: Sequence[str]):
-        """Get the Exec object from the container with the given command prefix."""
-        for exec in self.execs:
-            if exec.command_prefix == command_prefix:
-                return exec
-        raise KeyError(f"no exec found with command prefix {command_prefix}")
 
 
 _RawStatusLiteral = Literal[

@@ -4,7 +4,6 @@
 import datetime
 import random
 import shutil
-from io import StringIO
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -15,6 +14,7 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    TextIO,
     Tuple,
     Union,
     cast,
@@ -34,7 +34,7 @@ from ops.model import (
     _ModelBackend,
 )
 from ops.pebble import Client, ExecError
-from ops.testing import _TestingPebbleClient
+from ops.testing import ExecArgs, _TestingPebbleClient
 
 from scenario.logger import logger as scenario_logger
 from scenario.state import (
@@ -75,38 +75,44 @@ class ActionMissingFromContextError(Exception):
 class _MockExecProcess:
     def __init__(
         self,
-        command: Tuple[str, ...],
         change_id: int,
-        exec: "Exec",
+        args: ExecArgs,
+        return_code: int,
+        stdin: Optional[TextIO],
+        stdout: Optional[TextIO],
+        stderr: Optional[TextIO],
     ):
-        self._command = command
         self._change_id = change_id
-        self._exec = exec
+        self._args = args
+        self._return_code = return_code
         self._waited = False
-        self.stdout = StringIO(self._exec.stdout)
-        self.stderr = StringIO(self._exec.stderr)
-        # You can't pass *in* the stdin, the charm is responsible for that.
-        self.stdin = StringIO()
+        self.stdin = stdin
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def __del__(self):
+        if not self._waited:
+            self._close_stdin()
+
+    def _close_stdin(self):
+        if self._args.stdin is None and self.stdin is not None:
+            self.stdin.seek(0)
+            self._args.stdin = self.stdin.read()
 
     def wait(self):
+        self._close_stdin()
         self._waited = True
-        self._exec._update_stdin(self.stdin.getvalue())
-        exit_code = self._exec.return_code
-        if exit_code != 0:
-            raise ExecError(list(self._command), exit_code, None, None)
+        if self._return_code != 0:
+            raise ExecError(list(self._args.command), self._return_code, None, None)
 
     def wait_output(self):
-        exec = self._exec
-        self._exec._update_stdin(self.stdin.getvalue())
-        exit_code = exec.return_code
-        if exit_code != 0:
-            raise ExecError(
-                list(self._command),
-                exit_code,
-                self.stdout.read(),
-                self.stderr.read(),
-            )
-        return exec.stdout, exec.stderr
+        self._close_stdin()
+        self._waited = True
+        stdout = self.stdout.read() if self.stdout is not None else None
+        stderr = self.stderr.read() if self.stderr is not None else None
+        if self._return_code != 0:
+            raise ExecError(list(self._args.command), self._return_code, stdout, stderr)
+        return stdout, stderr
 
     def send_signal(self, sig: Union[int, str]):  # noqa: U100
         raise NotImplementedError()
@@ -180,6 +186,8 @@ class _MockModelBackend(_ModelBackend):
             state=self._state,
             event=self._event,
             charm_spec=self._charm_spec,
+            context=self._context,
+            container_name=container_name,
         )
 
     def _get_relation_by_id(
@@ -684,11 +692,15 @@ class _MockPebbleClient(_TestingPebbleClient):
         state: "State",
         event: "_Event",
         charm_spec: "_CharmSpec",
+        context: "Context",
+        container_name: str,
     ):
         self._state = state
         self.socket_path = socket_path
         self._event = event
         self._charm_spec = charm_spec
+        self._context = context
+        self._container_name = container_name
 
         # wipe just in case
         if container_root.exists():
@@ -758,7 +770,24 @@ class _MockPebbleClient(_TestingPebbleClient):
         # matter how much of it was used, so we have failed to find a handler.
         return None
 
-    def exec(self, command, **kwargs):  # noqa: U100 type: ignore
+    def exec(
+        self,
+        command: List[str],
+        *,
+        environment: Optional[Dict[str, str]] = None,
+        working_dir: Optional[str] = None,
+        timeout: Optional[float] = None,
+        user_id: Optional[int] = None,
+        user: Optional[str] = None,
+        group_id: Optional[int] = None,
+        group: Optional[str] = None,
+        stdin: Optional[Union[str, bytes, TextIO]] = None,
+        stdout: Optional[TextIO] = None,
+        stderr: Optional[TextIO] = None,
+        encoding: Optional[str] = "utf-8",
+        combine_stderr: bool = False,
+        **kwargs,
+    ):
         handler = self._find_exec_handler(command)
         if not handler:
             raise ExecError(
@@ -772,11 +801,48 @@ class _MockPebbleClient(_TestingPebbleClient):
                 f"'Container(..., execs={{scenario.Exec({list(command)}, ...)}})'",
             )
 
+        if stdin is None:
+            proc_stdin = self._transform_exec_handler_output("", encoding)
+        else:
+            proc_stdin = None
+            stdin = stdin.read() if hasattr(stdin, "read") else stdin  # type: ignore
+        if stdout is None:
+            proc_stdout = self._transform_exec_handler_output(handler.stdout, encoding)
+        else:
+            proc_stdout = None
+            stdout.write(handler.stdout)
+        if stderr is None:
+            proc_stderr = self._transform_exec_handler_output(handler.stderr, encoding)
+        else:
+            proc_stderr = None
+            stderr.write(handler.stderr)
+
+        args = ExecArgs(
+            command,
+            environment or {},
+            working_dir,
+            timeout,
+            user_id,
+            user,
+            group_id,
+            group,
+            stdin,  # type:ignore  # If None, will be replaced by proc_stdin.read() later.
+            encoding,
+            combine_stderr,
+        )
+        self._context.exec_history[self._container_name].append(args)
+
         change_id = handler._run()
-        return _MockExecProcess(
-            change_id=change_id,
-            command=command,
-            exec=handler,
+        return cast(
+            pebble.ExecProcess[Any],
+            _MockExecProcess(
+                change_id=change_id,
+                args=args,
+                return_code=handler.return_code,
+                stdin=proc_stdin,
+                stdout=proc_stdout,
+                stderr=proc_stderr,
+            ),
         )
 
     def _check_connection(self):

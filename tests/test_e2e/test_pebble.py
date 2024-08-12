@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import io
 import tempfile
 from pathlib import Path
 
@@ -212,24 +213,30 @@ def test_exec(charm_cls, cmd, out):
     )
 
 
-def test_get_exec():
+@pytest.mark.parametrize(
+    "stdin,write",
+    (
+        [None, "hello world!"],
+        ["hello world!", None],
+        [io.StringIO("hello world!"), None],
+    ),
+)
+def test_exec_history_stdin(stdin, write):
     class MyCharm(CharmBase):
         def __init__(self, framework: Framework):
             super().__init__(framework)
             self.framework.observe(self.on.foo_pebble_ready, self._on_ready)
 
         def _on_ready(self, _):
-            proc = self.unit.get_container("foo").exec(["ls"])
-            proc.stdin.write("hello world!")
-            proc.wait_output()
+            proc = self.unit.get_container("foo").exec(["ls"], stdin=stdin)
+            if write:
+                proc.stdin.write(write)
+            proc.wait()
 
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
-    exec = Exec([], stdout=LS)
-    container = Container(name="foo", can_connect=True, execs={exec})
-    state_out = ctx.run(
-        ctx.on.pebble_ready(container=container), State(containers={container})
-    )
-    assert state_out.get_container(container.name).get_exec(())._stdin == "hello world!"
+    container = Container(name="foo", can_connect=True, execs={Exec([])})
+    ctx.run(ctx.on.pebble_ready(container=container), State(containers={container}))
+    assert ctx.exec_history[container.name][0].stdin == "hello world!"
 
 
 def test_pebble_ready(charm_cls):
@@ -346,7 +353,8 @@ def test_exec_wait_error(charm_cls):
         assert exc_info.value.stdout == "hello pebble"
 
 
-def test_exec_wait_output(charm_cls):
+@pytest.mark.parametrize("command", (["foo"], ["foo", "bar"], ["foo", "bar", "baz"]))
+def test_exec_wait_output(charm_cls, command):
     state = State(
         containers={
             Container(
@@ -360,10 +368,11 @@ def test_exec_wait_output(charm_cls):
     ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
     with ctx.manager(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
-        proc = container.exec(["foo"])
+        proc = container.exec(command)
         out, err = proc.wait_output()
         assert out == "hello pebble"
         assert err == "oepsie"
+        assert ctx.exec_history[container.name][0].command == command
 
 
 def test_exec_wait_output_error(charm_cls):
