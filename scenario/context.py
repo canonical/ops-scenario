@@ -2,7 +2,6 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 import collections
-import dataclasses
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
