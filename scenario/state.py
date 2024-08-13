@@ -479,6 +479,11 @@ _next_relation_id_counter = 1
 
 
 def next_relation_id(*, update=True):
+    """Get the ID the next relation to be created will get.
+
+    Pass update=False if you're only inspecting it.
+    Pass update=True if you also want to bump it.
+    """
     global _next_relation_id_counter
     cur = _next_relation_id_counter
     if update:
@@ -605,14 +610,19 @@ class Relation(RelationBase):
 
 @dataclasses.dataclass(frozen=True)
 class SubordinateRelation(RelationBase):
+    """A relation to share data between a subordinate and a principal charm."""
+
     remote_app_data: "RawDataBagContents" = dataclasses.field(default_factory=dict)
+    """The current content of the remote application databag."""
     remote_unit_data: "RawDataBagContents" = dataclasses.field(
         default_factory=lambda: DEFAULT_JUJU_DATABAG.copy(),
     )
+    """The current content of the remote unit databag."""
 
-    # app name and ID of the remote unit that *this unit* is attached to.
     remote_app_name: str = "remote"
+    """The name of the remote application that *this unit* is attached to."""
     remote_unit_id: int = 0
+    """The ID of the remote unit that *this unit* is attached to."""
 
     def __hash__(self) -> int:
         return hash(self.id)
@@ -641,6 +651,7 @@ class SubordinateRelation(RelationBase):
 
     @property
     def remote_unit_name(self) -> str:
+        """The full name of the remote unit, in the form ``remote/0``."""
         return f"{self.remote_app_name}/{self.remote_unit_id}"
 
 
@@ -756,6 +767,11 @@ _next_notice_id_counter = 1
 
 
 def next_notice_id(*, update=True):
+    """Get the ID the next Pebble notice to be created will get.
+
+    Pass update=False if you're only inspecting it.
+    Pass update=True if you also want to bump it.
+    """
     global _next_notice_id_counter
     cur = _next_notice_id_counter
     if update:
@@ -1118,26 +1134,40 @@ _EntityStatus._entity_statuses.update(
 
 @dataclasses.dataclass(frozen=True)
 class StoredState(_max_posargs(1)):
-    name: str = "_stored"
+    """Represents unit-local state that persists across events."""
 
-    # /-separated Object names. E.g. MyCharm/MyCharmLib.
-    # if None, this StoredState instance is owned by the Framework.
+    name: str = "_stored"
+    """The attribute in the charm class where the state is stored.
+
+    For example, ``_stored`` in this class::
+
+        class MyCharm(ops.CharmBase):
+            _stored = ops.StoredState()
+
+    """
+
     owner_path: Optional[str] = None
+    """The path to the owner of this StoredState instance.
+
+    If None, the owner is the Framework. Otherwise, /-separated object names,
+    for example MyCharm/MyCharmLib.
+    """
 
     # Ideally, the type here would be only marshallable types, rather than Any.
     # However, it's complex to describe those types, since it's a recursive
     # definition - even in TypeShed the _Marshallable type includes containers
     # like list[Any], which seems to defeat the point.
     content: Dict[str, Any] = dataclasses.field(default_factory=dict)
+    """The content of the :class:`ops.StoredState` instance."""
 
     _data_type_name: str = "StoredStateData"
 
     @property
-    def handle_path(self):
+    def _handle_path(self):
         return f"{self.owner_path or ''}/{self._data_type_name}[{self.name}]"
 
     def __hash__(self) -> int:
-        return hash(self.handle_path)
+        return hash(self._handle_path)
 
 
 _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
@@ -1176,7 +1206,10 @@ class TCPPort(Port):
     port: int
     """The port to open."""
     protocol: _RawPortProtocolLiteral = "tcp"
-    """The protocol that data transferred over the port will use."""
+    """The protocol that data transferred over the port will use.
+
+    :meta private:
+    """
 
     def __post_init__(self):
         super().__post_init__()
@@ -1193,7 +1226,10 @@ class UDPPort(Port):
     port: int
     """The port to open."""
     protocol: _RawPortProtocolLiteral = "udp"
-    """The protocol that data transferred over the port will use."""
+    """The protocol that data transferred over the port will use.
+
+    :meta private:
+    """
 
     def __post_init__(self):
         super().__post_init__()
@@ -1208,7 +1244,10 @@ class ICMPPort(Port):
     """Represents an ICMP port on the charm host."""
 
     protocol: _RawPortProtocolLiteral = "icmp"
-    """The protocol that data transferred over the port will use."""
+    """The protocol that data transferred over the port will use.
+
+    :meta private:
+    """
 
     _max_positional_args: Final = 0
 
@@ -1243,12 +1282,16 @@ def next_storage_index(*, update=True):
 
 @dataclasses.dataclass(frozen=True)
 class Storage(_max_posargs(1)):
-    """Represents an (attached!) storage made available to the charm container."""
+    """Represents an (attached) storage made available to the charm container."""
 
     name: str
+    """The name of the storage, as found in the charm metadata."""
 
     index: int = dataclasses.field(default_factory=next_storage_index)
-    # Every new Storage instance gets a new one, if there's trouble, override.
+    """The index of this storage instance.
+
+    For Kubernetes charms, this will always be 1. For machine charms, each new
+    Storage instance gets a new index."""
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, (Storage, ops.Storage)):
@@ -1272,7 +1315,7 @@ class Resource(_max_posargs(0)):
 
 @dataclasses.dataclass(frozen=True)
 class State(_max_posargs(0)):
-    """Represents the juju-owned portion of a unit's state.
+    """Represents the Juju-owned portion of a unit's state.
 
     Roughly speaking, it wraps all hook-tool- and pebble-mediated data a charm can access in its
     lifecycle. For example, status-get will return data from `State.status`, is-leader will
@@ -1289,31 +1332,36 @@ class State(_max_posargs(0)):
     """Manual overrides for any relation and extra bindings currently provisioned for this charm.
     If a metadata-defined relation endpoint is not explicitly mapped to a Network in this field,
     it will be defaulted.
-    [CAVEAT: `extra-bindings` is a deprecated, regretful feature in juju/ops. For completeness we
-    support it, but use at your own risk.] If a metadata-defined extra-binding is left empty,
-    it will be defaulted.
+
+    .. warning::
+        `extra-bindings` is a deprecated, regretful feature in Juju/ops. For completeness we
+        support it, but use at your own risk. If a metadata-defined extra-binding is left empty,
+        it will be defaulted.
     """
     containers: Iterable[Container] = dataclasses.field(default_factory=frozenset)
     """All containers (whether they can connect or not) that this charm is aware of."""
     storages: Iterable[Storage] = dataclasses.field(default_factory=frozenset)
-    """All ATTACHED storage instances for this charm.
+    """All **attached** storage instances for this charm.
+
     If a storage is not attached, omit it from this listing."""
 
     # we don't use sets to make json serialization easier
     opened_ports: Iterable[Port] = dataclasses.field(default_factory=frozenset)
-    """Ports opened by juju on this charm."""
+    """Ports opened by Juju on this charm."""
     leader: bool = False
     """Whether this charm has leadership."""
     model: Model = Model()
     """The model this charm lives in."""
     secrets: Iterable[Secret] = dataclasses.field(default_factory=frozenset)
     """The secrets this charm has access to (as an owner, or as a grantee).
+
     The presence of a secret in this list entails that the charm can read it.
     Whether it can manage it or not depends on the individual secret's `owner` flag."""
     resources: Iterable[Resource] = dataclasses.field(default_factory=frozenset)
     """All resources that this charm can access."""
     planned_units: int = 1
     """Number of non-dying planned units that are expected to be running this application.
+
     Use with caution."""
 
     # Represents the OF's event queue. These events will be emitted before the event being
@@ -1413,6 +1461,8 @@ class State(_max_posargs(0)):
         object.__setattr__(self, "secrets", new_secrets)
 
     def with_can_connect(self, container_name: str, can_connect: bool) -> "State":
+        """A copy of the State with the can_connect attribute of a container updated."""
+
         def replacer(container: Container):
             if container.name == container_name:
                 return dataclasses.replace(container, can_connect=can_connect)
@@ -1422,9 +1472,11 @@ class State(_max_posargs(0)):
         return dataclasses.replace(self, containers=ctrs)
 
     def with_leadership(self, leader: bool) -> "State":
+        """A copy of the State with the leadership status updated."""
         return dataclasses.replace(self, leader=leader)
 
     def with_unit_status(self, status: StatusBase) -> "State":
+        """A copy of the State with the unit status updated."""
         return dataclasses.replace(
             self,
             unit_status=_EntityStatus.from_ops(status),
@@ -1886,6 +1938,11 @@ _next_action_id_counter = 1
 
 
 def next_action_id(*, update=True):
+    """Get the ID the next action to be created will get.
+
+    Pass update=False if you're only inspecting it.
+    Pass update=True if you also want to bump it.
+    """
     global _next_action_id_counter
     cur = _next_action_id_counter
     if update:
