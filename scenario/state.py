@@ -1148,7 +1148,7 @@ class StoredState(_max_posargs(1)):
     """Represents unit-local state that persists across events."""
 
     name: str = "_stored"
-    """The attribute in the charm class where the state is stored.
+    """The attribute in the parent Object where the state is stored.
 
     For example, ``_stored`` in this class::
 
