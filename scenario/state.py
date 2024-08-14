@@ -1555,8 +1555,13 @@ class _CharmSpec(Generic[CharmType]):
 class DeferredEvent:
     """An event that has been deferred to run prior to the next Juju event.
 
-    In most cases, the :func:`deferred` function should be used to create a
-    ``DeferredEvent`` instance."""
+    Tests should not instantiate this class directly: use :meth:`_Event.deferred`
+    instead. For example:
+
+        ctx = Context(MyCharm)
+        deferred_start = ctx.on.start().deferred()
+        state = State(deferred=[deferred_start])
+    """
 
     handle_path: str
     owner: str
@@ -1862,24 +1867,3 @@ class _Action(_max_posargs(1)):
 
     Every action invocation is automatically assigned a new one. Override in
     the rare cases where a specific ID is required."""
-
-
-def deferred(
-    event: Union[str, _Event],
-    handler: Callable,
-    event_id: int = 1,
-    relation: Optional["Relation"] = None,
-    container: Optional["Container"] = None,
-    notice: Optional["Notice"] = None,
-    check_info: Optional["CheckInfo"] = None,
-):
-    """Construct a DeferredEvent from an Event or an event name."""
-    if isinstance(event, str):
-        event = _Event(
-            event,
-            relation=relation,
-            container=container,
-            notice=notice,
-            check_info=check_info,
-        )
-    return event.deferred(handler=handler, event_id=event_id)
