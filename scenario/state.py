@@ -1581,7 +1581,7 @@ class DeferredEvent:
         return self.handle_path.split("/")[-1].split("[")[0]
 
 
-class _EventType(str, Enum):  #
+class _EventType(str, Enum):
     framework = "framework"
     builtin = "builtin"
     relation = "relation"
