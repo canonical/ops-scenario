@@ -1559,7 +1559,7 @@ class DeferredEvent:
     instead. For example:
 
         ctx = Context(MyCharm)
-        deferred_start = ctx.on.start().deferred()
+        deferred_start = ctx.on.start().deferred(handler=MyCharm._on_start)
         state = State(deferred=[deferred_start])
     """
 
