@@ -1063,7 +1063,7 @@ class MyCharm(ops.CharmBase):
         event.defer()
 
 
-def test_start_on_deferred_update_status(MyCharm):
+def test_start_on_deferred_update_status():
     """Test charm execution if a 'start' is dispatched when in the previous run an update-status had been deferred."""
     ctx = scenario.Context(MyCharm)
     state_in = scenario.State(
