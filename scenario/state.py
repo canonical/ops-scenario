@@ -1792,6 +1792,7 @@ class _Event:
         #  not, then the coming checks are meaningless: the custom event could be named like a
         #  relation event but not *be* one.
         if self._is_workload_event:
+            # Enforced by the consistency checker, but for type checkers:
             assert self.container is not None
             snapshot_data["container_name"] = self.container.name
             if self.notice:
@@ -1810,6 +1811,7 @@ class _Event:
                 snapshot_data["check_name"] = self.check_info.name
 
         elif self._is_relation_event:
+            # Enforced by the consistency checker, but for type checkers:
             assert self.relation is not None
             relation = self.relation
             if isinstance(relation, PeerRelation):
@@ -1836,6 +1838,7 @@ class _Event:
                 ] = f"{remote_app}/{self.relation_departed_unit_id}"
 
         elif self._is_storage_event:
+            # Enforced by the consistency checker, but for type checkers:
             assert self.storage is not None
             snapshot_data.update(
                 {
@@ -1846,6 +1849,7 @@ class _Event:
             )
 
         elif self._is_secret_event:
+            # Enforced by the consistency checker, but for type checkers:
             assert self.secret is not None
             snapshot_data.update(
                 {"secret_id": self.secret.id, "secret_label": self.secret.label},
@@ -1854,6 +1858,7 @@ class _Event:
                 snapshot_data["secret_revision"] = self.secret_revision
 
         elif self._is_action_event:
+            # Enforced by the consistency checker, but for type checkers:
             assert self.action is not None
             snapshot_data["id"] = self.action.id
 
