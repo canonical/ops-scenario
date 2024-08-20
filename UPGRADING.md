@@ -243,6 +243,31 @@ state = State(networks={"foo": Network.default()})
 state = State(networks={Network.default("foo")})
 ```
 
+### Use the .deferred() method to populate State.deferred
+
+Previously, there were multiple methods to populate the `State.deferred` list:
+events with a `.deferred()` method, the `scenario.deferred()` method, and
+creating a `DeferredEvent` object manually. Now, for Juju events, you should
+always use the `.deferred()` method of the event - this also ensures that the
+deferred event has all of the required links (to relations, containers, secrets,
+and so on).
+
+```python
+# Older Scenario code
+deferred_start = scenario.deferred('start', handler=MyCharm._on_start)
+deferred_relation_created = Relation('foo').changed_event.deferred(handler=MyCharm._on_foo_relation_changed)
+deferred_config_changed = DeferredEvent(
+    handle_path='MyCharm/on/config_changed[1]',
+    owner='MyCharm',
+    observer='_on_config_changed'
+)
+
+# Scenario 7.x
+deferred_start = ctx.on.start().deferred(handler=MyCharm._on_start)
+deferred_relation_changed = ctx.on.relation_changed(Relation('foo')).deferred(handler=MyCharm._on_foo_relation_changed)
+deferred_config_changed = ctx.on.config_changed().deferred(handler=MyCharm._on_config_changed)
+```
+
 ### Update names: State.storages, State.stored_states, Container.execs, Container.service_statuses
 
 The `State.storage` and `State.stored_state` attributes are now plurals. This
