@@ -297,7 +297,7 @@ container = Container(
 # Scenario 7.x
 container = Container(
     name="foo",
-    execs={Exec(("ls", "-ll"), return_code=0, stdout=....)},
+    execs={Exec(["ls", "-ll"], return_code=0, stdout=....)},
     service_statuses={"srv1": ops.pebble.ServiceStatus.ACTIVE},
 )
 ```
