@@ -1329,7 +1329,7 @@ class State(_max_posargs(0)):
     """Represents the Juju-owned portion of a unit's state.
 
     Roughly speaking, it wraps all hook-tool- and pebble-mediated data a charm can access in its
-    lifecycle. For example, status-get will return data from `State.status`, is-leader will
+    lifecycle. For example, status-get will return data from `State.unit_status`, is-leader will
     return data from `State.leader`, and so on.
     """
 
