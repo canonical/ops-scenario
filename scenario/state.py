@@ -64,9 +64,9 @@ CREATE_ALL_RELATIONS = "CREATE_ALL_RELATIONS"
 BREAK_ALL_RELATIONS = "BREAK_ALL_RELATIONS"
 DETACH_ALL_STORAGES = "DETACH_ALL_STORAGES"
 
-ACTION_EVENT_SUFFIX = "_action"
+_ACTION_EVENT_SUFFIX = "_action"
 # all builtin events except secret events. They're special because they carry secret metadata.
-BUILTIN_EVENTS = {
+_BUILTIN_EVENTS = {
     "start",
     "stop",
     "install",
@@ -83,7 +83,7 @@ BUILTIN_EVENTS = {
     "leader_settings_changed",
     "collect_metrics",
 }
-FRAMEWORK_EVENTS = {
+_FRAMEWORK_EVENTS = {
     "pre_commit",
     "commit",
     "collect_app_status",
@@ -105,18 +105,11 @@ _STORAGE_EVENTS_SUFFIX = {
     "_storage_attached",
 }
 
-SECRET_EVENTS = {
+_SECRET_EVENTS = {
     "secret_changed",
     "secret_removed",
     "secret_rotate",
     "secret_expired",
-}
-
-META_EVENTS = {
-    "CREATE_ALL_RELATIONS": "_relation_created",
-    "BREAK_ALL_RELATIONS": "_relation_broken",
-    "DETACH_ALL_STORAGES": "_storage_detaching",
-    "ATTACH_ALL_STORAGES": "_storage_attached",
 }
 
 
@@ -1596,13 +1589,13 @@ class _EventPath(str):
             if s.endswith(suffix):
                 return suffix, _EventType.relation
 
-        if s.endswith(ACTION_EVENT_SUFFIX):
-            return ACTION_EVENT_SUFFIX, _EventType.action
+        if s.endswith(_ACTION_EVENT_SUFFIX):
+            return _ACTION_EVENT_SUFFIX, _EventType.action
 
-        if s in SECRET_EVENTS:
+        if s in _SECRET_EVENTS:
             return s, _EventType.secret
 
-        if s in FRAMEWORK_EVENTS:
+        if s in _FRAMEWORK_EVENTS:
             return s, _EventType.framework
 
         # Whether the event name indicates that this is a storage event.
@@ -1620,7 +1613,7 @@ class _EventPath(str):
         if s.endswith(_PEBBLE_CHECK_RECOVERED_EVENT_SUFFIX):
             return _PEBBLE_CHECK_RECOVERED_EVENT_SUFFIX, _EventType.workload
 
-        if s in BUILTIN_EVENTS:
+        if s in _BUILTIN_EVENTS:
             return "", _EventType.builtin
 
         return "", _EventType.custom
