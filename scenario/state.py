@@ -1353,24 +1353,6 @@ class State(_max_posargs(0)):
         # bypass frozen dataclass
         object.__setattr__(self, "secrets", new_secrets)
 
-    def with_can_connect(self, container_name: str, can_connect: bool) -> "State":
-        def replacer(container: Container):
-            if container.name == container_name:
-                return dataclasses.replace(container, can_connect=can_connect)
-            return container
-
-        ctrs = tuple(map(replacer, self.containers))
-        return dataclasses.replace(self, containers=ctrs)
-
-    def with_leadership(self, leader: bool) -> "State":
-        return dataclasses.replace(self, leader=leader)
-
-    def with_unit_status(self, status: StatusBase) -> "State":
-        return dataclasses.replace(
-            self,
-            unit_status=_EntityStatus.from_ops(status),
-        )
-
     def get_container(self, container: str, /) -> Container:
         """Get container from this State, based on its name."""
         for state_container in self.containers:
