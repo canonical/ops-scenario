@@ -5,7 +5,7 @@ from ops.charm import CharmBase
 
 from scenario._consistency_checker import check_consistency
 from scenario.context import Context
-from scenario.runtime import InconsistentScenarioError
+from scenario.errors import InconsistentScenarioError
 from scenario.state import (
     _RELATION_EVENTS_SUFFIX,
     CheckInfo,

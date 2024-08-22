@@ -18,19 +18,13 @@ from ops.log import setup_root_logging
 from ops.main import CHARM_STATE_FILE, _Dispatcher, _get_charm_dir, _get_event_args
 from ops.main import logger as ops_logger
 
+from scenario.errors import BadOwnerPath, NoObserverError
+
 if TYPE_CHECKING:  # pragma: no cover
     from scenario.context import Context
     from scenario.state import State, _CharmSpec, _Event
 
 # pyright: reportPrivateUsage=false
-
-
-class NoObserverError(RuntimeError):
-    """Error raised when the event being dispatched has no registered observers."""
-
-
-class BadOwnerPath(RuntimeError):
-    """Error raised when the owner path does not lead to a valid ObjectEvents instance."""
 
 
 def _get_owner(root: Any, path: Sequence[str]) -> ops.ObjectEvents:

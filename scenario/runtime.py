@@ -25,6 +25,7 @@ from ops.framework import (
 )
 from ops.storage import NoSnapshotError, SQLiteStorage
 
+from scenario.errors import UncaughtCharmError
 from scenario.logger import logger as scenario_logger
 from scenario.ops_main_mock import NoObserverError
 from scenario.state import ActionFailed, DeferredEvent, PeerRelation, StoredState
@@ -44,18 +45,6 @@ STORED_STATE_REGEX = re.compile(
 EVENT_REGEX = re.compile(_event_regex)
 
 RUNTIME_MODULE = Path(__file__).parent
-
-
-class ScenarioRuntimeError(RuntimeError):
-    """Base class for exceptions raised by scenario.runtime."""
-
-
-class UncaughtCharmError(ScenarioRuntimeError):
-    """Error raised if the charm raises while handling the event being dispatched."""
-
-
-class InconsistentScenarioError(ScenarioRuntimeError):
-    """Error raised when the combination of state and event is inconsistent."""
 
 
 class UnitStateDB:

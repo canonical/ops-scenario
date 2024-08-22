@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union, cast
 from ops import CharmBase, EventBase
 from ops.testing import ExecArgs
 
+from scenario.errors import AlreadyEmittedError, ContextSetupError
 from scenario.logger import logger as scenario_logger
 from scenario.runtime import Runtime
 from scenario.state import (
@@ -35,22 +36,6 @@ if TYPE_CHECKING:  # pragma: no cover
 logger = scenario_logger.getChild("runtime")
 
 _DEFAULT_JUJU_VERSION = "3.5"
-
-
-class InvalidEventError(RuntimeError):
-    """raised when something is wrong with the event passed to Context.run"""
-
-
-class InvalidActionError(InvalidEventError):
-    """raised when something is wrong with an action passed to Context.run"""
-
-
-class ContextSetupError(RuntimeError):
-    """Raised by Context when setup fails."""
-
-
-class AlreadyEmittedError(RuntimeError):
-    """Raised when ``run()`` is called more than once."""
 
 
 class Manager:

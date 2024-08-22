@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from numbers import Number
 from typing import TYPE_CHECKING, Iterable, List, NamedTuple, Tuple, Union
 
-from scenario.runtime import InconsistentScenarioError
+from scenario.errors import InconsistentScenarioError
 from scenario.runtime import logger as scenario_logger
 from scenario.state import (
     PeerRelation,

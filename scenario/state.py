@@ -43,6 +43,7 @@ from ops.model import CloudCredential as CloudCredential_Ops
 from ops.model import CloudSpec as CloudSpec_Ops
 from ops.model import SecretRotate, StatusBase
 
+from scenario.errors import MetadataNotFoundError, StateValidationError
 from scenario.logger import logger as scenario_logger
 
 JujuLogLine = namedtuple("JujuLogLine", ("level", "message"))
@@ -112,17 +113,6 @@ _SECRET_EVENTS = {
     "secret_rotate",
     "secret_expired",
 }
-
-
-class StateValidationError(RuntimeError):
-    """Raised when individual parts of the State are inconsistent."""
-
-    # as opposed to InconsistentScenario error where the
-    # **combination** of several parts of the State are.
-
-
-class MetadataNotFoundError(RuntimeError):
-    """Raised when Scenario can't find a metadata.yaml file in the provided charm root."""
 
 
 class ActionFailed(Exception):
