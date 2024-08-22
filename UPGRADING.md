@@ -42,15 +42,15 @@ ctx.run_action(action, state)
 ctx.run(ctx.on.action("backup", params={...}), state)
 ```
 
-### State components are (frozen) sets
+### Provide State components as (frozen) sets
 
-Like containers, relations, and networks, state components do not have any
-inherent ordering. When these were lists, 'magic' numbers tended to creep into
-test code. These are now all sets, and have 'get' methods to retrieve the
-object you want to assert on. In addition, they are actually `frozenset`s
-(Scenario will automatically freeze them if you pass a `set`), which increases
-the immutability of the state and prevents accidentally modifying the input
-state.
+The state components were previously lists, but containers, relations, networks,
+and other state components do not have any inherent ordering. This led to
+'magic' numbers creeping into test code. These are now all sets, and have 'get'
+methods to retrieve the object you want to assert on. In addition, they are
+actually `frozenset`s (Scenario will automatically freeze them if you pass a
+`set`), which increases the immutability of the state and prevents accidentally
+modifying the input state.
 
 ```python
 # Older Scenario code.
@@ -68,13 +68,14 @@ assert state_out.get_relation(id=r1.id)...
 new_state = dataclasses.replace(state_out, relations=state_out.relations + {r3})
 ```
 
-### Run action events in the same way as other events.
+### Run action events in the same way as other events
 
-The `run_action()` method (top-level and on the context manager) has been
-unified with the `run()` method. All events, including action events, are run
-with `run()` and return a `State` objects. The action logs and history are
-available via the `Context` object, and if the charm calls `event.fail()`, an
-exception will be raised.
+Previously, to run an action event Scenario offered a `run_action` method that
+returned an object containing the result of the action. The `run_action()`
+method (top-level and on the context manager) has been unified with the `run()`
+method. All events, including action events, are run with `run()` and return a
+`State` object. The action logs and history are available via the `Context`
+object, and if the charm calls `event.fail()`, an exception will be raised.
 
 ```python
 # Older Scenario Code
@@ -122,11 +123,13 @@ with ctx(ctx.on.start(), State()) as manager:
     assert out...
 ```
 
-### State components are passed by keyword
+### Pass State components are by keyword
 
-Most state components, and the `State` object itself, now request at least some
-arguments to be passed by keyword. In most cases, it's likely that you were
-already doing this, but the API is now enforced.
+Previously, it was possible (but inadvisable) to use positional arguments for
+the `State` and its components. Most state components, and the `State` object
+itself, now request at least some arguments to be passed by keyword. In most
+cases, it's likely that you were already doing this, but the API is now
+enforced.
 
 ```python
 # Older Scenario code.
@@ -143,12 +146,14 @@ state = State(
 )
 ```
 
-### Only pass the tracked and latest content to Secrets
+### Pass only the tracked and latest content to Secrets
 
-Rather than having a dictionary of many revisions as part of `Secret` objects,
-only the tracked and latest revision content needs to be included. These are the
-only revisions that the charm has access to, so any other revisions are not
-required. In addition, there's no longer a requirement to pass in an ID.
+In the past, any number of revision contents were provided when creating a
+`Secret. Now, rather than having a dictionary of many revisions as part of `Secret`
+objects, only the tracked and latest revision content needs to be included.
+These are the only revisions that the charm has access to, so any other
+revisions are not required. In addition, there's no longer a requirement to
+pass in an ID.
 
 ```python
 # Older Scenario code.
@@ -310,7 +315,7 @@ made private:
 * The `data_type_name` attribute of `StoredState` is now private.
 * The `Event` class is now private.
 
-### Catan replaces `scenario.sequences`
+### Use Catan rather than `scenario.sequences`
 
 The `scenario.sequences` module has been removed. We encourage you to look at
 the new [Catan](https://github.com/PietroPasotti/catan) package.
@@ -323,13 +328,13 @@ future, but have not yet decided how this will look. In the meantime, you can
 use the jsonpatch package directly if necessary. See the tests/helpers.py file
 for an example.
 
-### No need to call `cleanup`/`clear`
+### Remove calls to `cleanup`/`clear`
 
 The `Context.cleanup()` and `Context.clear()` methods have been removed. You
 do not need to manually call any cleanup methods after running an event. If you
 want a fresh `Context` (e.g. with no history), you should create a new object.
 
-### Only include secrets in the state if the charm has permission to view them
+### Include secrets in the state only if the charm has permission to view them
 
 `Secret.granted` has been removed. Only include in the state the secrets that
 the charm has permission to (at least) view.
