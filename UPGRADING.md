@@ -216,7 +216,7 @@ duplicate_relation = copy.deepcopy(relation)
 
 ### Define resources with the Resource class
 
-The resources in State objects were previously plain dictionaryes, and are now
+The resources in State objects were previously plain dictionaries, and are now
 `scenario.Resource` objects, aligning with all of the other State components.
 
 ```python
@@ -248,7 +248,7 @@ state = State(networks={Network.default("foo")})
 Previously, there were multiple methods to populate the `State.deferred` list:
 events with a `.deferred()` method, the `scenario.deferred()` method, and
 creating a `DeferredEvent` object manually. Now, for Juju events, you should
-always use the `.deferred()` method of the event - this also ensures that the
+always use the `.deferred()` method of the event -- this also ensures that the
 deferred event has all of the required links (to relations, containers, secrets,
 and so on).
 
