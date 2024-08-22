@@ -347,7 +347,7 @@ class Secret(_max_posargs(1)):
             object.__setattr__(self, "rotate", rotate)
 
 
-def normalize_name(s: str):
+def _normalise_name(s: str):
     """Event names, in Scenario, uniformly use underscores instead of dashes."""
     return s.replace("-", "_")
 
@@ -1425,11 +1425,11 @@ class State(_max_posargs(0)):
         #   foo-bar: ...
         #   foo_bar: ...
 
-        normalized_endpoint = normalize_name(endpoint)
+        normalized_endpoint = _normalise_name(endpoint)
         return tuple(
             r
             for r in self.relations
-            if normalize_name(r.endpoint) == normalized_endpoint
+            if _normalise_name(r.endpoint) == normalized_endpoint
         )
 
 
@@ -1569,7 +1569,7 @@ class _EventPath(str):
         type: _EventType
 
     def __new__(cls, string):
-        string = normalize_name(string)
+        string = _normalise_name(string)
         instance = super().__new__(cls, string)
 
         instance.name = name = string.split(".")[-1]

@@ -16,7 +16,7 @@ from scenario.state import (
     SubordinateRelation,
     _Action,
     _CharmSpec,
-    normalize_name,
+    _normalise_name,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -170,7 +170,7 @@ def _check_relation_event(
             "Please pass one.",
         )
     else:
-        if not event.name.startswith(normalize_name(event.relation.endpoint)):
+        if not event.name.startswith(_normalise_name(event.relation.endpoint)):
             errors.append(
                 f"relation event should start with relation endpoint name. {event.name} does "
                 f"not start with {event.relation.endpoint}.",
@@ -193,7 +193,7 @@ def _check_workload_event(
             "cannot construct a workload event without the container instance. "
             "Please pass one.",
         )
-    elif not event.name.startswith(normalize_name(event.container.name)):
+    elif not event.name.startswith(_normalise_name(event.container.name)):
         errors.append(
             f"workload event should start with container name. {event.name} does "
             f"not start with {event.container.name}.",
@@ -225,7 +225,7 @@ def _check_action_event(
         )
         return
 
-    elif not event.name.startswith(normalize_name(action.name)):
+    elif not event.name.startswith(_normalise_name(action.name)):
         errors.append(
             f"action event should start with action name. {event.name} does "
             f"not start with {action.name}.",
@@ -255,7 +255,7 @@ def _check_storage_event(
             "cannot construct a storage event without the Storage instance. "
             "Please pass one.",
         )
-    elif not event.name.startswith(normalize_name(storage.name)):
+    elif not event.name.startswith(_normalise_name(storage.name)):
         errors.append(
             f"storage event should start with storage name. {event.name} does "
             f"not start with {storage.name}.",
@@ -557,8 +557,8 @@ def check_containers_consistency(
 
     # event names will be normalized; need to compare against normalized container names.
     meta = charm_spec.meta
-    meta_containers = list(map(normalize_name, meta.get("containers", {})))
-    state_containers = [normalize_name(c.name) for c in state.containers]
+    meta_containers = list(map(_normalise_name, meta.get("containers", {})))
+    state_containers = [_normalise_name(c.name) for c in state.containers]
     all_notices = {notice.id for c in state.containers for notice in c.notices}
     all_checks = {
         (c.name, check.name) for c in state.containers for check in c.check_infos
