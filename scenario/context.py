@@ -469,19 +469,6 @@ class Context:
         """Hook for Runtime to set the output state."""
         self._output_state = output_state
 
-    @property
-    def output_state(self) -> "State":
-        """The output state obtained by running an event on this context.
-
-        Raises:
-            RuntimeError: if this ``Context`` hasn't been :meth:`run` yet.
-        """
-        if not self._output_state:
-            raise RuntimeError(
-                "No output state available. ``.run()`` this Context first.",
-            )
-        return self._output_state
-
     def _get_container_root(self, container_name: str):
         """Get the path to a tempdir where this container's simulated root will live."""
         return Path(self._tmp.name) / "containers" / container_name
@@ -538,8 +525,8 @@ class Context:
             ops.emit()
         if event.action:
             if self._action_failure_message is not None:
-                raise ActionFailed(self._action_failure_message, self.output_state)
-        return self.output_state
+                raise ActionFailed(self._action_failure_message, self._output_state)
+        return self._output_state
 
     @contextmanager
     def _run(self, event: "_Event", state: "State"):
