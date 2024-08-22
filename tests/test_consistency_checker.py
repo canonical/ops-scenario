@@ -3,7 +3,7 @@ import dataclasses
 import pytest
 from ops.charm import CharmBase
 
-from scenario.consistency_checker import check_consistency
+from scenario._consistency_checker import check_consistency
 from scenario.context import Context
 from scenario.runtime import InconsistentScenarioError
 from scenario.state import (

@@ -430,7 +430,7 @@ class Runtime:
         # todo consider forking out a real subprocess and do the mocking by
         #  mocking hook tool executables
 
-        from scenario.consistency_checker import check_consistency  # avoid cycles
+        from scenario._consistency_checker import check_consistency  # avoid cycles
 
         check_consistency(state, event, self._charm_spec, self._juju_version)
 

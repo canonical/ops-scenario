@@ -1186,7 +1186,7 @@ therefore, so far as we're concerned, that can't happen, and therefore we help y
 are consistent and raise an exception if that isn't so.
 
 That happens automatically behind the scenes whenever you trigger an event;
-`scenario.consistency_checker.check_consistency` is called and verifies that the scenario makes sense.
+`scenario._consistency_checker.check_consistency` is called and verifies that the scenario makes sense.
 
 ## Caveats:
 
