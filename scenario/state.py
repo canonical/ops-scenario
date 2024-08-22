@@ -381,7 +381,7 @@ class BindAddress(_max_posargs(1)):
     interface_name: str = ""
     mac_address: Optional[str] = None
 
-    def hook_tool_output_fmt(self):
+    def _hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
         # todo support for legacy (deprecated) `interfacename` and `macaddress` fields?
         dct = {
@@ -409,10 +409,12 @@ class Network(_max_posargs(2)):
     def __hash__(self) -> int:
         return hash(self.binding_name)
 
-    def hook_tool_output_fmt(self):
+    def _hook_tool_output_fmt(self):
         # dumps itself to dict in the same format the hook tool would
         return {
-            "bind-addresses": [ba.hook_tool_output_fmt() for ba in self.bind_addresses],
+            "bind-addresses": [
+                ba._hook_tool_output_fmt() for ba in self.bind_addresses
+            ],
             "egress-subnets": self.egress_subnets,
             "ingress-addresses": self.ingress_addresses,
         }

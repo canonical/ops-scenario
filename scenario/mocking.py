@@ -312,7 +312,7 @@ class _MockModelBackend(_ModelBackend):
             network = self._state.get_network(binding_name)
         except KeyError:
             network = Network("default")  # The name is not used in the output.
-        return network.hook_tool_output_fmt()
+        return network._hook_tool_output_fmt()
 
     # setter methods: these can mutate the state.
     def application_version_set(self, version: str):
