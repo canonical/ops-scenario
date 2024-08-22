@@ -25,6 +25,7 @@ from typing import (
     List,
     Literal,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Type,
@@ -314,6 +315,10 @@ class Secret(_max_posargs(1)):
             # bypass frozen dataclass
             object.__setattr__(self, "latest_content", self.tracked_content)
 
+    def _set_label(self, label):
+        # bypass frozen dataclass
+        object.__setattr__(self, "label", label)
+
     def _track_latest_revision(self):
         """Set the current revision to the tracked revision."""
         # bypass frozen dataclass
@@ -333,6 +338,7 @@ class Secret(_max_posargs(1)):
         object.__setattr__(self, "_latest_revision", self._latest_revision + 1)
         # TODO: if this is done twice in the same hook, then Juju ignores the
         # first call, it doesn't continue to update like this does.
+        # Fix when https://github.com/canonical/operator/issues/1288 is resolved.
         if content:
             object.__setattr__(self, "latest_content", content)
         if label:
@@ -664,24 +670,40 @@ def _generate_new_change_id():
 
 
 @dataclasses.dataclass(frozen=True)
-class ExecOutput(_max_posargs(0)):
+class Exec(_max_posargs(1)):
     """Mock data for simulated :meth:`ops.Container.exec` calls."""
 
+    command_prefix: Sequence[str]
     return_code: int = 0
-    """The return code of the process (0 is success)."""
+    """The return code of the process.
+
+    Use 0 to mock the process ending successfully, and other values for failure.
+    """
     stdout: str = ""
-    """Any content written to stdout by the process."""
+    """Any content written to stdout by the process.
+
+    Provide content that the real process would write to stdout, which can be
+    read by the charm.
+    """
     stderr: str = ""
-    """Any content written to stderr by the process."""
+    """Any content written to stderr by the process.
+
+    Provide content that the real process would write to stderr, which can be
+    read by the charm.
+    """
 
     # change ID: used internally to keep track of mocked processes
     _change_id: int = dataclasses.field(default_factory=_generate_new_change_id)
 
+    def __post_init__(self):
+        # The command prefix can be any sequence type, and a list is tidier to
+        # write when there's only one string. However, this object needs to be
+        # hashable, so can't contain a list. We 'freeze' the sequence to a tuple
+        # to support that.
+        object.__setattr__(self, "command_prefix", tuple(self.command_prefix))
+
     def _run(self) -> int:
         return self._change_id
-
-
-_ExecMock = Dict[Tuple[str, ...], ExecOutput]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -824,7 +846,7 @@ class Container(_max_posargs(1)):
     layers: Dict[str, pebble.Layer] = dataclasses.field(default_factory=dict)
     """All :class:`ops.pebble.Layer` definitions that have already been added to the container."""
 
-    service_status: Dict[str, pebble.ServiceStatus] = dataclasses.field(
+    service_statuses: Dict[str, pebble.ServiceStatus] = dataclasses.field(
         default_factory=dict,
     )
     """The current status of each Pebble service running in the container."""
@@ -849,20 +871,23 @@ class Container(_max_posargs(1)):
         }
     """
 
-    exec_mock: _ExecMock = dataclasses.field(default_factory=dict)
+    execs: Iterable[Exec] = frozenset()
     """Simulate executing commands in the container.
 
-    Specify each command the charm might run in the container and a :class:`ExecOutput`
+    Specify each command the charm might run in the container and an :class:`Exec`
     containing its return code and any stdout/stderr.
 
     For example::
 
         container = scenario.Container(
             name='foo',
-            exec_mock={
-                ('whoami', ): scenario.ExecOutput(return_code=0, stdout='ubuntu')
-                ('dig', '+short', 'canonical.com'):
-                    scenario.ExecOutput(return_code=0, stdout='185.125.190.20\\n185.125.190.21')
+            execs={
+                scenario.Exec(['whoami'], return_code=0, stdout='ubuntu'),
+                scenario.Exec(
+                    ['dig', '+short', 'canonical.com'],
+                    return_code=0,
+                    stdout='185.125.190.20\\n185.125.190.21',
+                ),
             }
         )
     """
@@ -873,6 +898,11 @@ class Container(_max_posargs(1)):
 
     def __hash__(self) -> int:
         return hash(self.name)
+
+    def __post_init__(self):
+        if not isinstance(self.execs, frozenset):
+            # Allow passing a regular set (or other iterable) of Execs.
+            object.__setattr__(self, "execs", frozenset(self.execs))
 
     def _render_services(self):
         # copied over from ops.testing._TestingPebbleClient._render_services()
@@ -914,7 +944,7 @@ class Container(_max_posargs(1)):
                 # in pebble, it just returns "nothing matched" if there are 0 matches,
                 # but it ignores services it doesn't recognize
                 continue
-            status = self.service_status.get(name, pebble.ServiceStatus.INACTIVE)
+            status = self.service_statuses.get(name, pebble.ServiceStatus.INACTIVE)
             if service.startup == "":
                 startup = pebble.ServiceStartup.DISABLED
             else:
@@ -1533,8 +1563,13 @@ class _CharmSpec(Generic[CharmType]):
 class DeferredEvent:
     """An event that has been deferred to run prior to the next Juju event.
 
-    In most cases, the :func:`deferred` function should be used to create a
-    ``DeferredEvent`` instance."""
+    Tests should not instantiate this class directly: use :meth:`_Event.deferred`
+    instead. For example:
+
+        ctx = Context(MyCharm)
+        deferred_start = ctx.on.start().deferred(handler=MyCharm._on_start)
+        state = State(deferred=[deferred_start])
+    """
 
     handle_path: str
     owner: str
@@ -1543,6 +1578,12 @@ class DeferredEvent:
     # needs to be marshal.dumps-able.
     snapshot_data: Dict = dataclasses.field(default_factory=dict)
 
+    # It would be nicer if people could do something like:
+    #   `isinstance(state.deferred[0], ops.StartEvent)`
+    # than comparing with the string names, but there's only one `_Event`
+    # class in Scenario, and it also needs to be created from the context,
+    # which is not available here. For the ops classes, it's complex to create
+    # them because they need a Handle.
     @property
     def name(self):
         return self.handle_path.split("/")[-1].split("[")[0]
@@ -1750,17 +1791,18 @@ class _Event:
         owner_name, handler_name = match.groups()[0].split(".")[-2:]
         handle_path = f"{owner_name}/on/{self.name}[{event_id}]"
 
+        # Many events have no snapshot data: install, start, stop, remove, config-changed,
+        # upgrade-charm, pre-series-upgrade, post-series-upgrade, leader-elected,
+        # leader-settings-changed, collect-metrics
         snapshot_data = {}
 
         # fixme: at this stage we can't determine if the event is a builtin one or not; if it is
         #  not, then the coming checks are meaningless: the custom event could be named like a
         #  relation event but not *be* one.
         if self._is_workload_event:
-            # this is a WorkloadEvent. The snapshot:
-            container = cast(Container, self.container)
-            snapshot_data = {
-                "container_name": container.name,
-            }
+            # Enforced by the consistency checker, but for type checkers:
+            assert self.container is not None
+            snapshot_data["container_name"] = self.container.name
             if self.notice:
                 if hasattr(self.notice.type, "value"):
                     notice_type = cast(pebble.NoticeType, self.notice.type).value
@@ -1777,8 +1819,9 @@ class _Event:
                 snapshot_data["check_name"] = self.check_info.name
 
         elif self._is_relation_event:
-            # this is a RelationEvent.
-            relation = cast("AnyRelation", self.relation)
+            # Enforced by the consistency checker, but for type checkers:
+            assert self.relation is not None
+            relation = self.relation
             if isinstance(relation, PeerRelation):
                 # FIXME: relation.unit for peers should point to <this unit>, but we
                 #  don't have access to the local app name in this context.
@@ -1786,12 +1829,46 @@ class _Event:
             else:
                 remote_app = relation.remote_app_name
 
-            snapshot_data = {
-                "relation_name": relation.endpoint,
-                "relation_id": relation.id,
-                "app_name": remote_app,
-                "unit_name": f"{remote_app}/{self.relation_remote_unit_id}",
-            }
+            snapshot_data.update(
+                {
+                    "relation_name": relation.endpoint,
+                    "relation_id": relation.id,
+                    "app_name": remote_app,
+                },
+            )
+            if not self.name.endswith(("_created", "_broken")):
+                snapshot_data[
+                    "unit_name"
+                ] = f"{remote_app}/{self.relation_remote_unit_id}"
+            if self.name.endswith("_departed"):
+                snapshot_data[
+                    "departing_unit"
+                ] = f"{remote_app}/{self.relation_departed_unit_id}"
+
+        elif self._is_storage_event:
+            # Enforced by the consistency checker, but for type checkers:
+            assert self.storage is not None
+            snapshot_data.update(
+                {
+                    "storage_name": self.storage.name,
+                    "storage_index": self.storage.index,
+                    # "storage_location": str(self.storage.get_filesystem(self._context)),
+                },
+            )
+
+        elif self._is_secret_event:
+            # Enforced by the consistency checker, but for type checkers:
+            assert self.secret is not None
+            snapshot_data.update(
+                {"secret_id": self.secret.id, "secret_label": self.secret.label},
+            )
+            if self.name.endswith(("_remove", "_expired")):
+                snapshot_data["secret_revision"] = self.secret_revision
+
+        elif self._is_action_event:
+            # Enforced by the consistency checker, but for type checkers:
+            assert self.action is not None
+            snapshot_data["id"] = self.action.id
 
         return DeferredEvent(
             handle_path,
@@ -1840,24 +1917,3 @@ class _Action(_max_posargs(1)):
 
     Every action invocation is automatically assigned a new one. Override in
     the rare cases where a specific ID is required."""
-
-
-def deferred(
-    event: Union[str, _Event],
-    handler: Callable,
-    event_id: int = 1,
-    relation: Optional["Relation"] = None,
-    container: Optional["Container"] = None,
-    notice: Optional["Notice"] = None,
-    check_info: Optional["CheckInfo"] = None,
-):
-    """Construct a DeferredEvent from an Event or an event name."""
-    if isinstance(event, str):
-        event = _Event(
-            event,
-            relation=relation,
-            container=container,
-            notice=notice,
-            check_info=check_info,
-        )
-    return event.deferred(handler=handler, event_id=event_id)

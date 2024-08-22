@@ -594,6 +594,7 @@ class MyCharm(ops.CharmBase):
     def _on_start(self, _):
         foo = self.unit.get_container('foo')
         proc = foo.exec(['ls', '-ll'])
+        proc.stdin.write("...")
         stdout, _ = proc.wait_output()
         assert stdout == LS_LL
 
@@ -601,10 +602,12 @@ class MyCharm(ops.CharmBase):
 def test_pebble_exec():
     container = scenario.Container(
         name='foo',
-        exec_mock={
-            ('ls', '-ll'):  # this is the command we're mocking
-                scenario.ExecOutput(return_code=0,  # this data structure contains all we need to mock the call.
-                                    stdout=LS_LL)
+        execs={
+            scenario.Exec(
+                command_prefix=['ls'],
+                return_code=0,
+                stdout=LS_LL,
+            ),
         }
     )
     state_in = scenario.State(containers={container})
@@ -616,7 +619,19 @@ def test_pebble_exec():
         ctx.on.pebble_ready(container),
         state_in,
     )
+    assert ctx.exec_history[container.name][0].command == ['ls', '-ll']
+    assert ctx.exec_history[container.name][0].stdin == "..."
 ```
+
+Scenario will attempt to find the right `Exec` object by matching the provided
+command prefix against the command used in the ops `container.exec()` call. For
+example if the command is `['ls', '-ll']` then the searching will be:
+
+ 1. an `Exec` with exactly the same as command prefix, `('ls', '-ll')`
+ 2. an `Exec` with the command prefix `('ls', )`
+ 3. an `Exec` with the command prefix `()`
+
+If none of these are found Scenario will raise an `ExecError`.
 
 ### Pebble Notices
 
@@ -1005,7 +1020,7 @@ def test_backup_action():
 Scenario allows you to accurately simulate the Operator Framework's event queue. The event queue is responsible for
 keeping track of the deferred events. On the input side, you can verify that if the charm triggers with this and that
 event in its queue (they would be there because they had been deferred in the previous run), then the output state is
-valid.
+valid. You generate the deferred data structure using the event's `deferred()` method:
 
 ```python
 class MyCharm(ops.CharmBase):
@@ -1018,26 +1033,17 @@ class MyCharm(ops.CharmBase):
         event.defer()
 
 
-def test_start_on_deferred_update_status(MyCharm):
+def test_start_on_deferred_update_status():
     """Test charm execution if a 'start' is dispatched when in the previous run an update-status had been deferred."""
+    ctx = scenario.Context(MyCharm)
     state_in = scenario.State(
         deferred=[
-            scenario.deferred('update_status', handler=MyCharm._on_update_status)
+            ctx.on.update_status().deferred(handler=MyCharm._on_update_status)
         ]
     )
-    state_out = scenario.Context(MyCharm).run(ctx.on.start(), state_in)
+    state_out = ctx.run(ctx.on.start(), state_in)
     assert len(state_out.deferred) == 1
     assert state_out.deferred[0].name == 'start'
-```
-
-You can also generate the 'deferred' data structure (called a DeferredEvent) from the corresponding Event (and the
-handler):
-
-```python continuation
-ctx = scenario.Context(MyCharm, meta={"name": "deferring"})
-
-deferred_start = ctx.on.start().deferred(MyCharm._on_start)
-deferred_install = ctx.on.install().deferred(MyCharm._on_start)
 ```
 
 On the output side, you can verify that an event that you expect to have been deferred during this trigger, has indeed
@@ -1055,41 +1061,6 @@ def test_defer(MyCharm):
     out = scenario.Context(MyCharm).run(ctx.on.start(), scenario.State())
     assert len(out.deferred) == 1
     assert out.deferred[0].name == 'start'
-```
-
-## Deferring relation events
-
-If you want to test relation event deferrals, some extra care needs to be taken. RelationEvents hold references to the
-Relation instance they are about. So do they in Scenario. You can use the deferred helper to generate the data
-structure:
-
-```python
-class MyCharm(ops.CharmBase):
-    ...
-
-    def _on_foo_relation_changed(self, event):
-        event.defer()
-
-
-def test_start_on_deferred_update_status(MyCharm):
-    foo_relation = scenario.Relation('foo')
-    scenario.State(
-        relations={foo_relation},
-        deferred=[
-            scenario.deferred('foo_relation_changed',
-                              handler=MyCharm._on_foo_relation_changed,
-                              relation=foo_relation)
-        ]
-    )
-```
-
-but you can also use a shortcut from the relation event itself:
-
-```python continuation
-ctx = scenario.Context(MyCharm, meta={"name": "deferring"})
-
-foo_relation = scenario.Relation('foo')
-deferred_event = ctx.on.relation_changed(foo_relation).deferred(handler=MyCharm._on_foo_relation_changed)
 ```
 
 # Live charm introspection

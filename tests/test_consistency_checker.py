@@ -12,6 +12,7 @@ from scenario.state import (
     CloudCredential,
     CloudSpec,
     Container,
+    Exec,
     Model,
     Network,
     Notice,
@@ -23,7 +24,6 @@ from scenario.state import (
     Storage,
     StoredState,
     SubordinateRelation,
-    _Action,
     _CharmSpec,
     _Event,
 )

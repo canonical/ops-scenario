@@ -14,7 +14,7 @@ from scenario.state import (
     Container,
     DeferredEvent,
     ErrorStatus,
-    ExecOutput,
+    Exec,
     ICMPPort,
     MaintenanceStatus,
     Model,
@@ -35,7 +35,6 @@ from scenario.state import (
     UDPPort,
     UnknownStatus,
     WaitingStatus,
-    deferred,
 )
 
 __all__ = [
@@ -44,14 +43,13 @@ __all__ = [
     "CloudCredential",
     "CloudSpec",
     "Context",
-    "deferred",
     "StateValidationError",
     "Secret",
     "Relation",
     "SubordinateRelation",
     "PeerRelation",
     "Model",
-    "ExecOutput",
+    "Exec",
     "Mount",
     "Container",
     "Notice",
