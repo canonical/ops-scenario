@@ -437,9 +437,6 @@ def next_relation_id(*, update=True):
     return cur
 
 
-_DEFAULT_IP = "192.0.2.0"
-
-
 @dataclasses.dataclass(frozen=True)
 class RelationBase(_max_posargs(2)):
     endpoint: str
@@ -457,15 +454,9 @@ class RelationBase(_max_posargs(2)):
     """This application's databag for this relation."""
 
     local_unit_data: "RawDataBagContents" = dataclasses.field(
-        default_factory=lambda: RelationBase.DEFAULT_JUJU_DATABAG.copy(),
+        default_factory=lambda: _DEFAULT_JUJU_DATABAG.copy(),
     )
     """This unit's databag for this relation."""
-
-    DEFAULT_JUJU_DATABAG: ClassVar = {
-        "egress-subnets": _DEFAULT_IP,
-        "ingress-address": _DEFAULT_IP,
-        "private-address": _DEFAULT_IP,
-    }
 
     @property
     def _databags(self):
@@ -511,6 +502,14 @@ class RelationBase(_max_posargs(2)):
                 )
 
 
+_DEFAULT_IP = "192.0.2.0"
+_DEFAULT_JUJU_DATABAG = {
+    "egress-subnets": _DEFAULT_IP,
+    "ingress-address": _DEFAULT_IP,
+    "private-address": _DEFAULT_IP,
+}
+
+
 @dataclasses.dataclass(frozen=True)
 class Relation(RelationBase):
     """An integration between the charm and another application."""
@@ -525,7 +524,7 @@ class Relation(RelationBase):
     remote_app_data: "RawDataBagContents" = dataclasses.field(default_factory=dict)
     """The current content of the application databag."""
     remote_units_data: Dict["UnitID", "RawDataBagContents"] = dataclasses.field(
-        default_factory=lambda: {0: RelationBase.DEFAULT_JUJU_DATABAG.copy()},  # dedup
+        default_factory=lambda: {0: _DEFAULT_JUJU_DATABAG.copy()},  # dedup
     )
     """The current content of the databag for each unit in the relation."""
 
@@ -559,7 +558,7 @@ class Relation(RelationBase):
 class SubordinateRelation(RelationBase):
     remote_app_data: "RawDataBagContents" = dataclasses.field(default_factory=dict)
     remote_unit_data: "RawDataBagContents" = dataclasses.field(
-        default_factory=lambda: RelationBase.DEFAULT_JUJU_DATABAG.copy(),
+        default_factory=lambda: _DEFAULT_JUJU_DATABAG.copy(),
     )
 
     # app name and ID of the remote unit that *this unit* is attached to.
@@ -601,7 +600,7 @@ class PeerRelation(RelationBase):
     """A relation to share data between units of the charm."""
 
     peers_data: Dict["UnitID", "RawDataBagContents"] = dataclasses.field(
-        default_factory=lambda: {0: RelationBase.DEFAULT_JUJU_DATABAG.copy()},
+        default_factory=lambda: {0: _DEFAULT_JUJU_DATABAG.copy()},
     )
     """Current contents of the peer databags."""
     # Consistency checks will validate that *this unit*'s ID is not in here.
