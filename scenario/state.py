@@ -705,7 +705,7 @@ def _now_utc():
 _next_notice_id_counter = 1
 
 
-def next_notice_id(*, update=True):
+def _next_notice_id(*, update=True):
     global _next_notice_id_counter
     cur = _next_notice_id_counter
     if update:
@@ -722,7 +722,7 @@ class Notice(_max_posargs(1)):
     ``canonical.com/postgresql/backup`` or ``example.com/mycharm/notice``.
     """
 
-    id: str = dataclasses.field(default_factory=next_notice_id)
+    id: str = dataclasses.field(default_factory=_next_notice_id)
     """Unique ID for this notice."""
 
     user_id: Optional[int] = None
@@ -1171,7 +1171,7 @@ _port_cls_by_protocol = {
 _next_storage_index_counter = 0  # storage indices start at 0
 
 
-def next_storage_index(*, update=True):
+def _next_storage_index(*, update=True):
     """Get the index (used to be called ID) the next Storage to be created will get.
 
     Pass update=False if you're only inspecting it.
@@ -1190,7 +1190,7 @@ class Storage(_max_posargs(1)):
 
     name: str
 
-    index: int = dataclasses.field(default_factory=next_storage_index)
+    index: int = dataclasses.field(default_factory=_next_storage_index)
     # Every new Storage instance gets a new one, if there's trouble, override.
 
     def __eq__(self, other: object) -> bool:
@@ -1808,7 +1808,7 @@ class _Event:
 _next_action_id_counter = 1
 
 
-def next_action_id(*, update=True):
+def _next_action_id(*, update=True):
     global _next_action_id_counter
     cur = _next_action_id_counter
     if update:
@@ -1839,7 +1839,7 @@ class _Action(_max_posargs(1)):
     params: Dict[str, "AnyJson"] = dataclasses.field(default_factory=dict)
     """Parameter values passed to the action."""
 
-    id: str = dataclasses.field(default_factory=next_action_id)
+    id: str = dataclasses.field(default_factory=_next_action_id)
     """Juju action ID.
 
     Every action invocation is automatically assigned a new one. Override in
