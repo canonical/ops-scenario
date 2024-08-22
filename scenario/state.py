@@ -89,18 +89,18 @@ FRAMEWORK_EVENTS = {
     "collect_app_status",
     "collect_unit_status",
 }
-PEBBLE_READY_EVENT_SUFFIX = "_pebble_ready"
-PEBBLE_CUSTOM_NOTICE_EVENT_SUFFIX = "_pebble_custom_notice"
-PEBBLE_CHECK_FAILED_EVENT_SUFFIX = "_pebble_check_failed"
-PEBBLE_CHECK_RECOVERED_EVENT_SUFFIX = "_pebble_check_recovered"
-RELATION_EVENTS_SUFFIX = {
+_PEBBLE_READY_EVENT_SUFFIX = "_pebble_ready"
+_PEBBLE_CUSTOM_NOTICE_EVENT_SUFFIX = "_pebble_custom_notice"
+_PEBBLE_CHECK_FAILED_EVENT_SUFFIX = "_pebble_check_failed"
+_PEBBLE_CHECK_RECOVERED_EVENT_SUFFIX = "_pebble_check_recovered"
+_RELATION_EVENTS_SUFFIX = {
     "_relation_changed",
     "_relation_broken",
     "_relation_joined",
     "_relation_departed",
     "_relation_created",
 }
-STORAGE_EVENTS_SUFFIX = {
+_STORAGE_EVENTS_SUFFIX = {
     "_storage_detaching",
     "_storage_attached",
 }
@@ -1592,7 +1592,7 @@ class _EventPath(str):
 
     @staticmethod
     def _get_suffix_and_type(s: str) -> Tuple[str, _EventType]:
-        for suffix in RELATION_EVENTS_SUFFIX:
+        for suffix in _RELATION_EVENTS_SUFFIX:
             if s.endswith(suffix):
                 return suffix, _EventType.relation
 
@@ -1606,19 +1606,19 @@ class _EventPath(str):
             return s, _EventType.framework
 
         # Whether the event name indicates that this is a storage event.
-        for suffix in STORAGE_EVENTS_SUFFIX:
+        for suffix in _STORAGE_EVENTS_SUFFIX:
             if s.endswith(suffix):
                 return suffix, _EventType.storage
 
         # Whether the event name indicates that this is a workload event.
-        if s.endswith(PEBBLE_READY_EVENT_SUFFIX):
-            return PEBBLE_READY_EVENT_SUFFIX, _EventType.workload
-        if s.endswith(PEBBLE_CUSTOM_NOTICE_EVENT_SUFFIX):
-            return PEBBLE_CUSTOM_NOTICE_EVENT_SUFFIX, _EventType.workload
-        if s.endswith(PEBBLE_CHECK_FAILED_EVENT_SUFFIX):
-            return PEBBLE_CHECK_FAILED_EVENT_SUFFIX, _EventType.workload
-        if s.endswith(PEBBLE_CHECK_RECOVERED_EVENT_SUFFIX):
-            return PEBBLE_CHECK_RECOVERED_EVENT_SUFFIX, _EventType.workload
+        if s.endswith(_PEBBLE_READY_EVENT_SUFFIX):
+            return _PEBBLE_READY_EVENT_SUFFIX, _EventType.workload
+        if s.endswith(_PEBBLE_CUSTOM_NOTICE_EVENT_SUFFIX):
+            return _PEBBLE_CUSTOM_NOTICE_EVENT_SUFFIX, _EventType.workload
+        if s.endswith(_PEBBLE_CHECK_FAILED_EVENT_SUFFIX):
+            return _PEBBLE_CHECK_FAILED_EVENT_SUFFIX, _EventType.workload
+        if s.endswith(_PEBBLE_CHECK_RECOVERED_EVENT_SUFFIX):
+            return _PEBBLE_CHECK_RECOVERED_EVENT_SUFFIX, _EventType.workload
 
         if s in BUILTIN_EVENTS:
             return "", _EventType.builtin

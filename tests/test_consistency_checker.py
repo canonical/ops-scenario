@@ -7,7 +7,7 @@ from scenario.consistency_checker import check_consistency
 from scenario.context import Context
 from scenario.runtime import InconsistentScenarioError
 from scenario.state import (
-    RELATION_EVENTS_SUFFIX,
+    _RELATION_EVENTS_SUFFIX,
     CheckInfo,
     CloudCredential,
     CloudSpec,
@@ -181,7 +181,7 @@ def test_evt_bad_container_name():
     )
 
 
-@pytest.mark.parametrize("suffix", RELATION_EVENTS_SUFFIX)
+@pytest.mark.parametrize("suffix", _RELATION_EVENTS_SUFFIX)
 def test_evt_bad_relation_name(suffix):
     assert_inconsistent(
         State(),
@@ -196,7 +196,7 @@ def test_evt_bad_relation_name(suffix):
     )
 
 
-@pytest.mark.parametrize("suffix", RELATION_EVENTS_SUFFIX)
+@pytest.mark.parametrize("suffix", _RELATION_EVENTS_SUFFIX)
 def test_evt_no_relation(suffix):
     assert_inconsistent(State(), _Event(f"foo{suffix}"), _CharmSpec(MyCharm, {}))
     relation = Relation("bar")
