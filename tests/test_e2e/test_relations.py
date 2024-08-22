@@ -21,7 +21,7 @@ from scenario.state import (
     State,
     StateValidationError,
     SubordinateRelation,
-    next_relation_id,
+    _next_relation_id,
 )
 from tests.helpers import trigger
 
@@ -431,7 +431,7 @@ def test_relation_positional_arguments(klass):
 
 
 def test_relation_default_values():
-    expected_id = next_relation_id(update=False)
+    expected_id = _next_relation_id(update=False)
     endpoint = "database"
     interface = "postgresql"
     relation = Relation(endpoint, interface)
@@ -447,7 +447,7 @@ def test_relation_default_values():
 
 
 def test_subordinate_relation_default_values():
-    expected_id = next_relation_id(update=False)
+    expected_id = _next_relation_id(update=False)
     endpoint = "database"
     interface = "postgresql"
     relation = SubordinateRelation(endpoint, interface)
@@ -463,7 +463,7 @@ def test_subordinate_relation_default_values():
 
 
 def test_peer_relation_default_values():
-    expected_id = next_relation_id(update=False)
+    expected_id = _next_relation_id(update=False)
     endpoint = "peers"
     interface = "shared"
     relation = PeerRelation(endpoint, interface)

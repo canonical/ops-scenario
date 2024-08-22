@@ -429,7 +429,7 @@ class Network(_max_posargs(2)):
 _next_relation_id_counter = 1
 
 
-def next_relation_id(*, update=True):
+def _next_relation_id(*, update=True):
     global _next_relation_id_counter
     cur = _next_relation_id_counter
     if update:
@@ -446,7 +446,7 @@ class RelationBase(_max_posargs(2)):
     """Interface name. Must match the interface name attached to this endpoint in metadata.yaml.
     If left empty, it will be automatically derived from metadata.yaml."""
 
-    id: int = dataclasses.field(default_factory=next_relation_id)
+    id: int = dataclasses.field(default_factory=_next_relation_id)
     """Juju relation ID. Every new Relation instance gets a unique one,
     if there's trouble, override."""
 

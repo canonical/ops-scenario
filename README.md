@@ -394,32 +394,6 @@ joined_event = ctx.on.relation_joined(relation=relation)
 The reason for this construction is that the event is associated with some relation-specific metadata, that Scenario
 needs to set up the process that will run `ops.main` with the right environment variables.
 
-### Working with relation IDs
-
-Every time you instantiate `Relation` (or peer, or subordinate), the new instance will be given a unique `id`.
-To inspect the ID the next relation instance will have, you can call `scenario.state.next_relation_id`.
-
-```python
-import scenario.state
-
-next_id = scenario.state.next_relation_id(update=False)
-rel = scenario.Relation('foo')
-assert rel.id == next_id
-``` 
-
-This can be handy when using `replace` to create new relations, to avoid relation ID conflicts:
-
-```python
-import dataclasses
-import scenario.state
-
-rel = scenario.Relation('foo')
-rel2 = dataclasses.replace(rel, local_app_data={"foo": "bar"}, id=scenario.state.next_relation_id())
-assert rel2.id == rel.id + 1 
-``` 
-
-If you don't do this, and pass both relations into a `State`, you will trigger a consistency checker error.
-
 ### Additional event parameters
 
 All relation events have some additional metadata that does not belong in the Relation object, such as, for a
