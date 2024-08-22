@@ -523,6 +523,9 @@ class Context:
             self._action_failure_message = None
         with self._run(event=event, state=state) as ops:
             ops.emit()
+        # We know that the output state will have been set by this point,
+        # so let the type checkers know that too.
+        assert self._output_state is not None
         if event.action:
             if self._action_failure_message is not None:
                 raise ActionFailed(self._action_failure_message, self._output_state)

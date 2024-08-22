@@ -14,7 +14,6 @@ from ops.framework import EventBase, Framework
 
 from scenario import Context
 from scenario.state import (
-    DEFAULT_JUJU_DATABAG,
     PeerRelation,
     Relation,
     RelationBase,
@@ -265,19 +264,19 @@ def test_relation_events_no_attrs(mycharm, evt_name, remote_app_name, caplog):
 
 def test_relation_default_unit_data_regular():
     relation = Relation("baz")
-    assert relation.local_unit_data == DEFAULT_JUJU_DATABAG
-    assert relation.remote_units_data == {0: DEFAULT_JUJU_DATABAG}
+    assert relation.local_unit_data == RelationBase.DEFAULT_JUJU_DATABAG
+    assert relation.remote_units_data == {0: RelationBase.DEFAULT_JUJU_DATABAG}
 
 
 def test_relation_default_unit_data_sub():
     relation = SubordinateRelation("baz")
-    assert relation.local_unit_data == DEFAULT_JUJU_DATABAG
-    assert relation.remote_unit_data == DEFAULT_JUJU_DATABAG
+    assert relation.local_unit_data == RelationBase.DEFAULT_JUJU_DATABAG
+    assert relation.remote_unit_data == RelationBase.DEFAULT_JUJU_DATABAG
 
 
 def test_relation_default_unit_data_peer():
     relation = PeerRelation("baz")
-    assert relation.local_unit_data == DEFAULT_JUJU_DATABAG
+    assert relation.local_unit_data == RelationBase.DEFAULT_JUJU_DATABAG
 
 
 @pytest.mark.parametrize(
@@ -439,11 +438,11 @@ def test_relation_default_values():
     assert relation.endpoint == endpoint
     assert relation.interface == interface
     assert relation.local_app_data == {}
-    assert relation.local_unit_data == DEFAULT_JUJU_DATABAG
+    assert relation.local_unit_data == RelationBase.DEFAULT_JUJU_DATABAG
     assert relation.remote_app_name == "remote"
     assert relation.limit == 1
     assert relation.remote_app_data == {}
-    assert relation.remote_units_data == {0: DEFAULT_JUJU_DATABAG}
+    assert relation.remote_units_data == {0: RelationBase.DEFAULT_JUJU_DATABAG}
 
 
 def test_subordinate_relation_default_values():
@@ -455,11 +454,11 @@ def test_subordinate_relation_default_values():
     assert relation.endpoint == endpoint
     assert relation.interface == interface
     assert relation.local_app_data == {}
-    assert relation.local_unit_data == DEFAULT_JUJU_DATABAG
+    assert relation.local_unit_data == RelationBase.DEFAULT_JUJU_DATABAG
     assert relation.remote_app_name == "remote"
     assert relation.remote_unit_id == 0
     assert relation.remote_app_data == {}
-    assert relation.remote_unit_data == DEFAULT_JUJU_DATABAG
+    assert relation.remote_unit_data == RelationBase.DEFAULT_JUJU_DATABAG
 
 
 def test_peer_relation_default_values():
@@ -471,5 +470,5 @@ def test_peer_relation_default_values():
     assert relation.endpoint == endpoint
     assert relation.interface == interface
     assert relation.local_app_data == {}
-    assert relation.local_unit_data == DEFAULT_JUJU_DATABAG
-    assert relation.peers_data == {0: DEFAULT_JUJU_DATABAG}
+    assert relation.local_unit_data == RelationBase.DEFAULT_JUJU_DATABAG
+    assert relation.peers_data == {0: RelationBase.DEFAULT_JUJU_DATABAG}
