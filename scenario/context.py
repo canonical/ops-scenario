@@ -34,7 +34,7 @@ if TYPE_CHECKING:  # pragma: no cover
 
 logger = scenario_logger.getChild("runtime")
 
-DEFAULT_JUJU_VERSION = "3.4"
+_DEFAULT_JUJU_VERSION = "3.5"
 
 
 class InvalidEventError(RuntimeError):
@@ -385,7 +385,7 @@ class Context:
         actions: Optional[Dict[str, Any]] = None,
         config: Optional[Dict[str, Any]] = None,
         charm_root: Optional["PathLike"] = None,
-        juju_version: str = DEFAULT_JUJU_VERSION,
+        juju_version: str = _DEFAULT_JUJU_VERSION,
         capture_deferred_events: bool = False,
         capture_framework_events: bool = False,
         app_name: Optional[str] = None,
