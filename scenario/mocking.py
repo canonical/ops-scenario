@@ -42,7 +42,10 @@ from scenario.state import (
     Mount,
     Network,
     PeerRelation,
+    Relation,
+    RelationBase,
     Storage,
+    SubordinateRelation,
     _EntityStatus,
     _port_cls_by_protocol,
     _RawPortProtocolLiteral,
@@ -183,10 +186,7 @@ class _MockModelBackend(_ModelBackend):
             container_name=container_name,
         )
 
-    def _get_relation_by_id(
-        self,
-        rel_id,
-    ) -> Union["Relation", "SubordinateRelation", "PeerRelation"]:
+    def _get_relation_by_id(self, rel_id) -> "RelationBase":
         try:
             return self._state.get_relation(rel_id)
         except ValueError:
@@ -248,7 +248,10 @@ class _MockModelBackend(_ModelBackend):
         elif is_app:
             if isinstance(relation, PeerRelation):
                 return relation.local_app_data
-            return relation.remote_app_data
+            elif isinstance(relation, (Relation, SubordinateRelation)):
+                return relation.remote_app_data
+            else:
+                raise TypeError("relation_get: unknown relation type")
         elif member_name == self.unit_name:
             return relation.local_unit_data
 
@@ -561,8 +564,10 @@ class _MockModelBackend(_ModelBackend):
 
         if isinstance(relation, PeerRelation):
             return self.app_name
-        else:
+        elif isinstance(relation, (Relation, SubordinateRelation)):
             return relation.remote_app_name
+        else:
+            raise TypeError("relation_remote_app_name: unknown relation type")
 
     def action_set(self, results: Dict[str, Any]):
         if not self._event.action:

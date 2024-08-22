@@ -29,9 +29,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from ops.testing import CharmType
 
     from scenario.ops_main_mock import Ops
-    from scenario.state import AnyJson, AnyRelation, JujuLogLine, State, _EntityStatus
-
-    PathLike = Union[str, Path]
+    from scenario.state import AnyJson, JujuLogLine, RelationBase, State, _EntityStatus
 
 logger = scenario_logger.getChild("runtime")
 
@@ -203,11 +201,11 @@ class _CharmEvents:
         return _Event("collect_unit_status")
 
     @staticmethod
-    def relation_created(relation: "AnyRelation"):
+    def relation_created(relation: "RelationBase"):
         return _Event(f"{relation.endpoint}_relation_created", relation=relation)
 
     @staticmethod
-    def relation_joined(relation: "AnyRelation", *, remote_unit: Optional[int] = None):
+    def relation_joined(relation: "RelationBase", *, remote_unit: Optional[int] = None):
         return _Event(
             f"{relation.endpoint}_relation_joined",
             relation=relation,
@@ -215,7 +213,11 @@ class _CharmEvents:
         )
 
     @staticmethod
-    def relation_changed(relation: "AnyRelation", *, remote_unit: Optional[int] = None):
+    def relation_changed(
+        relation: "RelationBase",
+        *,
+        remote_unit: Optional[int] = None,
+    ):
         return _Event(
             f"{relation.endpoint}_relation_changed",
             relation=relation,
@@ -224,7 +226,7 @@ class _CharmEvents:
 
     @staticmethod
     def relation_departed(
-        relation: "AnyRelation",
+        relation: "RelationBase",
         *,
         remote_unit: Optional[int] = None,
         departing_unit: Optional[int] = None,
@@ -237,7 +239,7 @@ class _CharmEvents:
         )
 
     @staticmethod
-    def relation_broken(relation: "AnyRelation"):
+    def relation_broken(relation: "RelationBase"):
         return _Event(f"{relation.endpoint}_relation_broken", relation=relation)
 
     @staticmethod
@@ -369,7 +371,7 @@ class Context:
         *,
         actions: Optional[Dict[str, Any]] = None,
         config: Optional[Dict[str, Any]] = None,
-        charm_root: Optional["PathLike"] = None,
+        charm_root: Optional[Union[str, Path]] = None,
         juju_version: str = _DEFAULT_JUJU_VERSION,
         capture_deferred_events: bool = False,
         capture_framework_events: bool = False,

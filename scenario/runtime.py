@@ -28,15 +28,20 @@ from ops.storage import NoSnapshotError, SQLiteStorage
 from scenario.errors import UncaughtCharmError
 from scenario.logger import logger as scenario_logger
 from scenario.ops_main_mock import NoObserverError
-from scenario.state import ActionFailed, DeferredEvent, PeerRelation, StoredState
+from scenario.state import (
+    ActionFailed,
+    DeferredEvent,
+    PeerRelation,
+    Relation,
+    StoredState,
+    SubordinateRelation,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from ops.testing import CharmType
 
     from scenario.context import Context
     from scenario.state import State, _CharmSpec, _Event
-
-    PathLike = Union[str, Path]
 
 logger = scenario_logger.getChild("runtime")
 STORED_STATE_REGEX = re.compile(
@@ -152,7 +157,7 @@ class Runtime:
     def __init__(
         self,
         charm_spec: "_CharmSpec",
-        charm_root: Optional["PathLike"] = None,
+        charm_root: Optional[Union[str, Path]] = None,
         juju_version: str = "3.0.0",
         app_name: Optional[str] = None,
         unit_id: Optional[int] = 0,
@@ -202,8 +207,10 @@ class Runtime:
         if event._is_relation_event and (relation := event.relation):
             if isinstance(relation, PeerRelation):
                 remote_app_name = self._app_name
-            else:
+            elif isinstance(relation, (Relation, SubordinateRelation)):
                 remote_app_name = relation.remote_app_name
+            else:
+                raise ValueError(f"Unknown relation type: {relation}")
             env.update(
                 {
                     "JUJU_RELATION": relation.endpoint,

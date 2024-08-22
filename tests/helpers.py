@@ -24,8 +24,6 @@ if TYPE_CHECKING:  # pragma: no cover
 
     _CT = TypeVar("_CT", bound=Type[CharmType])
 
-    PathLike = Union[str, Path]
-
 logger = logging.getLogger()
 
 
@@ -38,7 +36,7 @@ def trigger(
     meta: Optional[Dict[str, Any]] = None,
     actions: Optional[Dict[str, Any]] = None,
     config: Optional[Dict[str, Any]] = None,
-    charm_root: Optional["PathLike"] = None,
+    charm_root: Optional[Union[str, Path]] = None,
     juju_version: str = _DEFAULT_JUJU_VERSION,
 ) -> "State":
     ctx = Context(

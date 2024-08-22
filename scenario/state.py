@@ -51,8 +51,6 @@ JujuLogLine = namedtuple("JujuLogLine", ("level", "message"))
 if TYPE_CHECKING:  # pragma: no cover
     from scenario import Context
 
-PathLike = Union[str, Path]
-AnyRelation = Union["Relation", "PeerRelation", "SubordinateRelation"]
 AnyJson = Union[str, bool, dict, int, float, list]
 RawSecretRevisionContents = RawDataBagContents = Dict[str, str]
 UnitID = int
@@ -1223,7 +1221,7 @@ class Resource(_max_posargs(0)):
     """Represents a resource made available to the charm."""
 
     name: str
-    path: "PathLike"
+    path: Union[str, Path]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1239,7 +1237,7 @@ class State(_max_posargs(0)):
         default_factory=dict,
     )
     """The present configuration of this charm."""
-    relations: Iterable["AnyRelation"] = dataclasses.field(default_factory=frozenset)
+    relations: Iterable["RelationBase"] = dataclasses.field(default_factory=frozenset)
     """All relations that currently exist for this charm."""
     networks: Iterable[Network] = dataclasses.field(default_factory=frozenset)
     """Manual overrides for any relation and extra bindings currently provisioned for this charm.
@@ -1429,14 +1427,14 @@ class State(_max_posargs(0)):
             f"storage: name={storage}, index={index} not found in the State",
         )
 
-    def get_relation(self, relation: int, /) -> "AnyRelation":
+    def get_relation(self, relation: int, /) -> "RelationBase":
         """Get relation from this State, based on the relation's id."""
         for state_relation in self.relations:
             if state_relation.id == relation:
                 return state_relation
         raise KeyError(f"relation: id={relation} not found in the State")
 
-    def get_relations(self, endpoint: str) -> Tuple["AnyRelation", ...]:
+    def get_relations(self, endpoint: str) -> Tuple["RelationBase", ...]:
         """Get all relations on this endpoint from the current state."""
 
         # we rather normalize the endpoint than worry about cursed metadata situations such as:
@@ -1667,7 +1665,7 @@ class _Event:
 
     storage: Optional["Storage"] = None
     """If this is a storage event, the storage it refers to."""
-    relation: Optional["AnyRelation"] = None
+    relation: Optional["RelationBase"] = None
     """If this is a relation event, the relation it refers to."""
     relation_remote_unit_id: Optional[int] = None
     relation_departed_unit_id: Optional[int] = None
@@ -1815,8 +1813,10 @@ class _Event:
                 # FIXME: relation.unit for peers should point to <this unit>, but we
                 #  don't have access to the local app name in this context.
                 remote_app = "local"
-            else:
+            elif isinstance(relation, (Relation, SubordinateRelation)):
                 remote_app = relation.remote_app_name
+            else:
+                raise RuntimeError(f"unexpected relation type: {relation!r}")
 
             snapshot_data.update(
                 {
