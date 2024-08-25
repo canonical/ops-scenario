@@ -55,15 +55,7 @@ from scenario.state import (
 if TYPE_CHECKING:  # pragma: no cover
     from scenario.context import Context
     from scenario.state import Container as ContainerSpec
-    from scenario.state import (
-        Exec,
-        Relation,
-        Secret,
-        State,
-        SubordinateRelation,
-        _CharmSpec,
-        _Event,
-    )
+    from scenario.state import Exec, Secret, State, _CharmSpec, _Event
 
 logger = scenario_logger.getChild("mocking")
 
