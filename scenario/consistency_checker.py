@@ -427,6 +427,9 @@ def check_network_consistency(
     errors = []
 
     meta_bindings = set(charm_spec.meta.get("extra-bindings", ()))
+    # add the implicit juju-info binding so we can override its network without
+    # having to declare a relation for it in metadata
+    implicit_bindings = {"juju-info"}
     all_relations = charm_spec.get_all_relations()
     non_sub_relations = {
         endpoint
@@ -435,7 +438,9 @@ def check_network_consistency(
     }
 
     state_bindings = set(state.networks)
-    if diff := state_bindings.difference(meta_bindings.union(non_sub_relations)):
+    if diff := state_bindings.difference(
+        meta_bindings.union(non_sub_relations).union(implicit_bindings),
+    ):
         errors.append(
             f"Some network bindings defined in State are not in metadata.yaml: {diff}.",
         )
