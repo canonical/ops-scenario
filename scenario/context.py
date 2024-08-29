@@ -519,6 +519,7 @@ class Context:
         self.juju_log: List["JujuLogLine"] = []
         self.app_status_history: List["_EntityStatus"] = []
         self.unit_status_history: List["_EntityStatus"] = []
+        self.exec_history: Dict[str, List[ExecArgs]] = {}
         self.workload_version_history: List[str] = []
         self.removed_secret_revisions: List[int] = []
         self.emitted_events: List[ops.EventBase] = []
