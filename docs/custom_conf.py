@@ -307,7 +307,6 @@ nitpicky = True
 # ('envvar', 'LD_LIBRARY_PATH').
 nitpick_ignore = [
     # Please keep this list sorted alphabetically.
-#    ('py:class', '_CharmSpec'),
     ('py:class', '_Event'),
     ('py:class', '_EntityStatus'),
     ('py:class', 'ModelError'),  # This is in a copied docstring so we can't fix it.
