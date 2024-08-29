@@ -179,7 +179,12 @@ class Runtime:
             # os.unsetenv does not always seem to work !?
             del os.environ[key]
 
-    def _get_event_env(self, state: "State", event: "Event", charm_root: Path):
+    def _get_juju_env(
+        self,
+        state: "State",
+        event: "Event",
+        charm_root: Path,
+    ) -> Dict[str, str]:
         """Build the simulated environment the operator framework expects."""
         env = {
             "JUJU_VERSION": self._juju_version,
@@ -426,7 +431,7 @@ class Runtime:
             self._initialize_storage(state, temporary_charm_root)
 
             logger.info(" - preparing env")
-            env = self._get_event_env(
+            env = self._get_juju_env(
                 state=state,
                 event=event,
                 charm_root=temporary_charm_root,
@@ -444,6 +449,7 @@ class Runtime:
                     charm_spec=self._charm_spec.replace(
                         charm_type=self._wrap(charm_type),
                     ),
+                    juju_env=env,
                 )
                 ops.setup()
 

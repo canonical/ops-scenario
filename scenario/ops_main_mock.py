@@ -4,7 +4,7 @@
 import inspect
 import os
 import sys
-from typing import TYPE_CHECKING, Any, Optional, Sequence, cast
+from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, cast
 
 import ops.charm
 import ops.framework
@@ -15,7 +15,7 @@ from ops.charm import CharmMeta
 from ops.log import setup_root_logging
 
 # use logger from ops.main so that juju_log will be triggered
-from ops.main import CHARM_STATE_FILE, _Dispatcher, _get_charm_dir, _get_event_args
+from ops.main import CHARM_STATE_FILE, _Dispatcher, _get_event_args, _JujuContext
 from ops.main import logger as ops_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -54,6 +54,7 @@ def _get_owner(root: Any, path: Sequence[str]) -> ops.ObjectEvents:
 def _emit_charm_event(
     charm: "CharmBase",
     event_name: str,
+    juju_context: _JujuContext,
     event: Optional["Event"] = None,
 ):
     """Emits a charm event based on a Juju event name.
@@ -75,7 +76,7 @@ def _emit_charm_event(
             f"Use Context.run_custom instead.",
         )
 
-    args, kwargs = _get_event_args(charm, event_to_emit)
+    args, kwargs = _get_event_args(charm, event_to_emit, juju_context)
     ops_logger.debug("Emitting Juju event %s.", event_name)
     event_to_emit.emit(*args, **kwargs)
 
@@ -154,15 +155,26 @@ def setup_charm(charm_class, framework, dispatcher):
     return charm
 
 
-def setup(state: "State", event: "Event", context: "Context", charm_spec: "_CharmSpec"):
+def setup(
+    state: "State",
+    event: "Event",
+    context: "Context",
+    juju_context: _JujuContext,
+    charm_spec: "_CharmSpec",
+):
     """Setup dispatcher, framework and charm objects."""
     charm_class = charm_spec.charm_type
-    charm_dir = _get_charm_dir()
 
-    dispatcher = _Dispatcher(charm_dir)
+    dispatcher = _Dispatcher(juju_context.charm_dir, juju_context)
     dispatcher.run_any_legacy_hook()
 
-    framework = setup_framework(charm_dir, state, event, context, charm_spec)
+    framework = setup_framework(
+        juju_context.charm_dir,
+        state,
+        event,
+        context,
+        charm_spec,
+    )
     charm = setup_charm(charm_class, framework, dispatcher)
     return dispatcher, framework, charm
 
@@ -176,10 +188,12 @@ class Ops:
         event: "Event",
         context: "Context",
         charm_spec: "_CharmSpec",
+        juju_env: Dict[str, str],
     ):
         self.state = state
         self.event = event
         self.context = context
+        self.juju_context = _JujuContext.from_dict(juju_env)
         self.charm_spec = charm_spec
 
         # set by setup()
@@ -198,6 +212,7 @@ class Ops:
             self.state,
             self.event,
             self.context,
+            self.juju_context,
             self.charm_spec,
         )
 
@@ -215,7 +230,12 @@ class Ops:
             if not dispatcher.is_restricted_context():
                 framework.reemit()
 
-            _emit_charm_event(charm, dispatcher.event_name, self.event)
+            _emit_charm_event(
+                charm,
+                dispatcher.event_name,
+                self.juju_context,
+                self.event,
+            )
 
         except Exception:
             framework.close()
