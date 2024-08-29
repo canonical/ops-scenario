@@ -31,6 +31,7 @@ sphinx.ext.autodoc.py_ext_sig_re = re.compile(
     r'''^ ([\w.]+::)?            # explicit module name
           ([\w.]+\.)?            # module and/or class name(s)
           ([^.()]+)  \s*         # thing name
+          (?: \[\s*(.*)\s*])?    # optional: type parameters list, Sphinx 7&8
           (?: \((.*)\)           # optional: arguments
            (?:\s* -> \s* (.*))?  #           return annotation
           )? $                   # and nothing more
@@ -306,4 +307,11 @@ nitpicky = True
 # ('envvar', 'LD_LIBRARY_PATH').
 nitpick_ignore = [
     # Please keep this list sorted alphabetically.
+#    ('py:class', '_CharmSpec'),
+    ('py:class', '_Event'),
+    ('py:class', '_EntityStatus'),
+    ('py:class', 'ModelError'),  # This is in a copied docstring so we can't fix it.
+    ('py:class', 'scenario.state._EntityStatus'),
+    ('py:class', 'scenario.state._Event'),
+    ('py:class', 'scenario.state._max_posargs.<locals>._MaxPositionalArgs'),
 ]
