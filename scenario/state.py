@@ -1655,8 +1655,8 @@ class _CharmSpec(Generic[CharmType]):
 class DeferredEvent:
     """An event that has been deferred to run prior to the next Juju event.
 
-    Tests should not instantiate this class directly: use :meth:`_Event.deferred`
-    instead. For example:
+    Tests should not instantiate this class directly: use the `deferred` method
+    of the event instead. For example:
 
         ctx = Context(MyCharm)
         deferred_start = ctx.on.start().deferred(handler=MyCharm._on_start)

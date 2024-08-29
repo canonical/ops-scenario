@@ -419,7 +419,7 @@ class Context:
 
     This will be ``None`` if the charm never calls :meth:`ops.ActionEvent.set_results`
     """
-    on: "CharmEvents"
+    on: CharmEvents
     """The events that this charm can respond to.
 
     Use this when calling :meth:`run` to specify the event to emit.
@@ -427,7 +427,7 @@ class Context:
 
     def __init__(
         self,
-        charm_type: Type["ops.testing.CharmType"],
+        charm_type: Type[ops.testing.CharmType],
         meta: Optional[Dict[str, Any]] = None,
         *,
         actions: Optional[Dict[str, Any]] = None,
