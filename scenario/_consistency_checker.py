@@ -72,9 +72,9 @@ def check_consistency(
     A scenario is inconsistent if it can practically never occur because it
     contradicts the Juju model. For example: Juju guarantees that upon calling
     ``config-get``, a charm will only ever get the keys it declared in its
-    ``config.yaml``, so a :class:`scenario.State` declaring some config keys
-    that are not in the charm's ``config.yaml`` is nonsense, and the combination
-    of the two is inconsistent.
+    config metadata, so a :class:`scenario.State` declaring some config keys
+    that are not in the charm's ``charmcraft.yaml`` is nonsense, and the
+    combination of the two is inconsistent.
     """
     juju_version_: Tuple[int, ...] = tuple(map(int, juju_version.split(".")))
 
