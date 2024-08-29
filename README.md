@@ -85,8 +85,11 @@ With that, we can write the simplest possible scenario test:
 def test_scenario_base():
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
     out = ctx.run(ctx.on.start(), scenario.State())
-    assert out.unit_status == ops.UnknownStatus()
+    assert out.unit_status == scenario.UnknownStatus()
 ```
+
+Note that you should always compare the app and unit status using `==`, not `is`. You can compare
+them to either the `scenario` objects, or the `ops` ones.
 
 Now let's start making it more complicated. Our charm sets a special state if it has leadership on 'start':
 
@@ -110,7 +113,7 @@ class MyCharm(ops.CharmBase):
 def test_status_leader(leader):
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
     out = ctx.run(ctx.on.start(), scenario.State(leader=leader))
-    assert out.unit_status == ops.ActiveStatus('I rule' if leader else 'I am ruled')
+    assert out.unit_status == scenario.ActiveStatus('I rule' if leader else 'I am ruled')
 ```
 
 By defining the right state we can programmatically define what answers will the charm get to all the questions it can
@@ -165,15 +168,15 @@ def test_statuses():
     ctx = scenario.Context(MyCharm, meta={"name": "foo"})
     out = ctx.run(ctx.on.start(), scenario.State(leader=False))
     assert ctx.unit_status_history == [
-        ops.UnknownStatus(),
-        ops.MaintenanceStatus('determining who the ruler is...'),
-        ops.WaitingStatus('checking this is right...'),
+        scenario.UnknownStatus(),
+        scenario.MaintenanceStatus('determining who the ruler is...'),
+        scenario.WaitingStatus('checking this is right...'),
     ]
-    assert out.unit_status == ops.ActiveStatus("I am ruled")
+    assert out.unit_status == scenario.ActiveStatus("I am ruled")
     
     # similarly you can check the app status history:
     assert ctx.app_status_history == [
-        ops.UnknownStatus(),
+        scenario.UnknownStatus(),
         ...
     ]
 ```
@@ -198,9 +201,9 @@ class MyCharm(ops.CharmBase):
 
 # ...
 ctx = scenario.Context(MyCharm, meta={"name": "foo"})
-ctx.run(ctx.on.start(), scenario.State(unit_status=ops.ActiveStatus('foo')))
+ctx.run(ctx.on.start(), scenario.State(unit_status=scenario.ActiveStatus('foo')))
 assert ctx.unit_status_history == [
-    ops.ActiveStatus('foo'),  # now the first status is active: 'foo'!
+    scenario.ActiveStatus('foo'),  # now the first status is active: 'foo'!
     # ...
 ]
 ```
@@ -248,7 +251,7 @@ def test_emitted_full():
         capture_deferred_events=True,
         capture_framework_events=True,
     )
-    ctx.run(ctx.on.start(), scenario.State(deferred=[scenario.Event("update-status").deferred(MyCharm._foo)]))
+    ctx.run(ctx.on.start(), scenario.State(deferred=[ctx.on.update_status().deferred(MyCharm._foo)]))
 
     assert len(ctx.emitted_events) == 5
     assert [e.handle.kind for e in ctx.emitted_events] == [
@@ -259,51 +262,6 @@ def test_emitted_full():
         "commit",
     ]
 ```
-
-### Low-level access: using directly `capture_events`
-
-If you need more control over what events are captured (or you're not into pytest), you can use directly the context
-manager that powers the `emitted_events` fixture: `scenario.capture_events`.
-This context manager allows you to intercept any events emitted by the framework.
-
-Usage:
-
-```python
-import scenario.capture_events
-
-with scenario.capture_events.capture_events() as emitted:
-    ctx = scenario.Context(SimpleCharm, meta={"name": "capture"})
-    state_out = ctx.run(
-        ctx.on.update_status(),
-        scenario.State(deferred=[scenario.deferred("start", SimpleCharm._on_start)])
-    )
-
-# deferred events get reemitted first
-assert isinstance(emitted[0], ops.StartEvent)
-# the main Juju event gets emitted next
-assert isinstance(emitted[1], ops.UpdateStatusEvent)
-# possibly followed by a tail of all custom events that the main Juju event triggered in turn
-# assert isinstance(emitted[2], MyFooEvent)
-# ...
-```
-
-You can filter events by type like so:
-
-```python
-import scenario.capture_events
-
-with scenario.capture_events.capture_events(ops.StartEvent, ops.RelationEvent) as emitted:
-    # capture all `start` and `*-relation-*` events.
-    pass
-```
-
-Configuration:
-
-- Passing no event types, like: `capture_events()`, is equivalent to `capture_events(ops.EventBase)`.
-- By default, **framework events** (`PreCommit`, `Commit`) are not considered for inclusion in the output list even if
-  they match the instance check. You can toggle that by passing: `capture_events(include_framework=True)`.
-- By default, **deferred events** are included in the listing if they match the instance check. You can toggle that by
-  passing: `capture_events(include_deferred=False)`.
 
 ## Relations
 
@@ -396,8 +354,6 @@ meta = {
 }
 ctx = scenario.Context(ops.CharmBase, meta=meta, unit_id=1)
 ctx.run(ctx.on.start(), state_in)  # invalid: this unit's id cannot be the ID of a peer.
-
-
 ```
 
 ### SubordinateRelation
@@ -438,32 +394,6 @@ joined_event = ctx.on.relation_joined(relation=relation)
 The reason for this construction is that the event is associated with some relation-specific metadata, that Scenario
 needs to set up the process that will run `ops.main` with the right environment variables.
 
-### Working with relation IDs
-
-Every time you instantiate `Relation` (or peer, or subordinate), the new instance will be given a unique `id`.
-To inspect the ID the next relation instance will have, you can call `scenario.state.next_relation_id`.
-
-```python
-import scenario.state
-
-next_id = scenario.state.next_relation_id(update=False)
-rel = scenario.Relation('foo')
-assert rel.id == next_id
-``` 
-
-This can be handy when using `replace` to create new relations, to avoid relation ID conflicts:
-
-```python
-import dataclasses
-import scenario.state
-
-rel = scenario.Relation('foo')
-rel2 = dataclasses.replace(rel, local_app_data={"foo": "bar"}, id=scenario.state.next_relation_id())
-assert rel2.id == rel.id + 1 
-``` 
-
-If you don't do this, and pass both relations into a `State`, you will trigger a consistency checker error.
-
 ### Additional event parameters
 
 All relation events have some additional metadata that does not belong in the Relation object, such as, for a
@@ -487,7 +417,7 @@ remote_unit_2_is_joining_event = ctx.on.relation_joined(relation, remote_unit=2)
 Simplifying a bit the Juju "spaces" model, each integration endpoint a charm defines in its metadata is associated with a network. Regardless of whether there is a living relation over that endpoint, that is.  
 
 If your charm has a relation `"foo"` (defined in its metadata), then the charm will be able at runtime to do `self.model.get_binding("foo").network`.
-The network you'll get by doing so is heavily defaulted (see `state.Network.default`) and good for most use-cases because the charm should typically not be concerned about what IP it gets. 
+The network you'll get by doing so is heavily defaulted (see `state.Network`) and good for most use-cases because the charm should typically not be concerned about what IP it gets. 
 
 On top of the relation-provided network bindings, a charm can also define some `extra-bindings` in its metadata and access them at runtime. Note that this is a deprecated feature that should not be relied upon. For completeness, we support it in Scenario.
 
@@ -495,7 +425,7 @@ If you want to, you can override any of these relation or extra-binding associat
 
 ```python
 state = scenario.State(networks={
-  scenario.Network.default("foo", private_address='192.0.2.1')
+  scenario.Network("foo", [scenario.BindAddress([scenario.Address('192.0.2.1')])])
 })
 ```
 
@@ -638,6 +568,7 @@ class MyCharm(ops.CharmBase):
     def _on_start(self, _):
         foo = self.unit.get_container('foo')
         proc = foo.exec(['ls', '-ll'])
+        proc.stdin.write("...")
         stdout, _ = proc.wait_output()
         assert stdout == LS_LL
 
@@ -645,10 +576,12 @@ class MyCharm(ops.CharmBase):
 def test_pebble_exec():
     container = scenario.Container(
         name='foo',
-        exec_mock={
-            ('ls', '-ll'):  # this is the command we're mocking
-                scenario.ExecOutput(return_code=0,  # this data structure contains all we need to mock the call.
-                                    stdout=LS_LL)
+        execs={
+            scenario.Exec(
+                command_prefix=['ls'],
+                return_code=0,
+                stdout=LS_LL,
+            ),
         }
     )
     state_in = scenario.State(containers={container})
@@ -660,7 +593,19 @@ def test_pebble_exec():
         ctx.on.pebble_ready(container),
         state_in,
     )
+    assert ctx.exec_history[container.name][0].command == ['ls', '-ll']
+    assert ctx.exec_history[container.name][0].stdin == "..."
 ```
+
+Scenario will attempt to find the right `Exec` object by matching the provided
+command prefix against the command used in the ops `container.exec()` call. For
+example if the command is `['ls', '-ll']` then the searching will be:
+
+ 1. an `Exec` with exactly the same as command prefix, `('ls', '-ll')`
+ 2. an `Exec` with the command prefix `('ls', )`
+ 3. an `Exec` with the command prefix `()`
+
+If none of these are found Scenario will raise an `ExecError`.
 
 ### Pebble Notices
 
@@ -690,7 +635,25 @@ notices = [
     scenario.Notice(key="example.com/c"),
 ]
 container = scenario.Container("my-container", notices=notices)
-ctx.run(container.get_notice("example.com/c").event, scenario.State(containers=[container]))
+state = scenario.State(containers={container})
+ctx.run(ctx.on.pebble_custom_notice(container=container, notice=notices[-1]), state)
+```
+
+### Pebble Checks
+
+A Pebble plan can contain checks, and when those checks exceed the configured
+failure threshold, or start succeeding again after, Juju will emit a
+pebble-check-failed or pebble-check-recovered event. In order to simulate these
+events, you need to add a `CheckInfo` to the container. Note that the status of the
+check doesn't have to match the event being generated: by the time that Juju
+sends a pebble-check-failed event the check might have started passing again.
+
+```python
+ctx = scenario.Context(MyCharm, meta={"name": "foo", "containers": {"my_container": {}}})
+check_info = scenario.CheckInfo("http-check", failures=7, status=ops.pebble.CheckStatus.DOWN)
+container = scenario.Container("my_container", check_infos={check_info})
+state = scenario.State(containers={container})
+ctx.run(ctx.on.pebble_check_failed(info=check_info, container=container), state=state)
 ```
 
 ## Storage
@@ -707,8 +670,8 @@ storage = scenario.Storage("foo")
 # Setup storage with some content:
 (storage.get_filesystem(ctx) / "myfile.txt").write_text("helloworld")
 
-with ctx.manager(ctx.on.update_status(), scenario.State(storages={storage})) as mgr:
-    foo = mgr.charm.model.storages["foo"][0]
+with ctx(ctx.on.update_status(), scenario.State(storages={storage})) as manager:
+    foo = manager.charm.model.storages["foo"][0]
     loc = foo.location
     path = loc / "myfile.txt"
     assert path.exists()
@@ -785,22 +748,27 @@ Scenario has secrets. Here's how you use them.
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'public'}},
-            id='foo',
-        ),
-    },
+            tracked_content={'key': 'public'},
+            latest_content={'key': 'public', 'cert': 'private'},
+        )
+    }
 )
 ```
 
-The only mandatory arguments to Secret are its secret ID (which should be unique) and its 'contents': that is, a mapping
-from revision numbers (integers) to a `str:str` dict representing the payload of the revision.
+The only mandatory arguments to Secret is the `tracked_content` dict: a `str:str`
+mapping representing the content of the revision. If there is a newer revision
+of the content than the one the unit that's handling the event is tracking, then
+`latest_content` should also be provided - if it's not, then Scenario assumes
+that `latest_content` is the `tracked_content`. If there are other revisions of
+the content, simply don't include them: the unit has no way of knowing about
+these.
 
 There are three cases:
 - the secret is owned by this app but not this unit, in which case this charm can only manage it if we are the leader
 - the secret is owned by this unit, in which case this charm can always manage it (leader or not)
-- (default) the secret is not owned by this app nor unit, which means we can't manage it but only view it
+- (default) the secret is not owned by this app nor unit, which means we can't manage it but only view it (this includes user secrets)
 
-Thus by default, the secret is not owned by **this charm**, but, implicitly, by some unknown 'other charm', and that other charm has granted us view rights.
+Thus by default, the secret is not owned by **this charm**, but, implicitly, by some unknown 'other charm' (or a user), and that other has granted us view rights.
 
 The presence of the secret in `State.secrets` entails that we have access to it, either as owners or as grantees. Therefore, if we're not owners, we must be grantees. Absence of a Secret from the known secrets list means we are not entitled to obtaining it in any way. The charm, indeed, shouldn't even know it exists.
 
@@ -811,32 +779,52 @@ If this charm does not own the secret, but also it was not granted view rights b
 To specify a secret owned by this unit (or app):
 
 ```python
+rel = scenario.Relation("web")
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'private'}},
-            id='foo',
+            {'key': 'private'},
             owner='unit',  # or 'app'
-            remote_grants={0: {"remote"}}
-            # the secret owner has granted access to the "remote" app over some relation with ID 0
-        ),
-    },
+            # The secret owner has granted access to the "remote" app over some relation:
+            remote_grants={rel.id: {"remote"}}
+        )
+    }
 )
 ```
 
-To specify a secret owned by some other application and give this unit (or app) access to it:
+To specify a secret owned by some other application, or a user secret, and give this unit (or app) access to it:
 
 ```python
 state = scenario.State(
     secrets={
         scenario.Secret(
-            {0: {'key': 'public'}},
-            id='foo',
+            {'key': 'public'},
             # owner=None, which is the default
-            revision=0,  # the revision that this unit (or app) is currently tracking
-        ),
-    },
+        )
+    }
 )
+```
+
+When handling the `secret-expired` and `secret-remove` events, the charm must remove the specified revision of the secret. For `secret-remove`, the revision will no longer be in the `State`, because it's no longer in use (which is why the `secret-remove` event was triggered). To ensure that the charm is removing the secret, check the context for the history of secret removal:
+
+```python
+class SecretCharm(ops.CharmBase):
+    def __init__(self, framework):
+        super().__init__(framework)
+        self.framework.observe(self.on.secret_remove, self._on_secret_remove)
+
+    def _on_secret_remove(self, event):
+        event.secret.remove_revision(event.revision)
+
+
+ctx = scenario.Context(SecretCharm, meta={"name": "foo"})
+secret = scenario.Secret({"password": "xxxxxxxx"}, owner="app")
+old_revision = 42
+state = ctx.run(
+    ctx.on.secret_remove(secret, revision=old_revision),
+    scenario.State(leader=True, secrets={secret})
+)
+assert ctx.removed_secret_revisions == [old_revision]
 ```
 
 ## StoredState
@@ -880,9 +868,9 @@ import pathlib
 
 ctx = scenario.Context(MyCharm, meta={'name': 'juliette', "resources": {"foo": {"type": "oci-image"}}})
 resource = scenario.Resource(name='foo', path='/path/to/resource.tar')
-with ctx.manager(ctx.on.start(), scenario.State(resources={resource})) as mgr:
+with ctx(ctx.on.start(), scenario.State(resources={resource})) as manager:
     # If the charm, at runtime, were to call self.model.resources.fetch("foo"), it would get '/path/to/resource.tar' back.
-    path = mgr.charm.model.resources.fetch('foo')
+    path = manager.charm.model.resources.fetch('foo')
     assert path == pathlib.Path('/path/to/resource.tar')
 ```
 
@@ -944,7 +932,6 @@ class MyVMCharm(ops.CharmBase):
 An action is a special sort of event, even though `ops` handles them almost identically.
 In most cases, you'll want to inspect the 'results' of an action, or whether it has failed or
 logged something while executing. Many actions don't have a direct effect on the output state.
-For this reason, the output state is less prominent in the return type of `Context.run_action`.
 
 How to test actions with scenario:
 
@@ -956,33 +943,48 @@ def test_backup_action():
 
     # If you didn't declare do_backup in the charm's metadata, 
     # the `ConsistencyChecker` will slap you on the wrist and refuse to proceed.
-    out: scenario.ActionOutput = ctx.run_action("do_backup_action", scenario.State())
+    state = ctx.run(ctx.on.action("do_backup"), scenario.State())
 
-    # You can assert action results, logs, failure using the ActionOutput interface:
-    assert out.logs == ['baz', 'qux']
-    
-    if out.success:
-      # If the action did not fail, we can read the results:
-      assert out.results == {'foo': 'bar'}
+    # You can assert on action results and logs using the context:
+    assert ctx.action_logs == ['baz', 'qux']
+    assert ctx.action_results == {'foo': 'bar'}
+```
 
-    else:
-      # If the action fails, we can read a failure message:
-      assert out.failure == 'boo-hoo'
+## Failing Actions
+
+If the charm code calls `event.fail()` to indicate that the action has failed,
+an `ActionFailed` exception will be raised. This avoids having to include
+success checks in every test where the action is successful.
+
+```python
+def test_backup_action_failed():
+    ctx = scenario.Context(MyCharm)
+
+    with pytest.raises(ActionFailed) as exc_info:
+        ctx.run(ctx.on.action("do_backup"), scenario.State())
+    assert exc_info.value.message == "sorry, couldn't do the backup"
+    # The state is also available if that's required:
+    assert exc_info.value.state.get_container(...)
+
+    # You can still assert action results and logs that occured as well as the failure:
+    assert ctx.action_logs == ['baz', 'qux']
+    assert ctx.action_results == {'foo': 'bar'}
 ```
 
 ## Parametrized Actions
 
-If the action takes parameters, you'll need to instantiate an `Action`.
+If the action takes parameters, you can pass those in the call.
 
 ```python
 def test_backup_action():
-    # Define an action:
-    action = scenario.Action('do_backup', params={'a': 'b'})
     ctx = scenario.Context(MyCharm)
 
     # If the parameters (or their type) don't match what is declared in the metadata, 
     # the `ConsistencyChecker` will slap you on the other wrist.
-    out: scenario.ActionOutput = ctx.run_action(action, scenario.State())
+    state = ctx.run(
+        ctx.on.action("do_backup", params={'a': 'b'}),
+        scenario.State()
+    )
 
     # ...
 ```
@@ -992,7 +994,7 @@ def test_backup_action():
 Scenario allows you to accurately simulate the Operator Framework's event queue. The event queue is responsible for
 keeping track of the deferred events. On the input side, you can verify that if the charm triggers with this and that
 event in its queue (they would be there because they had been deferred in the previous run), then the output state is
-valid.
+valid. You generate the deferred data structure using the event's `deferred()` method:
 
 ```python
 class MyCharm(ops.CharmBase):
@@ -1005,26 +1007,17 @@ class MyCharm(ops.CharmBase):
         event.defer()
 
 
-def test_start_on_deferred_update_status(MyCharm):
+def test_start_on_deferred_update_status():
     """Test charm execution if a 'start' is dispatched when in the previous run an update-status had been deferred."""
+    ctx = scenario.Context(MyCharm)
     state_in = scenario.State(
         deferred=[
-            scenario.deferred('update_status', handler=MyCharm._on_update_status)
+            ctx.on.update_status().deferred(handler=MyCharm._on_update_status)
         ]
     )
-    state_out = scenario.Context(MyCharm).run(ctx.on.start(), state_in)
+    state_out = ctx.run(ctx.on.start(), state_in)
     assert len(state_out.deferred) == 1
     assert state_out.deferred[0].name == 'start'
-```
-
-You can also generate the 'deferred' data structure (called a DeferredEvent) from the corresponding Event (and the
-handler):
-
-```python continuation
-ctx = scenario.Context(MyCharm, meta={"name": "deferring"})
-
-deferred_start = ctx.on.start().deferred(MyCharm._on_start)
-deferred_install = ctx.on.install().deferred(MyCharm._on_start)
 ```
 
 On the output side, you can verify that an event that you expect to have been deferred during this trigger, has indeed
@@ -1044,48 +1037,13 @@ def test_defer(MyCharm):
     assert out.deferred[0].name == 'start'
 ```
 
-## Deferring relation events
-
-If you want to test relation event deferrals, some extra care needs to be taken. RelationEvents hold references to the
-Relation instance they are about. So do they in Scenario. You can use the deferred helper to generate the data
-structure:
-
-```python
-class MyCharm(ops.CharmBase):
-    ...
-
-    def _on_foo_relation_changed(self, event):
-        event.defer()
-
-
-def test_start_on_deferred_update_status(MyCharm):
-    foo_relation = scenario.Relation('foo')
-    scenario.State(
-        relations={foo_relation},
-        deferred=[
-            scenario.deferred('foo_relation_changed',
-                              handler=MyCharm._on_foo_relation_changed,
-                              relation=foo_relation)
-        ]
-    )
-```
-
-but you can also use a shortcut from the relation event itself:
-
-```python continuation
-ctx = scenario.Context(MyCharm, meta={"name": "deferring"})
-
-foo_relation = scenario.Relation('foo')
-deferred_event = ctx.on.relation_changed(foo_relation).deferred(handler=MyCharm._on_foo_relation_changed)
-```
-
 # Live charm introspection
 
 Scenario is a black-box, state-transition testing framework. It makes it trivial to assert that a status went from A to
 B, but not to assert that, in the context of this charm execution, with this state, a certain charm-internal method was called and returned a
 given piece of data, or would return this and that _if_ it had been called.
 
-Scenario offers a cheekily-named context manager for this use case specifically:
+The Scenario `Context` object can be used as a context manager for this use case specifically:
 
 ```python notest
 from charms.bar.lib_name.v1.charm_lib import CharmLib
@@ -1107,8 +1065,7 @@ class MyCharm(ops.CharmBase):
 
 def test_live_charm_introspection(mycharm):
     ctx = scenario.Context(mycharm, meta=mycharm.META)
-    # If you want to do this with actions, you can use `Context.action_manager` instead.
-    with ctx.manager("start", scenario.State()) as manager:
+    with ctx(ctx.on.start(), scenario.State()) as manager:
         # This is your charm instance, after ops has set it up:
         charm: MyCharm = manager.charm
         
@@ -1129,8 +1086,8 @@ def test_live_charm_introspection(mycharm):
     assert state_out.unit_status == ...
 ```
 
-Note that you can't call `manager.run()` multiple times: the manager is a context that ensures that `ops.main` 'pauses' right
-before emitting the event to hand you some introspection hooks, but for the rest this is a regular scenario test: you
+Note that you can't call `manager.run()` multiple times: the object is a context that ensures that `ops.main` 'pauses' right
+before emitting the event to hand you some introspection hooks, but for the rest this is a regular Scenario test: you
 can't emit multiple events in a single charm execution.
 
 # The virtual charm root
@@ -1203,7 +1160,7 @@ therefore, so far as we're concerned, that can't happen, and therefore we help y
 are consistent and raise an exception if that isn't so.
 
 That happens automatically behind the scenes whenever you trigger an event;
-`scenario.consistency_checker.check_consistency` is called and verifies that the scenario makes sense.
+`scenario._consistency_checker.check_consistency` is called and verifies that the scenario makes sense.
 
 ## Caveats:
 

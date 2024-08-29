@@ -4,19 +4,19 @@
 import marshal
 import os
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Sequence
 from numbers import Number
 from typing import TYPE_CHECKING, Iterable, List, NamedTuple, Tuple, Union
 
-from scenario.runtime import InconsistentScenarioError
+from scenario.errors import InconsistentScenarioError
 from scenario.runtime import logger as scenario_logger
 from scenario.state import (
-    Action,
     PeerRelation,
     SubordinateRelation,
+    _Action,
     _CharmSpec,
-    normalize_name,
+    _normalise_name,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -170,7 +170,7 @@ def _check_relation_event(
             "Please pass one.",
         )
     else:
-        if not event.name.startswith(normalize_name(event.relation.endpoint)):
+        if not event.name.startswith(_normalise_name(event.relation.endpoint)):
             errors.append(
                 f"relation event should start with relation endpoint name. {event.name} does "
                 f"not start with {event.relation.endpoint}.",
@@ -186,27 +186,33 @@ def _check_workload_event(
     event: "_Event",
     state: "State",
     errors: List[str],
-    warnings: List[str],  # noqa: U100
+    warnings: List[str],
 ):
     if not event.container:
         errors.append(
             "cannot construct a workload event without the container instance. "
             "Please pass one.",
         )
-    elif not event.name.startswith(normalize_name(event.container.name)):
-        errors.append(
-            f"workload event should start with container name. {event.name} does "
-            f"not start with {event.container.name}.",
-        )
-        if event.container not in state.containers:
+    else:
+        if not event.name.startswith(_normalise_name(event.container.name)):
             errors.append(
-                f"cannot emit {event.name} because container {event.container.name} "
-                f"is not in the state.",
+                f"workload event should start with container name. {event.name} does "
+                f"not start with {event.container.name}.",
             )
-        if not event.container.can_connect:
-            warnings.append(
-                "you **can** fire fire pebble-ready while the container cannot connect, "
-                "but that's most likely not what you want.",
+            if event.container not in state.containers:
+                errors.append(
+                    f"cannot emit {event.name} because container {event.container.name} "
+                    f"is not in the state.",
+                )
+            if not event.container.can_connect:
+                warnings.append(
+                    "you **can** fire fire pebble-ready while the container cannot connect, "
+                    "but that's most likely not what you want.",
+                )
+        names = Counter(exec.command_prefix for exec in event.container.execs)
+        if dupes := [n for n in names if names[n] > 1]:
+            errors.append(
+                f"container {event.container.name} has duplicate command prefixes: {dupes}",
             )
 
 
@@ -225,7 +231,7 @@ def _check_action_event(
         )
         return
 
-    elif not event.name.startswith(normalize_name(action.name)):
+    elif not event.name.startswith(_normalise_name(action.name)):
         errors.append(
             f"action event should start with action name. {event.name} does "
             f"not start with {action.name}.",
@@ -255,7 +261,7 @@ def _check_storage_event(
             "cannot construct a storage event without the Storage instance. "
             "Please pass one.",
         )
-    elif not event.name.startswith(normalize_name(storage.name)):
+    elif not event.name.startswith(_normalise_name(storage.name)):
         errors.append(
             f"storage event should start with storage name. {event.name} does "
             f"not start with {storage.name}.",
@@ -274,7 +280,7 @@ def _check_storage_event(
 
 def _check_action_param_types(
     charm_spec: _CharmSpec,
-    action: Action,
+    action: _Action,
     errors: List[str],
     warnings: List[str],
 ):
@@ -557,9 +563,12 @@ def check_containers_consistency(
 
     # event names will be normalized; need to compare against normalized container names.
     meta = charm_spec.meta
-    meta_containers = list(map(normalize_name, meta.get("containers", {})))
-    state_containers = [normalize_name(c.name) for c in state.containers]
+    meta_containers = list(map(_normalise_name, meta.get("containers", {})))
+    state_containers = [_normalise_name(c.name) for c in state.containers]
     all_notices = {notice.id for c in state.containers for notice in c.notices}
+    all_checks = {
+        (c.name, check.name) for c in state.containers for check in c.check_infos
+    }
     errors = []
 
     # it's fine if you have containers in meta that are not in state.containers (yet), but it's
@@ -579,10 +588,20 @@ def check_containers_consistency(
                 f"container with that name is not present in the state. It's odd, but "
                 f"consistent, if it cannot connect; but it should at least be there.",
             )
+        # - you're processing a Notice event and that notice is not in any of the containers
         if event.notice and event.notice.id not in all_notices:
             errors.append(
                 f"the event being processed concerns notice {event.notice!r}, but that "
                 "notice is not in any of the containers present in the state.",
+            )
+        # - you're processing a Check event and that check is not in the check's container
+        if (
+            event.check_info
+            and (evt_container_name, event.check_info.name) not in all_checks
+        ):
+            errors.append(
+                f"the event being processed concerns check {event.check_info.name}, but that "
+                f"check is not in the {evt_container_name} container.",
             )
 
     # - a container in state.containers is not in meta.containers

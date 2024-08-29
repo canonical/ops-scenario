@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import io
 import tempfile
 from pathlib import Path
 
@@ -10,7 +11,7 @@ from ops.framework import Framework
 from ops.pebble import ExecError, ServiceStartup, ServiceStatus
 
 from scenario import Context
-from scenario.state import Container, ExecOutput, Mount, Notice, State
+from scenario.state import CheckInfo, Container, Exec, Mount, Notice, State
 from tests.helpers import jsonpatch_delta, trigger
 
 
@@ -128,7 +129,7 @@ def test_fs_pull(charm_cls, make_dirs):
         charm_type=charm_cls,
         meta={"name": "foo", "containers": {"foo": {}}},
     )
-    with ctx.manager(ctx.on.start(), state=state) as mgr:
+    with ctx(ctx.on.start(), state=state) as mgr:
         out = mgr.run()
         callback(mgr.charm)
 
@@ -193,7 +194,7 @@ def test_exec(charm_cls, cmd, out):
         container = self.unit.get_container("foo")
         proc = container.exec([cmd])
         proc.wait()
-        assert proc.stdout.read() == "hello pebble"
+        assert proc.stdout.read() == out
 
     trigger(
         State(
@@ -201,7 +202,7 @@ def test_exec(charm_cls, cmd, out):
                 Container(
                     name="foo",
                     can_connect=True,
-                    exec_mock={(cmd,): ExecOutput(stdout="hello pebble")},
+                    execs={Exec([cmd], stdout=out)},
                 )
             }
         ),
@@ -210,6 +211,32 @@ def test_exec(charm_cls, cmd, out):
         event="start",
         post_event=callback,
     )
+
+
+@pytest.mark.parametrize(
+    "stdin,write",
+    (
+        [None, "hello world!"],
+        ["hello world!", None],
+        [io.StringIO("hello world!"), None],
+    ),
+)
+def test_exec_history_stdin(stdin, write):
+    class MyCharm(CharmBase):
+        def __init__(self, framework: Framework):
+            super().__init__(framework)
+            self.framework.observe(self.on.foo_pebble_ready, self._on_ready)
+
+        def _on_ready(self, _):
+            proc = self.unit.get_container("foo").exec(["ls"], stdin=stdin)
+            if write:
+                proc.stdin.write(write)
+            proc.wait()
+
+    ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
+    container = Container(name="foo", can_connect=True, execs={Exec([])})
+    ctx.run(ctx.on.pebble_ready(container=container), State(containers={container}))
+    assert ctx.exec_history[container.name][0].stdin == "hello world!"
 
 
 def test_pebble_ready(charm_cls):
@@ -279,7 +306,7 @@ def test_pebble_plan(charm_cls, starting_service_status):
                 }
             )
         },
-        service_status={
+        service_statuses={
             "fooserv": pebble.ServiceStatus.ACTIVE,
             # todo: should we disallow setting status for services that aren't known YET?
             "barserv": starting_service_status,
@@ -312,40 +339,40 @@ def test_exec_wait_error(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                exec_mock={("foo",): ExecOutput(stdout="hello pebble", return_code=1)},
+                execs={Exec(["foo"], stdout="hello pebble", return_code=1)},
             )
         }
     )
 
     ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
-    with ctx.manager(ctx.on.start(), state) as mgr:
+    with ctx(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
-        with pytest.raises(ExecError):
-            proc.wait()
-        assert proc.stdout.read() == "hello pebble"
+        with pytest.raises(ExecError) as exc_info:
+            proc.wait_output()
+        assert exc_info.value.stdout == "hello pebble"
 
 
-def test_exec_wait_output(charm_cls):
+@pytest.mark.parametrize("command", (["foo"], ["foo", "bar"], ["foo", "bar", "baz"]))
+def test_exec_wait_output(charm_cls, command):
     state = State(
         containers={
             Container(
                 name="foo",
                 can_connect=True,
-                exec_mock={
-                    ("foo",): ExecOutput(stdout="hello pebble", stderr="oepsie")
-                },
+                execs={Exec(["foo"], stdout="hello pebble", stderr="oepsie")},
             )
         }
     )
 
     ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
-    with ctx.manager(ctx.on.start(), state) as mgr:
+    with ctx(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
-        proc = container.exec(["foo"])
+        proc = container.exec(command)
         out, err = proc.wait_output()
         assert out == "hello pebble"
         assert err == "oepsie"
+        assert ctx.exec_history[container.name][0].command == command
 
 
 def test_exec_wait_output_error(charm_cls):
@@ -354,13 +381,13 @@ def test_exec_wait_output_error(charm_cls):
             Container(
                 name="foo",
                 can_connect=True,
-                exec_mock={("foo",): ExecOutput(stdout="hello pebble", return_code=1)},
+                execs={Exec(["foo"], stdout="hello pebble", return_code=1)},
             )
         }
     )
 
     ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
-    with ctx.manager(ctx.on.start(), state) as mgr:
+    with ctx(ctx.on.start(), state) as mgr:
         container = mgr.charm.unit.get_container("foo")
         proc = container.exec(["foo"])
         with pytest.raises(ExecError):
@@ -381,7 +408,9 @@ def test_pebble_custom_notice(charm_cls):
 
     state = State(containers=[container])
     ctx = Context(charm_cls, meta={"name": "foo", "containers": {"foo": {}}})
-    with ctx.manager(container.get_notice("example.com/baz").event, state) as mgr:
+    with ctx(
+        ctx.on.pebble_custom_notice(container=container, notice=notices[-1]), state
+    ) as mgr:
         container = mgr.charm.unit.get_container("foo")
         assert container.get_notices() == [n._to_ops() for n in notices]
 
@@ -437,4 +466,83 @@ def test_pebble_custom_notice_in_charm():
     )
     state = State(containers=[container])
     ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
-    ctx.run(container.get_notice(key).event, state)
+    ctx.run(ctx.on.pebble_custom_notice(container=container, notice=notices[-1]), state)
+
+
+def test_pebble_check_failed():
+    infos = []
+
+    class MyCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            framework.observe(self.on.foo_pebble_check_failed, self._on_check_failed)
+
+        def _on_check_failed(self, event):
+            infos.append(event.info)
+
+    ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
+    check = CheckInfo("http-check", failures=7, status=pebble.CheckStatus.DOWN)
+    container = Container("foo", check_infos={check})
+    state = State(containers={container})
+    ctx.run(ctx.on.pebble_check_failed(container, check), state=state)
+    assert len(infos) == 1
+    assert infos[0].name == "http-check"
+    assert infos[0].status == pebble.CheckStatus.DOWN
+    assert infos[0].failures == 7
+
+
+def test_pebble_check_recovered():
+    infos = []
+
+    class MyCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            framework.observe(
+                self.on.foo_pebble_check_recovered, self._on_check_recovered
+            )
+
+        def _on_check_recovered(self, event):
+            infos.append(event.info)
+
+    ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}}})
+    check = CheckInfo("http-check")
+    container = Container("foo", check_infos={check})
+    state = State(containers={container})
+    ctx.run(ctx.on.pebble_check_recovered(container, check), state=state)
+    assert len(infos) == 1
+    assert infos[0].name == "http-check"
+    assert infos[0].status == pebble.CheckStatus.UP
+    assert infos[0].failures == 0
+
+
+def test_pebble_check_failed_two_containers():
+    foo_infos = []
+    bar_infos = []
+
+    class MyCharm(CharmBase):
+        def __init__(self, framework):
+            super().__init__(framework)
+            framework.observe(
+                self.on.foo_pebble_check_failed, self._on_foo_check_failed
+            )
+            framework.observe(
+                self.on.bar_pebble_check_failed, self._on_bar_check_failed
+            )
+
+        def _on_foo_check_failed(self, event):
+            foo_infos.append(event.info)
+
+        def _on_bar_check_failed(self, event):
+            bar_infos.append(event.info)
+
+    ctx = Context(MyCharm, meta={"name": "foo", "containers": {"foo": {}, "bar": {}}})
+    check = CheckInfo("http-check", failures=7, status=pebble.CheckStatus.DOWN)
+    foo_container = Container("foo", check_infos={check})
+    bar_container = Container("bar", check_infos={check})
+    state = State(containers={foo_container, bar_container})
+    ctx.run(ctx.on.pebble_check_failed(foo_container, check), state=state)
+    assert len(foo_infos) == 1
+    assert foo_infos[0].name == "http-check"
+    assert foo_infos[0].status == pebble.CheckStatus.DOWN
+    assert foo_infos[0].failures == 7
+    assert len(bar_infos) == 0

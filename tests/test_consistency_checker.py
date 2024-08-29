@@ -3,14 +3,16 @@ import dataclasses
 import pytest
 from ops.charm import CharmBase
 
-from scenario.consistency_checker import check_consistency
-from scenario.runtime import InconsistentScenarioError
+from scenario._consistency_checker import check_consistency
+from scenario.context import Context
+from scenario.errors import InconsistentScenarioError
 from scenario.state import (
-    RELATION_EVENTS_SUFFIX,
-    Action,
+    _RELATION_EVENTS_SUFFIX,
+    CheckInfo,
     CloudCredential,
     CloudSpec,
     Container,
+    Exec,
     Model,
     Network,
     Notice,
@@ -84,6 +86,46 @@ def test_workload_event_without_container():
         _Event("foo-pebble-custom-notice", container=Container("foo"), notice=notice),
         _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
     )
+    check = CheckInfo("http-check")
+    assert_consistent(
+        State(containers={Container("foo", check_infos={check})}),
+        _Event("foo-pebble-check-failed", container=Container("foo"), check_info=check),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
+    )
+    assert_inconsistent(
+        State(containers={Container("foo")}),
+        _Event("foo-pebble-check-failed", container=Container("foo"), check_info=check),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
+    )
+    assert_consistent(
+        State(containers={Container("foo", check_infos={check})}),
+        _Event(
+            "foo-pebble-check-recovered", container=Container("foo"), check_info=check
+        ),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
+    )
+    assert_inconsistent(
+        State(containers={Container("foo")}),
+        _Event(
+            "foo-pebble-check-recovered", container=Container("foo"), check_info=check
+        ),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}}}),
+    )
+    # Ensure the check is in the correct container.
+    assert_inconsistent(
+        State(containers={Container("foo", check_infos={check}), Container("bar")}),
+        _Event(
+            "foo-pebble-check-recovered", container=Container("bar"), check_info=check
+        ),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}, "bar": {}}}),
+    )
+    assert_inconsistent(
+        State(containers={Container("foo", check_infos={check}), Container("bar")}),
+        _Event(
+            "bar-pebble-check-recovered", container=Container("bar"), check_info=check
+        ),
+        _CharmSpec(MyCharm, {"containers": {"foo": {}, "bar": {}}}),
+    )
 
 
 def test_container_meta_mismatch():
@@ -139,7 +181,7 @@ def test_evt_bad_container_name():
     )
 
 
-@pytest.mark.parametrize("suffix", RELATION_EVENTS_SUFFIX)
+@pytest.mark.parametrize("suffix", _RELATION_EVENTS_SUFFIX)
 def test_evt_bad_relation_name(suffix):
     assert_inconsistent(
         State(),
@@ -154,7 +196,7 @@ def test_evt_bad_relation_name(suffix):
     )
 
 
-@pytest.mark.parametrize("suffix", RELATION_EVENTS_SUFFIX)
+@pytest.mark.parametrize("suffix", _RELATION_EVENTS_SUFFIX)
 def test_evt_no_relation(suffix):
     assert_inconsistent(State(), _Event(f"foo{suffix}"), _CharmSpec(MyCharm, {}))
     relation = Relation("bar")
@@ -261,7 +303,7 @@ def test_config_secret_old_juju(juju_version):
 
 @pytest.mark.parametrize("bad_v", ("1.0", "0", "1.2", "2.35.42", "2.99.99", "2.99"))
 def test_secrets_jujuv_bad(bad_v):
-    secret = Secret("secret:foo", {0: {"a": "b"}})
+    secret = Secret({"a": "b"})
     assert_inconsistent(
         State(secrets={secret}),
         _Event("bar"),
@@ -270,14 +312,14 @@ def test_secrets_jujuv_bad(bad_v):
     )
     assert_inconsistent(
         State(secrets={secret}),
-        secret.changed_event,
+        _Event("secret_changed", secret=secret),
         _CharmSpec(MyCharm, {}),
         bad_v,
     )
 
     assert_inconsistent(
         State(),
-        secret.changed_event,
+        _Event("secret_changed", secret=secret),
         _CharmSpec(MyCharm, {}),
         bad_v,
     )
@@ -286,7 +328,7 @@ def test_secrets_jujuv_bad(bad_v):
 @pytest.mark.parametrize("good_v", ("3.0", "3.1", "3", "3.33", "4", "100"))
 def test_secrets_jujuv_bad(good_v):
     assert_consistent(
-        State(secrets={Secret(id="secret:foo", contents={0: {"a": "b"}})}),
+        State(secrets={Secret({"a": "b"})}),
         _Event("bar"),
         _CharmSpec(MyCharm, {}),
         good_v,
@@ -294,14 +336,14 @@ def test_secrets_jujuv_bad(good_v):
 
 
 def test_secret_not_in_state():
-    secret = Secret(id="secret:foo", contents={"a": "b"})
+    secret = Secret({"a": "b"})
     assert_inconsistent(
         State(),
         _Event("secret_changed", secret=secret),
         _CharmSpec(MyCharm, {}),
     )
     assert_consistent(
-        State(secrets=[secret]),
+        State(secrets={secret}),
         _Event("secret_changed", secret=secret),
         _CharmSpec(MyCharm, {}),
     )
@@ -377,19 +419,19 @@ def test_relation_not_in_state():
 
 
 def test_action_not_in_meta_inconsistent():
-    action = Action("foo", params={"bar": "baz"})
+    ctx = Context(MyCharm, meta={"name": "foo"}, actions={"foo": {}})
     assert_inconsistent(
         State(),
-        action.event,
+        ctx.on.action("foo", params={"bar": "baz"}),
         _CharmSpec(MyCharm, meta={}, actions={}),
     )
 
 
 def test_action_meta_type_inconsistent():
-    action = Action("foo", params={"bar": "baz"})
+    ctx = Context(MyCharm, meta={"name": "foo"}, actions={"foo": {}})
     assert_inconsistent(
         State(),
-        action.event,
+        ctx.on.action("foo", params={"bar": "baz"}),
         _CharmSpec(
             MyCharm, meta={}, actions={"foo": {"params": {"bar": {"type": "zabazaba"}}}}
         ),
@@ -397,24 +439,24 @@ def test_action_meta_type_inconsistent():
 
     assert_inconsistent(
         State(),
-        action.event,
+        ctx.on.action("foo", params={"bar": "baz"}),
         _CharmSpec(MyCharm, meta={}, actions={"foo": {"params": {"bar": {}}}}),
     )
 
 
 def test_action_name():
-    action = Action("foo", params={"bar": "baz"})
+    ctx = Context(MyCharm, meta={"name": "foo"}, actions={"foo": {}})
 
     assert_consistent(
         State(),
-        action.event,
+        ctx.on.action("foo", params={"bar": "baz"}),
         _CharmSpec(
             MyCharm, meta={}, actions={"foo": {"params": {"bar": {"type": "string"}}}}
         ),
     )
     assert_inconsistent(
         State(),
-        _Event("box_action", action=action),
+        _Event("box_action", action=ctx.on.action("foo", params={"bar": "baz"})),
         _CharmSpec(MyCharm, meta={}, actions={"foo": {}}),
     )
 
@@ -431,19 +473,18 @@ _ACTION_TYPE_CHECKS = [
 
 @pytest.mark.parametrize("ptype,good,bad", _ACTION_TYPE_CHECKS)
 def test_action_params_type(ptype, good, bad):
-    action = Action("foo", params={"bar": good})
+    ctx = Context(MyCharm, meta={"name": "foo"}, actions={"foo": {}})
     assert_consistent(
         State(),
-        action.event,
+        ctx.on.action("foo", params={"bar": good}),
         _CharmSpec(
             MyCharm, meta={}, actions={"foo": {"params": {"bar": {"type": ptype}}}}
         ),
     )
     if bad is not None:
-        action = Action("foo", params={"bar": bad})
         assert_inconsistent(
             State(),
-            action.event,
+            ctx.on.action("foo", params={"bar": bad}),
             _CharmSpec(
                 MyCharm, meta={}, actions={"foo": {"params": {"bar": {"type": ptype}}}}
             ),
@@ -593,7 +634,7 @@ def test_resource_states():
 
 def test_networks_consistency():
     assert_inconsistent(
-        State(networks={Network.default("foo")}),
+        State(networks={Network("foo")}),
         _Event("start"),
         _CharmSpec(
             MyCharm,
@@ -602,7 +643,7 @@ def test_networks_consistency():
     )
 
     assert_inconsistent(
-        State(networks={Network.default("foo")}),
+        State(networks={Network("foo")}),
         _Event("start"),
         _CharmSpec(
             MyCharm,
@@ -615,7 +656,7 @@ def test_networks_consistency():
     )
 
     assert_consistent(
-        State(networks={Network.default("foo")}),
+        State(networks={Network("foo")}),
         _Event("start"),
         _CharmSpec(
             MyCharm,
@@ -682,11 +723,7 @@ def test_storedstate_consistency():
     )
     assert_inconsistent(
         State(
-            stored_states={
-                StoredState(
-                    owner_path=None, content={"secret": Secret(id="foo", contents={})}
-                )
-            }
+            stored_states={StoredState(owner_path=None, content={"secret": Secret({})})}
         ),
         _Event("start"),
         _CharmSpec(

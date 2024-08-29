@@ -8,7 +8,7 @@ from ops.framework import EventBase, Framework
 from ops.model import ActiveStatus, UnknownStatus, WaitingStatus
 
 from scenario.state import (
-    DEFAULT_JUJU_DATABAG,
+    _DEFAULT_JUJU_DATABAG,
     Address,
     BindAddress,
     Container,
@@ -236,13 +236,13 @@ def test_relation_set(mycharm):
         replace(
             relation,
             local_app_data={"a": "b"},
-            local_unit_data={"c": "d", **DEFAULT_JUJU_DATABAG},
+            local_unit_data={"c": "d", **_DEFAULT_JUJU_DATABAG},
         )
     )
     assert out.get_relation(relation.id).local_app_data == {"a": "b"}
     assert out.get_relation(relation.id).local_unit_data == {
         "c": "d",
-        **DEFAULT_JUJU_DATABAG,
+        **_DEFAULT_JUJU_DATABAG,
     }
 
 
@@ -253,7 +253,7 @@ def test_relation_set(mycharm):
         (Resource, (1,)),
         (Address, (0, 2)),
         (BindAddress, (0, 2)),
-        (Network, (1, 2)),
+        (Network, (0, 3)),
     ],
 )
 def test_positional_arguments(klass, num_args):
@@ -279,9 +279,9 @@ def test_container_default_values():
     assert container.name == name
     assert container.can_connect is False
     assert container.layers == {}
-    assert container.service_status == {}
+    assert container.service_statuses == {}
     assert container.mounts == {}
-    assert container.exec_mock == {}
+    assert container.execs == frozenset()
     assert container.layers == {}
     assert container._base_plan == {}
 

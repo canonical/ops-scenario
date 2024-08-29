@@ -1,84 +1,57 @@
 #!/usr/bin/env python3
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
-import dataclasses
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union, cast
 
 from ops import CharmBase, EventBase
+from ops.testing import ExecArgs
 
+from scenario.errors import AlreadyEmittedError, ContextSetupError
 from scenario.logger import logger as scenario_logger
 from scenario.runtime import Runtime
 from scenario.state import (
-    Action,
+    ActionFailed,
+    CheckInfo,
     Container,
     MetadataNotFoundError,
+    Notice,
     Secret,
     Storage,
+    _Action,
     _CharmSpec,
     _Event,
-    _max_posargs,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
     from ops.testing import CharmType
 
     from scenario.ops_main_mock import Ops
-    from scenario.state import AnyRelation, JujuLogLine, State, _EntityStatus
-
-    PathLike = Union[str, Path]
+    from scenario.state import AnyJson, JujuLogLine, RelationBase, State, _EntityStatus
 
 logger = scenario_logger.getChild("runtime")
 
-DEFAULT_JUJU_VERSION = "3.4"
+_DEFAULT_JUJU_VERSION = "3.5"
 
 
-@dataclasses.dataclass(frozen=True)
-class ActionOutput(_max_posargs(0)):
-    """Wraps the results of running an action event with `run_action`."""
+class Manager:
+    """Context manager to offer test code some runtime charm object introspection.
 
-    state: "State"
-    """The charm state after the action has been handled.
-    In most cases, actions are not expected to be affecting it."""
-    logs: List[str]
-    """Any logs associated with the action output, set by the charm."""
-    results: Optional[Dict[str, Any]] = None
-    """Key-value mapping assigned by the charm as a result of the action.
-    Will be None if the charm never calls action-set."""
-    failure: Optional[str] = None
-    """If the action is not a success: the message the charm set when failing the action."""
+    This class should not be instantiated directly: use a :class:`Context`
+    in a ``with`` statement instead, for example::
 
-    @property
-    def success(self) -> bool:
-        """Return whether this action was a success."""
-        return self.failure is None
-
-
-class InvalidEventError(RuntimeError):
-    """raised when something is wrong with the event passed to Context.run_*"""
-
-
-class InvalidActionError(InvalidEventError):
-    """raised when something is wrong with the action passed to Context.run_action"""
-
-
-class ContextSetupError(RuntimeError):
-    """Raised by Context when setup fails."""
-
-
-class AlreadyEmittedError(RuntimeError):
-    """Raised when _runner.run() is called more than once."""
-
-
-class _Manager:
-    """Context manager to offer test code some runtime charm object introspection."""
+        ctx = Context(MyCharm)
+        with ctx(ctx.on.start(), State()) as manager:
+            manager.charm.setup()
+            manager.run()
+    """
 
     def __init__(
         self,
         ctx: "Context",
-        arg: Union[str, Action, _Event],
+        arg: _Event,
         state_in: "State",
     ):
         self._ctx = ctx
@@ -86,25 +59,21 @@ class _Manager:
         self._state_in = state_in
 
         self._emitted: bool = False
-        self._run = None
 
         self.ops: Optional["Ops"] = None
-        self.output: Optional[Union["State", ActionOutput]] = None
+        self.output: Optional["State"] = None
 
     @property
     def charm(self) -> CharmBase:
         if not self.ops:
             raise RuntimeError(
-                "you should __enter__ this contextmanager before accessing this",
+                "you should __enter__ this context manager before accessing this",
             )
         return cast(CharmBase, self.ops.charm)
 
     @property
     def _runner(self):
-        raise NotImplementedError("override in subclass")
-
-    def _get_output(self):
-        raise NotImplementedError("override in subclass")
+        return self._ctx._run  # noqa
 
     def __enter__(self):
         self._wrapped_ctx = wrapped_ctx = self._runner(self._arg, self._state_in)
@@ -112,55 +81,27 @@ class _Manager:
         self.ops = ops
         return self
 
-    def run(self) -> Union[ActionOutput, "State"]:
+    def run(self) -> "State":
         """Emit the event and proceed with charm execution.
 
         This can only be done once.
         """
         if self._emitted:
-            raise AlreadyEmittedError("Can only context.manager.run() once.")
+            raise AlreadyEmittedError("Can only run once.")
         self._emitted = True
 
         # wrap up Runtime.exec() so that we can gather the output state
         self._wrapped_ctx.__exit__(None, None, None)
 
-        self.output = out = self._get_output()
-        return out
+        assert self._ctx._output_state is not None
+        return self._ctx._output_state
 
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: U100
         if not self._emitted:
-            logger.debug("manager not invoked. Doing so implicitly...")
+            logger.debug(
+                "user didn't emit the event within the context manager scope. Doing so implicitly upon exit...",
+            )
             self.run()
-
-
-class _EventManager(_Manager):
-    if TYPE_CHECKING:  # pragma: no cover
-        output: State  # pyright: ignore[reportIncompatibleVariableOverride]
-
-        def run(self) -> "State":
-            return cast("State", super().run())
-
-    @property
-    def _runner(self):
-        return self._ctx._run_event  # noqa
-
-    def _get_output(self):
-        return self._ctx._output_state  # noqa
-
-
-class _ActionManager(_Manager):
-    if TYPE_CHECKING:  # pragma: no cover
-        output: ActionOutput  # pyright: ignore[reportIncompatibleVariableOverride]
-
-        def run(self) -> "ActionOutput":
-            return cast("ActionOutput", super().run())
-
-    @property
-    def _runner(self):
-        return self._ctx._run_action  # noqa
-
-    def _get_output(self):
-        return self._ctx._finalize_action(self._ctx.output_state)  # noqa
 
 
 class _CharmEvents:
@@ -260,11 +201,11 @@ class _CharmEvents:
         return _Event("collect_unit_status")
 
     @staticmethod
-    def relation_created(relation: "AnyRelation"):
+    def relation_created(relation: "RelationBase"):
         return _Event(f"{relation.endpoint}_relation_created", relation=relation)
 
     @staticmethod
-    def relation_joined(relation: "AnyRelation", *, remote_unit: Optional[int] = None):
+    def relation_joined(relation: "RelationBase", *, remote_unit: Optional[int] = None):
         return _Event(
             f"{relation.endpoint}_relation_joined",
             relation=relation,
@@ -272,7 +213,11 @@ class _CharmEvents:
         )
 
     @staticmethod
-    def relation_changed(relation: "AnyRelation", *, remote_unit: Optional[int] = None):
+    def relation_changed(
+        relation: "RelationBase",
+        *,
+        remote_unit: Optional[int] = None,
+    ):
         return _Event(
             f"{relation.endpoint}_relation_changed",
             relation=relation,
@@ -281,7 +226,7 @@ class _CharmEvents:
 
     @staticmethod
     def relation_departed(
-        relation: "AnyRelation",
+        relation: "RelationBase",
         *,
         remote_unit: Optional[int] = None,
         departing_unit: Optional[int] = None,
@@ -294,7 +239,7 @@ class _CharmEvents:
         )
 
     @staticmethod
-    def relation_broken(relation: "AnyRelation"):
+    def relation_broken(relation: "RelationBase"):
         return _Event(f"{relation.endpoint}_relation_broken", relation=relation)
 
     @staticmethod
@@ -309,9 +254,115 @@ class _CharmEvents:
     def pebble_ready(container: Container):
         return _Event(f"{container.name}_pebble_ready", container=container)
 
+    @staticmethod
+    def pebble_custom_notice(container: Container, notice: Notice):
+        return _Event(
+            f"{container.name}_pebble_custom_notice",
+            container=container,
+            notice=notice,
+        )
+
+    @staticmethod
+    def pebble_check_failed(container: Container, info: CheckInfo):
+        return _Event(
+            f"{container.name}_pebble_check_failed",
+            container=container,
+            check_info=info,
+        )
+
+    @staticmethod
+    def pebble_check_recovered(container: Container, info: CheckInfo):
+        return _Event(
+            f"{container.name}_pebble_check_recovered",
+            container=container,
+            check_info=info,
+        )
+
+    @staticmethod
+    def action(
+        name: str,
+        params: Optional[Dict[str, "AnyJson"]] = None,
+        id: Optional[str] = None,
+    ):
+        kwargs = {}
+        if params:
+            kwargs["params"] = params
+        if id:
+            kwargs["id"] = id
+        return _Event(f"{name}_action", action=_Action(name, **kwargs))
+
 
 class Context:
-    """Scenario test execution context."""
+    """Represents a simulated charm's execution context.
+
+    It is the main entry point to running a scenario test.
+
+    It contains: the charm source code being executed, the metadata files associated with it,
+    a charm project repository root, and the Juju version to be simulated.
+
+    After you have instantiated ``Context``, typically you will call ``run()``to execute the charm
+    once, write any assertions you like on the output state returned by the call, write any
+    assertions you like on the ``Context`` attributes, then discard the ``Context``.
+
+    Each ``Context`` instance is in principle designed to be single-use:
+    ``Context`` is not cleaned up automatically between charm runs.
+
+    Any side effects generated by executing the charm, that are not rightful part of the
+    ``State``, are in fact stored in the ``Context``:
+
+    - :attr:`juju_log`: record of what the charm has sent to juju-log
+    - :attr:`app_status_history`: record of the app statuses the charm has set
+    - :attr:`unit_status_history`: record of the unit statuses the charm has set
+    - :attr:`workload_version_history`: record of the workload versions the charm has set
+    - :attr:`removed_secret_revisions`: record of the secret revisions the charm has removed
+    - :attr:`emitted_events`: record of the events (including custom) that the charm has processed
+    - :attr:`action_logs`: logs associated with the action output, set by the charm with
+        :meth:`ops.ActionEvent.log`
+    - :attr:`action_results`: key-value mapping assigned by the charm as a result of the action.
+        Will be None if the charm never calls :meth:`ops.ActionEvent.set_results`
+
+    This allows you to write assertions not only on the output state, but also, to some
+    extent, on the path the charm took to get there.
+
+    A typical scenario test will look like::
+
+        from scenario import Context, State
+        from ops import ActiveStatus
+        from charm import MyCharm, MyCustomEvent  # noqa
+
+        def test_foo():
+            # Arrange: set the context up
+            c = Context(MyCharm)
+            # Act: prepare the state and emit an event
+            state_out = c.run('update-status', State())
+            # Assert: verify the output state is what you think it should be
+            assert state_out.unit_status == ActiveStatus('foobar')
+            # Assert: verify the Context contains what you think it should
+            assert len(c.emitted_events) == 4
+            assert isinstance(c.emitted_events[3], MyCustomEvent)
+
+    If the charm, say, expects a ``./src/foo/bar.yaml`` file present relative to the
+    execution cwd, you need to use the ``charm_root`` argument. For example::
+
+        import scenario
+        import tempfile
+        virtual_root = tempfile.TemporaryDirectory()
+        local_path = Path(local_path.name)
+        (local_path / 'foo').mkdir()
+        (local_path / 'foo' / 'bar.yaml').write_text('foo: bar')
+        scenario.Context(... charm_root=virtual_root).run(...)
+
+    If you need access to the charm object that will handle the event, use the
+    class in a ``with`` statement, like::
+
+        import scenario
+
+        def test_foo():
+            ctx = scenario.Context(MyCharm)
+            with ctx(ctx.on.start(), State()) as manager:
+                manager.charm._some_private_setup()
+                manager.run()
+    """
 
     def __init__(
         self,
@@ -320,8 +371,8 @@ class Context:
         *,
         actions: Optional[Dict[str, Any]] = None,
         config: Optional[Dict[str, Any]] = None,
-        charm_root: Optional["PathLike"] = None,
-        juju_version: str = DEFAULT_JUJU_VERSION,
+        charm_root: Optional[Union[str, Path]] = None,
+        juju_version: str = _DEFAULT_JUJU_VERSION,
         capture_deferred_events: bool = False,
         capture_framework_events: bool = False,
         app_name: Optional[str] = None,
@@ -329,48 +380,6 @@ class Context:
         app_trusted: bool = False,
     ):
         """Represents a simulated charm's execution context.
-
-        It is the main entry point to running a scenario test.
-
-        It contains: the charm source code being executed, the metadata files associated with it,
-        a charm project repository root, and the juju version to be simulated.
-
-        After you have instantiated Context, typically you will call one of `run()` or
-        `run_action()` to execute the charm once, write any assertions you like on the output
-        state returned by the call, write any assertions you like on the Context attributes,
-        then discard the Context.
-        Each Context instance is in principle designed to be single-use:
-        Context is not cleaned up automatically between charm runs.
-        You can call `.clear()` to do some clean up, but we don't guarantee all state will be gone.
-
-        Any side effects generated by executing the charm, that are not rightful part of the State,
-        are in fact stored in the Context:
-        - ``juju_log``: record of what the charm has sent to juju-log
-        - ``app_status_history``: record of the app statuses the charm has set
-        - ``unit_status_history``: record of the unit statuses the charm has set
-        - ``workload_version_history``: record of the workload versions the charm has set
-        - ``emitted_events``: record of the events (including custom ones) that the charm has
-            processed
-
-        This allows you to write assertions not only on the output state, but also, to some
-        extent, on the path the charm took to get there.
-
-        A typical scenario test will look like:
-
-        >>> from scenario import Context, State
-        >>> from ops import ActiveStatus
-        >>> from charm import MyCharm, MyCustomEvent  # noqa
-        >>>
-        >>> def test_foo():
-        >>>     # Arrange: set the context up
-        >>>     c = Context(MyCharm)
-        >>>     # Act: prepare the state and emit an event
-        >>>     state_out = c.run(c.update_status(), State())
-        >>>     # Assert: verify the output state is what you think it should be
-        >>>     assert state_out.unit_status == ActiveStatus('foobar')
-        >>>     # Assert: verify the Context contains what you think it should
-        >>>     assert len(c.emitted_events) == 4
-        >>>     assert isinstance(c.emitted_events[3], MyCustomEvent)
 
         :arg charm_type: the CharmBase subclass to call ``ops.main()`` on.
         :arg meta: charm metadata to use. Needs to be a valid metadata.yaml format (as a dict).
@@ -386,16 +395,6 @@ class Context:
         :arg app_trusted: whether the charm has Juju trust (deployed with ``--trust`` or added with
             ``juju trust``). Defaults to False.
         :arg charm_root: virtual charm root the charm will be executed with.
-            If the charm, say, expects a `./src/foo/bar.yaml` file present relative to the
-            execution cwd, you need to use this. E.g.:
-
-            >>> import scenario
-            >>> import tempfile
-            >>> virtual_root = tempfile.TemporaryDirectory()
-            >>> local_path = Path(local_path.name)
-            >>> (local_path / 'foo').mkdir()
-            >>> (local_path / 'foo' / 'bar.yaml').write_text('foo: bar')
-            >>> scenario.Context(... charm_root=virtual_root).run(...)
         """
 
         if not any((meta, actions, config)):
@@ -439,36 +438,25 @@ class Context:
         self.juju_log: List["JujuLogLine"] = []
         self.app_status_history: List["_EntityStatus"] = []
         self.unit_status_history: List["_EntityStatus"] = []
+        self.exec_history: Dict[str, List[ExecArgs]] = {}
         self.workload_version_history: List[str] = []
+        self.removed_secret_revisions: List[int] = []
         self.emitted_events: List[EventBase] = []
         self.requested_storages: Dict[str, int] = {}
 
         # set by Runtime.exec() in self._run()
         self._output_state: Optional["State"] = None
 
-        # ephemeral side effects from running an action
-
-        self._action_logs: List[str] = []
-        self._action_results: Optional[Dict[str, str]] = None
-        self._action_failure: Optional[str] = None
+        # operations (and embedded tasks) from running actions
+        self.action_logs: List[str] = []
+        self.action_results: Optional[Dict[str, Any]] = None
+        self._action_failure_message: Optional[str] = None
 
         self.on = _CharmEvents()
 
     def _set_output_state(self, output_state: "State"):
         """Hook for Runtime to set the output state."""
         self._output_state = output_state
-
-    @property
-    def output_state(self) -> "State":
-        """The output state obtained by running an event on this context.
-
-        Will raise an exception if this Context hasn't been run yet.
-        """
-        if not self._output_state:
-            raise RuntimeError(
-                "No output state available. ``.run()`` this Context first.",
-            )
-        return self._output_state
 
     def _get_container_root(self, container_name: str):
         """Get the path to a tempdir where this container's simulated root will live."""
@@ -484,44 +472,26 @@ class Context:
     def _record_status(self, state: "State", is_app: bool):
         """Record the previous status before a status change."""
         if is_app:
-            self.app_status_history.append(cast("_EntityStatus", state.app_status))
+            self.app_status_history.append(state.app_status)
         else:
-            self.unit_status_history.append(cast("_EntityStatus", state.unit_status))
+            self.unit_status_history.append(state.unit_status)
 
-    def manager(self, event: "_Event", state: "State"):
+    def __call__(self, event: "_Event", state: "State"):
         """Context manager to introspect live charm object before and after the event is emitted.
 
-        Usage:
-        >>> with Context().manager(ctx.on.start(), State()) as manager:
-        >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
-        >>>     manager.run()  # this will fire the event
-        >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
+        Usage::
 
-        :arg event: the Event that the charm will respond to.
-        :arg state: the State instance to use as data source for the hook tool calls that the
-            charm will invoke when handling the Event.
+            ctx = Context(MyCharm)
+            with ctx(ctx.on.start(), State()) as manager:
+                manager.charm._some_private_setup()
+                manager.run()  # this will fire the event
+                assert manager.charm._some_private_attribute == "bar"  # noqa
+
+        Args:
+            event: the :class:`Event` that the charm will respond to.
+            state: the :class:`State` instance to use when handling the Event.
         """
-        return _EventManager(self, event, state)
-
-    def action_manager(self, action: "Action", state: "State"):
-        """Context manager to introspect live charm object before and after the event is emitted.
-
-        Usage:
-        >>> with Context().action_manager(Action("foo"), State()) as manager:
-        >>>     assert manager.charm._some_private_attribute == "foo"  # noqa
-        >>>     manager.run()  # this will fire the event
-        >>>     assert manager.charm._some_private_attribute == "bar"  # noqa
-
-        :arg action: the Action that the charm will execute.
-        :arg state: the State instance to use as data source for the hook tool calls that the
-            charm will invoke when handling the Action (event).
-        """
-        return _ActionManager(self, action, state)
-
-    @contextmanager
-    def _run_event(self, event: "_Event", state: "State"):
-        with self._run(event=event, state=state) as ops:
-            yield ops
+        return Manager(self, event, state)
 
     def run(self, event: "_Event", state: "State") -> "State":
         """Trigger a charm execution with an Event and a State.
@@ -533,45 +503,22 @@ class Context:
         :arg state: the State instance to use as data source for the hook tool calls that the
             charm will invoke when handling the Event.
         """
-        if isinstance(event, Action) or event.action:
-            raise InvalidEventError("Use run_action() to run an action event.")
-        with self._run_event(event=event, state=state) as ops:
+        if event.action:
+            # Reset the logs, failure status, and results, in case the context
+            # is reused.
+            self.action_logs.clear()
+            if self.action_results is not None:
+                self.action_results.clear()
+            self._action_failure_message = None
+        with self._run(event=event, state=state) as ops:
             ops.emit()
-        return self.output_state
-
-    def run_action(self, action: "Action", state: "State") -> ActionOutput:
-        """Trigger a charm execution with an Action and a State.
-
-        Calling this function will call ``ops.main`` and set up the context according to the
-        specified ``State``, then emit the event on the charm.
-
-        :arg action: the Action that the charm will execute.
-        :arg state: the State instance to use as data source for the hook tool calls that the
-            charm will invoke when handling the Action (event).
-        """
-        with self._run_action(action=action, state=state) as ops:
-            ops.emit()
-        return self._finalize_action(self.output_state)
-
-    def _finalize_action(self, state_out: "State"):
-        ao = ActionOutput(
-            state=state_out,
-            logs=self._action_logs,
-            results=self._action_results,
-            failure=self._action_failure,
-        )
-
-        # reset all action-related state
-        self._action_logs = []
-        self._action_results = None
-        self._action_failure = None
-
-        return ao
-
-    @contextmanager
-    def _run_action(self, action: "Action", state: "State"):
-        with self._run(event=action.event, state=state) as ops:
-            yield ops
+        # We know that the output state will have been set by this point,
+        # so let the type checkers know that too.
+        assert self._output_state is not None
+        if event.action:
+            if self._action_failure_message is not None:
+                raise ActionFailed(self._action_failure_message, self._output_state)
+        return self._output_state
 
     @contextmanager
     def _run(self, event: "_Event", state: "State"):

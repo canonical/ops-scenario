@@ -18,7 +18,7 @@ license.text = "Apache-2.0"
 keywords = ["juju", "test"]
 
 dependencies = [
-    "ops>=2.10",
+    "ops>=2.15",
     "PyYAML>=6.0.1",
 ]
 readme = "README.md"
@@ -38,6 +38,22 @@ classifiers = [
 "Homepage" = "https://github.com/canonical/ops-scenario"
 "Bug Tracker" = "https://github.com/canonical/ops-scenario/issues"
 
+[project.optional-dependencies]
+docs = [
+    "canonical-sphinx-extensions",
+    "furo",
+    "linkify-it-py",
+    "myst-parser",
+    "pyspelling",
+    "sphinx==6.2.1",
+    "sphinx-autobuild",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "sphinx-notfound-page",
+    "sphinx-tabs",
+    "sphinxcontrib-jquery",
+    "sphinxext-opengraph"
+]
 
 [tool.setuptools.package-dir]
 scenario = "scenario"
@@ -80,11 +96,6 @@ skip-magic-trailing-comma = false
 # Like Black, automatically detect the appropriate line ending.
 line-ending = "auto"
 
-[tool.pyright]
-ignore = [
-    "scenario/sequences.py",
-    "scenario/capture_events.py"
-]
 [tool.isort]
 profile = "black"
 

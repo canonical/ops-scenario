@@ -2,9 +2,7 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 import datetime
-import random
 import shutil
-from io import StringIO
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -15,6 +13,7 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    TextIO,
     Tuple,
     Union,
     cast,
@@ -34,15 +33,20 @@ from ops.model import (
     _ModelBackend,
 )
 from ops.pebble import Client, ExecError
-from ops.testing import _TestingPebbleClient
+from ops.testing import ExecArgs, _TestingPebbleClient
 
+from scenario.errors import ActionMissingFromContextError
 from scenario.logger import logger as scenario_logger
 from scenario.state import (
     JujuLogLine,
     Mount,
     Network,
     PeerRelation,
+    Relation,
+    RelationBase,
     Storage,
+    SubordinateRelation,
+    _EntityStatus,
     _port_cls_by_protocol,
     _RawPortProtocolLiteral,
     _RawStatusLiteral,
@@ -51,47 +55,52 @@ from scenario.state import (
 if TYPE_CHECKING:  # pragma: no cover
     from scenario.context import Context
     from scenario.state import Container as ContainerSpec
-    from scenario.state import (
-        ExecOutput,
-        Relation,
-        Secret,
-        State,
-        SubordinateRelation,
-        _CharmSpec,
-        _Event,
-    )
+    from scenario.state import Exec, Secret, State, _CharmSpec, _Event
 
 logger = scenario_logger.getChild("mocking")
 
 
-class ActionMissingFromContextError(Exception):
-    """Raised when the user attempts to invoke action hook tools outside an action context."""
-
-    # This is not an ops error: in ops, you'd have to go exceptionally out of your way to trigger
-    # this flow.
-
-
 class _MockExecProcess:
-    def __init__(self, command: Tuple[str, ...], change_id: int, out: "ExecOutput"):
-        self._command = command
+    def __init__(
+        self,
+        change_id: int,
+        args: ExecArgs,
+        return_code: int,
+        stdin: Optional[TextIO],
+        stdout: Optional[TextIO],
+        stderr: Optional[TextIO],
+    ):
         self._change_id = change_id
-        self._out = out
+        self._args = args
+        self._return_code = return_code
         self._waited = False
-        self.stdout = StringIO(self._out.stdout)
-        self.stderr = StringIO(self._out.stderr)
+        self.stdin = stdin
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def __del__(self):
+        if not self._waited:
+            self._close_stdin()
+
+    def _close_stdin(self):
+        if self._args.stdin is None and self.stdin is not None:
+            self.stdin.seek(0)
+            self._args.stdin = self.stdin.read()
 
     def wait(self):
+        self._close_stdin()
         self._waited = True
-        exit_code = self._out.return_code
-        if exit_code != 0:
-            raise ExecError(list(self._command), exit_code, None, None)
+        if self._return_code != 0:
+            raise ExecError(list(self._args.command), self._return_code, None, None)
 
     def wait_output(self):
-        out = self._out
-        exit_code = out.return_code
-        if exit_code != 0:
-            raise ExecError(list(self._command), exit_code, None, None)
-        return out.stdout, out.stderr
+        self._close_stdin()
+        self._waited = True
+        stdout = self.stdout.read() if self.stdout is not None else None
+        stderr = self.stderr.read() if self.stderr is not None else None
+        if self._return_code != 0:
+            raise ExecError(list(self._args.command), self._return_code, stdout, stderr)
+        return stdout, stderr
 
     def send_signal(self, sig: Union[int, str]):  # noqa: U100
         raise NotImplementedError()
@@ -165,12 +174,11 @@ class _MockModelBackend(_ModelBackend):
             state=self._state,
             event=self._event,
             charm_spec=self._charm_spec,
+            context=self._context,
+            container_name=container_name,
         )
 
-    def _get_relation_by_id(
-        self,
-        rel_id,
-    ) -> Union["Relation", "SubordinateRelation", "PeerRelation"]:
+    def _get_relation_by_id(self, rel_id) -> "RelationBase":
         try:
             return self._state.get_relation(rel_id)
         except ValueError:
@@ -201,20 +209,15 @@ class _MockModelBackend(_ModelBackend):
             return secrets[0]
 
         elif label:
-            secrets = [s for s in self._state.secrets if s.label == label]
-            if not secrets:
-                raise SecretNotFoundError(label)
-            return secrets[0]
+            try:
+                return self._state.get_secret(label=label)
+            except KeyError:
+                raise SecretNotFoundError(label) from None
 
         else:
             # if all goes well, this should never be reached. ops.model.Secret will check upon
             # instantiation that either an id or a label are set, and raise a TypeError if not.
             raise RuntimeError("need id or label.")
-
-    @staticmethod
-    def _generate_secret_id():
-        id = "".join(map(str, [random.choice(list(range(10))) for _ in range(20)]))
-        return f"secret:{id}"
 
     def _check_app_data_access(self, is_app: bool):
         if not isinstance(is_app, bool):
@@ -237,7 +240,10 @@ class _MockModelBackend(_ModelBackend):
         elif is_app:
             if isinstance(relation, PeerRelation):
                 return relation.local_app_data
-            return relation.remote_app_data
+            elif isinstance(relation, (Relation, SubordinateRelation)):
+                return relation.remote_app_data
+            else:
+                raise TypeError("relation_get: unknown relation type")
         elif member_name == self.unit_name:
             return relation.local_unit_data
 
@@ -316,8 +322,8 @@ class _MockModelBackend(_ModelBackend):
         try:
             network = self._state.get_network(binding_name)
         except KeyError:
-            network = Network.default("default")  # The name is not used in the output.
-        return network.hook_tool_output_fmt()
+            network = Network("default")  # The name is not used in the output.
+        return network._hook_tool_output_fmt()
 
     # setter methods: these can mutate the state.
     def application_version_set(self, version: str):
@@ -335,7 +341,8 @@ class _MockModelBackend(_ModelBackend):
         is_app: bool = False,
     ):
         self._context._record_status(self._state, is_app)
-        self._state._update_status(status, message, is_app)
+        status_obj = _EntityStatus.from_status_name(status, message)
+        self._state._update_status(status_obj, is_app)
 
     def juju_log(self, level: str, message: str):
         self._context.juju_log.append(JujuLogLine(level, message))
@@ -366,10 +373,8 @@ class _MockModelBackend(_ModelBackend):
     ) -> str:
         from scenario.state import Secret
 
-        secret_id = self._generate_secret_id()
         secret = Secret(
-            id=secret_id,
-            contents={0: content},
+            content,
             label=label,
             description=description,
             expire=expire,
@@ -379,7 +384,7 @@ class _MockModelBackend(_ModelBackend):
         secrets = set(self._state.secrets)
         secrets.add(secret)
         self._state._update_secrets(frozenset(secrets))
-        return secret_id
+        return secret.id
 
     def _check_can_manage_secret(
         self,
@@ -407,21 +412,24 @@ class _MockModelBackend(_ModelBackend):
         peek: bool = False,
     ) -> Dict[str, str]:
         secret = self._get_secret(id, label)
+        # If both the id and label are provided, then update the label.
+        if id is not None and label is not None:
+            secret._set_label(label)
         juju_version = self._context.juju_version
         if not (juju_version == "3.1.7" or juju_version >= "3.3.1"):
-            # in this medieval juju chapter,
+            # In this medieval Juju chapter,
             # secret owners always used to track the latest revision.
             # ref: https://bugs.launchpad.net/juju/+bug/2037120
             if secret.owner is not None:
                 refresh = True
 
-        revision = secret.revision
         if peek or refresh:
-            revision = max(secret.contents.keys())
             if refresh:
-                secret._set_revision(revision)
+                secret._track_latest_revision()
+            assert secret.latest_content is not None
+            return secret.latest_content
 
-        return secret.contents[revision]
+        return secret.tracked_content
 
     def secret_info_get(
         self,
@@ -430,6 +438,9 @@ class _MockModelBackend(_ModelBackend):
         label: Optional[str] = None,
     ) -> SecretInfo:
         secret = self._get_secret(id, label)
+        # If both the id and label are provided, then update the label.
+        if id is not None and label is not None:
+            secret._set_label(label)
 
         # only "manage"=write access level can read secret info
         self._check_can_manage_secret(secret)
@@ -437,7 +448,7 @@ class _MockModelBackend(_ModelBackend):
         return SecretInfo(
             id=secret.id,
             label=secret.label,
-            revision=max(secret.contents),
+            revision=secret._latest_revision,
             expires=secret.expire,
             rotation=secret.rotate,
             rotates=None,  # not implemented yet.
@@ -455,6 +466,15 @@ class _MockModelBackend(_ModelBackend):
     ):
         secret = self._get_secret(id, label)
         self._check_can_manage_secret(secret)
+
+        if content == secret.latest_content:
+            # In Juju 3.6 and higher, this is a no-op, but it's good to warn
+            # charmers if they are doing this, because it's not generally good
+            # practice.
+            # https://bugs.launchpad.net/juju/+bug/2069238
+            logger.warning(
+                f"secret {id} contents set to the existing value: new revision not needed",
+            )
 
         secret._update_metadata(
             content=content,
@@ -494,10 +514,32 @@ class _MockModelBackend(_ModelBackend):
         secret = self._get_secret(id)
         self._check_can_manage_secret(secret)
 
-        if revision:
-            del secret.contents[revision]
-        else:
-            secret.contents.clear()
+        # Removing all revisions means that the secret is removed, so is no
+        # longer in the state.
+        if revision is None:
+            secrets = set(self._state.secrets)
+            secrets.remove(secret)
+            self._state._update_secrets(frozenset(secrets))
+            return
+
+        # Juju does not prevent removing the tracked or latest revision, but it
+        # is always a mistake to do this. Rather than having the state model a
+        # secret where the tracked/latest revision cannot be retrieved but the
+        # secret still exists, we raise instead, so that charms know that there
+        # is a problem with their code.
+        if revision in (secret._tracked_revision, secret._latest_revision):
+            raise ValueError(
+                "Charms should not remove the latest revision of a secret. "
+                "Add a new revision with `set_content()` instead, and the previous "
+                "revision will be cleaned up by the secret owner when no longer in use.",
+            )
+
+        # For all other revisions, the content is not visible to the charm
+        # (this is as designed: the secret is being removed, so it should no
+        # longer be in use). That means that the state does not need to be
+        # modified - however, unit tests should be able to verify that the remove call was
+        # executed, so we track that in a history list in the context.
+        self._context.removed_secret_revisions.append(revision)
 
     def relation_remote_app_name(
         self,
@@ -514,8 +556,10 @@ class _MockModelBackend(_ModelBackend):
 
         if isinstance(relation, PeerRelation):
             return self.app_name
-        else:
+        elif isinstance(relation, (Relation, SubordinateRelation)):
             return relation.remote_app_name
+        else:
+            raise TypeError("relation_remote_app_name: unknown relation type")
 
     def action_set(self, results: Dict[str, Any]):
         if not self._event.action:
@@ -526,21 +570,24 @@ class _MockModelBackend(_ModelBackend):
         _format_action_result_dict(results)
         # but then we will store it in its unformatted,
         # original form for testing ease
-        self._context._action_results = results
+        if self._context.action_results:
+            self._context.action_results.update(results)
+        else:
+            self._context.action_results = results
 
     def action_fail(self, message: str = ""):
         if not self._event.action:
             raise ActionMissingFromContextError(
                 "not in the context of an action event: cannot action-fail",
             )
-        self._context._action_failure = message
+        self._context._action_failure_message = message
 
     def action_log(self, message: str):
         if not self._event.action:
             raise ActionMissingFromContextError(
                 "not in the context of an action event: cannot action-log",
             )
-        self._context._action_logs.append(message)
+        self._context.action_logs.append(message)
 
     def action_get(self):
         action = self._event.action
@@ -668,11 +715,15 @@ class _MockPebbleClient(_TestingPebbleClient):
         state: "State",
         event: "_Event",
         charm_spec: "_CharmSpec",
+        context: "Context",
+        container_name: str,
     ):
         self._state = state
         self.socket_path = socket_path
         self._event = event
         self._charm_spec = charm_spec
+        self._context = context
+        self._container_name = container_name
 
         # wipe just in case
         if container_root.exists():
@@ -689,8 +740,9 @@ class _MockPebbleClient(_TestingPebbleClient):
 
         self._root = container_root
 
-        # load any existing notices from the state
+        # load any existing notices and check information from the state
         self._notices: Dict[Tuple[str, str], pebble.Notice] = {}
+        self._check_infos: Dict[str, pebble.CheckInfo] = {}
         for container in state.containers:
             for notice in container.notices:
                 if hasattr(notice.type, "value"):
@@ -698,6 +750,8 @@ class _MockPebbleClient(_TestingPebbleClient):
                 else:
                     notice_type = str(notice.type)
                 self._notices[notice_type, notice.key] = notice._to_ops()
+            for check in container.check_infos:
+                self._check_infos[check.name] = check._to_ops()
 
     def get_plan(self) -> pebble.Plan:
         return self._container.plan
@@ -722,21 +776,100 @@ class _MockPebbleClient(_TestingPebbleClient):
 
     @property
     def _service_status(self) -> Dict[str, pebble.ServiceStatus]:
-        return self._container.service_status
+        return self._container.service_statuses
 
-    def exec(self, *args, **kwargs):  # noqa: U100 type: ignore
-        cmd = tuple(args[0])
-        out = self._container.exec_mock.get(cmd)
-        if not out:
-            raise RuntimeError(
-                f"mock for cmd {cmd} not found. Please pass to the Container "
-                f"{self._container.name} a scenario.ExecOutput mock for the "
-                f"command your charm is attempting to run, or patch "
-                f"out whatever leads to the call.",
+    # Based on a method of the same name from ops.testing.
+    def _find_exec_handler(self, command) -> Optional["Exec"]:
+        handlers = {exec.command_prefix: exec for exec in self._container.execs}
+        # Start with the full command and, each loop iteration, drop the last
+        # element, until it matches one of the command prefixes in the execs.
+        # This includes matching against the empty list, which will match any
+        # command, if there is not a more specific match.
+        for prefix_len in reversed(range(len(command) + 1)):
+            command_prefix = tuple(command[:prefix_len])
+            if command_prefix in handlers:
+                return handlers[command_prefix]
+        # None of the command prefixes in the execs matched the command, no
+        # matter how much of it was used, so we have failed to find a handler.
+        return None
+
+    def exec(
+        self,
+        command: List[str],
+        *,
+        environment: Optional[Dict[str, str]] = None,
+        working_dir: Optional[str] = None,
+        timeout: Optional[float] = None,
+        user_id: Optional[int] = None,
+        user: Optional[str] = None,
+        group_id: Optional[int] = None,
+        group: Optional[str] = None,
+        stdin: Optional[Union[str, bytes, TextIO]] = None,
+        stdout: Optional[TextIO] = None,
+        stderr: Optional[TextIO] = None,
+        encoding: Optional[str] = "utf-8",
+        combine_stderr: bool = False,
+        **kwargs,
+    ):
+        handler = self._find_exec_handler(command)
+        if not handler:
+            raise ExecError(
+                command,
+                127,
+                "",
+                f"mock for cmd {command} not found. Please patch out whatever "
+                f"leads to the call, or pass to the Container {self._container.name} "
+                f"a scenario.Exec mock for the command your charm is attempting "
+                f"to run, such as "
+                f"'Container(..., execs={{scenario.Exec({list(command)}, ...)}})'",
             )
 
-        change_id = out._run()
-        return _MockExecProcess(change_id=change_id, command=cmd, out=out)
+        if stdin is None:
+            proc_stdin = self._transform_exec_handler_output("", encoding)
+        else:
+            proc_stdin = None
+            stdin = stdin.read() if hasattr(stdin, "read") else stdin  # type: ignore
+        if stdout is None:
+            proc_stdout = self._transform_exec_handler_output(handler.stdout, encoding)
+        else:
+            proc_stdout = None
+            stdout.write(handler.stdout)
+        if stderr is None:
+            proc_stderr = self._transform_exec_handler_output(handler.stderr, encoding)
+        else:
+            proc_stderr = None
+            stderr.write(handler.stderr)
+
+        args = ExecArgs(
+            command=command,
+            environment=environment or {},
+            working_dir=working_dir,
+            timeout=timeout,
+            user_id=user_id,
+            user=user,
+            group_id=group_id,
+            group=group,
+            stdin=stdin,  # type:ignore  # If None, will be replaced by proc_stdin.read() later.
+            encoding=encoding,
+            combine_stderr=combine_stderr,
+        )
+        try:
+            self._context.exec_history[self._container_name].append(args)
+        except KeyError:
+            self._context.exec_history[self._container_name] = [args]
+
+        change_id = handler._run()
+        return cast(
+            pebble.ExecProcess[Any],
+            _MockExecProcess(
+                change_id=change_id,
+                args=args,
+                return_code=handler.return_code,
+                stdin=proc_stdin,
+                stdout=proc_stdout,
+                stderr=proc_stderr,
+            ),
+        )
 
     def _check_connection(self):
         if not self._container.can_connect:
