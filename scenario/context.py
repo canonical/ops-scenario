@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type, Union, cast
 
 import ops
+import ops.testing
 
 from scenario.errors import AlreadyEmittedError, ContextSetupError
 from scenario.logger import logger as scenario_logger
@@ -27,8 +28,6 @@ from scenario.state import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover
-    from ops.testing import CharmType
-
     from scenario.ops_main_mock import Ops
     from scenario.state import AnyJson, JujuLogLine, RelationBase, State, _EntityStatus
 
@@ -250,7 +249,11 @@ class CharmEvents:
 
     @staticmethod
     @_copy_doc(ops.RelationChangedEvent)
-    def relation_changed(relation: "RelationBase", *, remote_unit: Optional[int] = None):
+    def relation_changed(
+        relation: "RelationBase",
+        *,
+        remote_unit: Optional[int] = None,
+    ):
         return _Event(
             f"{relation.endpoint}_relation_changed",
             relation=relation,
@@ -424,7 +427,7 @@ class Context:
 
     def __init__(
         self,
-        charm_type: Type["CharmType"],
+        charm_type: Type["ops.testing.CharmType"],
         meta: Optional[Dict[str, Any]] = None,
         *,
         actions: Optional[Dict[str, Any]] = None,
@@ -506,7 +509,7 @@ class Context:
         self.juju_log: List["JujuLogLine"] = []
         self.app_status_history: List["_EntityStatus"] = []
         self.unit_status_history: List["_EntityStatus"] = []
-        self.exec_history: Dict[str, List[ExecArgs]] = {}
+        self.exec_history: Dict[str, List[ops.testing.ExecArgs]] = {}
         self.workload_version_history: List[str] = []
         self.removed_secret_revisions: List[int] = []
         self.emitted_events: List[ops.EventBase] = []

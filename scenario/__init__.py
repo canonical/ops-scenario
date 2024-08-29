@@ -145,5 +145,4 @@ __all__ = [
     "UnitID",
     "UnknownStatus",
     "WaitingStatus",
-    "deferred",
 ]
