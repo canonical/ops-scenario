@@ -362,3 +362,47 @@ accepted an object or key.
 The `State.get_storages` method has been removed. This was primarily intended
 for internal use. You can use `State.get_storage` or iterate through
 `State.storages` instead.
+
+### Use .replace() to change can_connect, leader, and unit_status
+
+The `State` class previously had convenience methods `with_can_connect`,
+`with_leadership`, and `with_unit_status`. You should now use the regular
+`.replace()` mechanism instead.
+
+```python
+# Older Scenario code
+new_state = state.with_can_connect(container_name, can_connect=True)
+new_state = state.with_leadership(leader=True)
+new_state = state.with_unit_status(status=ActiveStatus())
+
+# Scenario 7.x
+new_container = dataclasses.replace(container, can_connect=True)
+new_state = dataclasses.replace(containers={container})
+new_state = dataclasses.replace(state, leader=True)
+new_state = dataclasses.replace(state, status=ActiveStatus())
+```
+
+### Let Scenario handle the relation, action, and notice IDs, and storage index
+
+Scenario previously had `next_relation_id`, `next_action_id`,
+`next_storage_index`, and `next_notice_id` methods. You should now let Scenario
+manage the IDs and indexes of these objects.
+
+### Get the output state from the run() call
+
+The `Context` class previously had an `output_state` attribute that held the
+most recent output state. You should now get the output state from the `run()`
+return value.
+
+### Don't use internal details
+
+The `*_SUFFIX`, and `_EVENTS` names, the `hook_tool_output_fmt()` methods, the
+`normalize_name` method, the `DEFAULT_JUJU_VERSION` and `DEFAULT_JUJU_DATABAG`
+names have all been removed, and shouldn't need replacing.
+
+The `capture_events` and `consistency_checker` modules are also no longer
+available for public use - the consistency checker will still run automatically,
+and the `Context` class has attributes for capturing events.
+
+The `AnyRelation` and `PathLike` names have been removed: use `RelationBase` and
+`str | Path` instead.
