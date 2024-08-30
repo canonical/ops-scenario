@@ -314,3 +314,23 @@ nitpick_ignore = [
     ('py:class', 'scenario.state._Event'),
     ('py:class', 'scenario.state._max_posargs.<locals>._MaxPositionalArgs'),
 ]
+
+# Monkeypatch Sphinx to look for __init__ rather than __new__ for the subclasses
+# of _MaxPositionalArgs.
+import inspect
+import sphinx.ext.autodoc
+
+def _custom_get_signature(self):
+    if any(p.__name__ == '_MaxPositionalArgs' for p in self.object.__mro__):
+        signature = inspect.signature(self.object)
+        parameters = []
+        for position, param in enumerate(signature.parameters.values()):
+            if position >= self.object._max_positional_args:
+                parameters.append(param.replace(kind=inspect.Parameter.KEYWORD_ONLY))
+            else:
+                parameters.append(param)
+        signature = signature.replace(parameters=parameters)
+        return None, None, signature
+    return sphinx.ext.autodoc.ClassDocumenter._get_signature(self)
+
+sphinx.ext.autodoc.ClassDocumenter._get_signature = _custom_get_signature

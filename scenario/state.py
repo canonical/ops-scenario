@@ -187,25 +187,6 @@ def _max_posargs(n: int):
     return _MaxPositionalArgs
 
 
-def _add_signature(cls):
-    """Set the __signature__ attribute on the class to its signature.
-
-    This tricks Sphinx's autodoc into using the `__init__` signature rather than
-    the `__new__` signature, which is always `*args, **kwargs` for classes
-    that use the _MaxPositionalArgs class.
-    """
-    signature = inspect.signature(cls)
-    parameters = []
-    for position, param in enumerate(signature.parameters.values()):
-        if position >= cls._max_positional_args:
-            parameters.append(param.replace(kind=inspect.Parameter.KEYWORD_ONLY))
-        else:
-            parameters.append(param)
-    cls.__signature__ = signature.replace(parameters=parameters)
-    return cls
-
-
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class JujuLogLine(_max_posargs(2)):
     """An entry in the Juju debug-log."""
@@ -216,7 +197,6 @@ class JujuLogLine(_max_posargs(2)):
     """The log message."""
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class CloudCredential(_max_posargs(0)):
     __doc__ = ops.CloudCredential.__doc__
@@ -242,7 +222,6 @@ class CloudCredential(_max_posargs(0)):
         )
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class CloudSpec(_max_posargs(1)):
     __doc__ = ops.CloudSpec.__doc__
@@ -301,7 +280,6 @@ def _generate_secret_id():
     return f"secret:{secret_id}"
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Secret(_max_posargs(1)):
     """A Juju secret.
@@ -407,7 +385,6 @@ def _normalise_name(s: str):
     return s.replace("-", "_")
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Address(_max_posargs(1)):
     """An address in a Juju network space."""
@@ -429,7 +406,6 @@ class Address(_max_posargs(1)):
         object.__setattr__(self, "value", value)
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class BindAddress(_max_posargs(1)):
     """An address bound to a network interface in a Juju space."""
@@ -453,7 +429,6 @@ class BindAddress(_max_posargs(1)):
         return dct
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Network(_max_posargs(2)):
     """A Juju network space."""
@@ -503,7 +478,6 @@ def _next_relation_id(*, update=True):
     return cur
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class RelationBase(_max_posargs(2)):
     endpoint: str
@@ -706,7 +680,6 @@ def _random_model_name():
     return "".join(random.choice(space) for _ in range(20))
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Model(_max_posargs(1)):
     """The Juju model in which the charm is deployed."""
@@ -742,7 +715,6 @@ def _generate_new_change_id():
     return _CHANGE_IDS
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Exec(_max_posargs(1)):
     """Mock data for simulated :meth:`ops.Container.exec` calls."""
@@ -780,7 +752,6 @@ class Exec(_max_posargs(1)):
         return self._change_id
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Mount(_max_posargs(0)):
     """Maps local files to a :class:`Container` filesystem."""
@@ -811,7 +782,6 @@ def _next_notice_id(*, update=True):
     return str(cur)
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Notice(_max_posargs(1)):
     """A Pebble notice."""
@@ -873,7 +843,6 @@ class Notice(_max_posargs(1)):
         )
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class CheckInfo(_max_posargs(1)):
     """A health check for a Pebble workload container."""
@@ -912,7 +881,6 @@ class CheckInfo(_max_posargs(1)):
         )
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Container(_max_posargs(1)):
     """A Kubernetes container where a charm's workload runs."""
@@ -1175,7 +1143,6 @@ _EntityStatus._entity_statuses.update(
 )
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class StoredState(_max_posargs(1)):
     """Represents unit-local state that persists across events."""
@@ -1217,7 +1184,6 @@ class StoredState(_max_posargs(1)):
 _RawPortProtocolLiteral = Literal["tcp", "udp", "icmp"]
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Port(_max_posargs(1)):
     """Represents a port on the charm host.
@@ -1244,7 +1210,6 @@ class Port(_max_posargs(1)):
         return False
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class TCPPort(Port):
     """Represents a TCP port on the charm host."""
@@ -1265,7 +1230,6 @@ class TCPPort(Port):
             )
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class UDPPort(Port):
     """Represents a UDP port on the charm host."""
@@ -1286,7 +1250,6 @@ class UDPPort(Port):
             )
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class ICMPPort(Port):
     """Represents an ICMP port on the charm host."""
@@ -1328,7 +1291,6 @@ def _next_storage_index(*, update=True):
     return cur
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Storage(_max_posargs(1)):
     """Represents an (attached) storage made available to the charm container."""
@@ -1352,7 +1314,6 @@ class Storage(_max_posargs(1)):
         return ctx._get_storage_root(self.name, self.index)
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class Resource(_max_posargs(0)):
     """Represents a resource made available to the charm."""
@@ -1363,7 +1324,6 @@ class Resource(_max_posargs(0)):
     """A local path that will be provided to the charm as the content of the resource."""
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class State(_max_posargs(0)):
     """Represents the Juju-owned portion of a unit's state.
@@ -2030,7 +1990,6 @@ def _next_action_id(*, update=True):
     return str(cur)
 
 
-@_add_signature
 @dataclasses.dataclass(frozen=True)
 class _Action(_max_posargs(1)):
     """A ``juju run`` command.
