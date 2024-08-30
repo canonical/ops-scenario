@@ -320,6 +320,8 @@ nitpick_ignore = [
 import inspect
 import sphinx.ext.autodoc
 
+_real_get_signature = sphinx.ext.autodoc.ClassDocumenter._get_signature
+
 def _custom_get_signature(self):
     if any(p.__name__ == '_MaxPositionalArgs' for p in self.object.__mro__):
         signature = inspect.signature(self.object)
@@ -331,6 +333,6 @@ def _custom_get_signature(self):
                 parameters.append(param)
         signature = signature.replace(parameters=parameters)
         return None, None, signature
-    return sphinx.ext.autodoc.ClassDocumenter._get_signature(self)
+    return _real_get_signature(self)
 
 sphinx.ext.autodoc.ClassDocumenter._get_signature = _custom_get_signature
