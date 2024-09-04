@@ -61,7 +61,6 @@ class Manager:
         self._emitted: bool = False
 
         self.ops: Optional["Ops"] = None
-        self.output: Optional["State"] = None
 
     @property
     def charm(self) -> ops.CharmBase:
