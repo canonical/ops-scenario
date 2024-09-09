@@ -1585,7 +1585,10 @@ class State(_max_posargs(0)):
             if _normalise_name(r.endpoint) == normalized_endpoint
         )
 
-    def _remap(self, obj: _Remappable) -> Tuple[str, Optional[_Remappable]]:
+    def _remap(self, *obj: _Remappable) -> Iterable[Tuple[str, Optional[_Remappable]]]:
+        return map(self._remap_one, obj)
+
+    def _remap_one(self, obj: _Remappable) -> Tuple[str, Optional[_Remappable]]:
         """Return the attribute in which the object can be found and the object itself."""
 
         @singledispatch
@@ -1641,11 +1644,24 @@ class State(_max_posargs(0)):
         >>> from scenario import Relation, State, Context
         >>> rel1, rel2 = Relation("foo"), Relation("bar")
         >>> state_in = State(leader=True, relations=[rel1, rel2])
-        >>> state_out = Context(...).run("update-status", state=state_in)
+        >>> ctx = Context(...)
+        >>> state_out = ctx.run(ctx.on.update_status(), state=state_in)
         >>> rel1_out = state_out.remap(rel1)
         >>> assert rel1.endpoint == "foo"
         """
-        return self._remap(obj)[1]
+        return self._remap_one(obj)[1]
+
+    def remap_multiple(self, *obj: _Remappable) -> Tuple[_Remappable, ...]:
+        """Get the corresponding objects from this State.
+        >>> from scenario import Relation, State, Context
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> state_in = State(leader=True, relations=[rel1, rel2])
+        >>> ctx = Context(...)
+        >>> state_out = ctx.run(ctx.on.update_status(), state=state_in)
+        >>> rel1_out, rel2_out = state_out.remap_multiple(rel1, rel2)
+        >>> assert rel1.endpoint == "foo"
+        """
+        return tuple(remapped[1] for remapped in self._remap(obj))
 
     def patch(self, obj_=None, /, **kwargs) -> "State":
         """Return a copy of this state with ``obj_`` modified by ``kwargs``.
@@ -1662,7 +1678,7 @@ class State(_max_posargs(0)):
         modified_obj = dataclasses.replace(obj, **kwargs)
         return self.insert(modified_obj)
 
-    def insert(self, obj: Any) -> "State":
+    def insert(self, *obj: _Remappable) -> "State":
         """Insert ``obj`` in the right place in this State.
         >>> from scenario import Relation, State
         >>> rel1, rel2 = Relation("foo"), Relation("bar")
@@ -1676,12 +1692,14 @@ class State(_max_posargs(0)):
         >>> s1___ = State(leader=True, relations=[rel2])
         """
         # if we can remap the object, we know we have to kick something out in order to insert it.
-        attr, replace = self._remap(obj)
-        current = getattr(self, attr)
-        new = [c for c in current if c != replace] + [obj]
-        return dataclasses.replace(self, **{attr: new})
+        out = self
+        for attr, replace in self._remap(*obj):
+            current = getattr(out, attr)
+            new = [c for c in current if c != replace] + list(obj)
+            out = dataclasses.replace(out, **{attr: new})
+        return out
 
-    def without(self, obj: Any) -> "State":
+    def without(self, *obj: _Remappable) -> "State":
         """Remove ``obj`` from this State.
         >>> from scenario import Relation, State
         >>> rel1, rel2 = Relation("foo"), Relation("bar")
@@ -1690,10 +1708,12 @@ class State(_max_posargs(0)):
         ... # is equivalent to:
         >>> s1_ = State(leader=True, relations=[rel1])
         """
-        attr, replace = self._remap(obj)
-        current = getattr(self, attr)
-        new = [c for c in current if c != replace]
-        return dataclasses.replace(self, **{attr: new})
+        out = self
+        for attr, replace in self._remap(*obj):
+            current = getattr(out, attr)
+            new = [c for c in current if c != replace]
+            out = dataclasses.replace(out, **{attr: new})
+        return out
 
 
 def _is_valid_charmcraft_25_metadata(meta: Dict[str, Any]):
