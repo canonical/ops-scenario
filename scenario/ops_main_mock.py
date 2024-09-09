@@ -3,6 +3,8 @@
 # See LICENSE file for licensing details.
 import inspect
 import os
+import pathlib
+import sys
 from typing import TYPE_CHECKING, Any, Optional, Sequence, cast
 
 import ops.charm
@@ -14,22 +16,27 @@ from ops.charm import CharmMeta
 from ops.log import setup_root_logging
 
 # use logger from ops.main so that juju_log will be triggered
-from ops.main import CHARM_STATE_FILE, _Dispatcher, _get_charm_dir, _get_event_args
+from ops.main import CHARM_STATE_FILE, _Dispatcher, _get_event_args
 from ops.main import logger as ops_logger
+
+from scenario.errors import BadOwnerPath, NoObserverError
 
 if TYPE_CHECKING:  # pragma: no cover
     from scenario.context import Context
-    from scenario.state import Event, State, _CharmSpec
+    from scenario.state import State, _CharmSpec, _Event
 
 # pyright: reportPrivateUsage=false
 
 
-class NoObserverError(RuntimeError):
-    """Error raised when the event being dispatched has no registered observers."""
-
-
-class BadOwnerPath(RuntimeError):
-    """Error raised when the owner path does not lead to a valid ObjectEvents instance."""
+# TODO: Use ops.jujucontext's _JujuContext.charm_dir.
+def _get_charm_dir():
+    charm_dir = os.environ.get("JUJU_CHARM_DIR")
+    if charm_dir is None:
+        # Assume $JUJU_CHARM_DIR/lib/op/main.py structure.
+        charm_dir = pathlib.Path(f"{__file__}/../../..").resolve()
+    else:
+        charm_dir = pathlib.Path(charm_dir).resolve()
+    return charm_dir
 
 
 def _get_owner(root: Any, path: Sequence[str]) -> ops.ObjectEvents:
@@ -53,7 +60,7 @@ def _get_owner(root: Any, path: Sequence[str]) -> ops.ObjectEvents:
 def _emit_charm_event(
     charm: "CharmBase",
     event_name: str,
-    event: Optional["Event"] = None,
+    event: Optional["_Event"] = None,
 ):
     """Emits a charm event based on a Juju event name.
 
@@ -70,11 +77,20 @@ def _emit_charm_event(
         ops_logger.debug("Event %s not defined for %s.", event_name, charm)
         raise NoObserverError(
             f"Cannot fire {event_name!r} on {owner}: "
-            f"invalid event (not on charm.on). "
-            f"Use Context.run_custom instead.",
+            f"invalid event (not on charm.on).",
         )
 
-    args, kwargs = _get_event_args(charm, event_to_emit)
+    try:
+        args, kwargs = _get_event_args(charm, event_to_emit)  # type: ignore
+    except TypeError:
+        # ops 2.16+
+        import ops.jujucontext  # type: ignore
+
+        args, kwargs = _get_event_args(
+            charm,
+            event_to_emit,
+            ops.jujucontext._JujuContext.from_dict(os.environ),  # type: ignore
+        )
     ops_logger.debug("Emitting Juju event %s.", event_name)
     event_to_emit.emit(*args, **kwargs)
 
@@ -82,7 +98,7 @@ def _emit_charm_event(
 def setup_framework(
     charm_dir,
     state: "State",
-    event: "Event",
+    event: "_Event",
     context: "Context",
     charm_spec: "_CharmSpec",
 ):
@@ -96,6 +112,9 @@ def setup_framework(
     )
     debug = "JUJU_DEBUG" in os.environ
     setup_root_logging(model_backend, debug=debug)
+    # ops sets sys.excepthook to go to Juju's debug-log, but that's not useful
+    # in a testing context, so reset it.
+    sys.excepthook = sys.__excepthook__
     ops_logger.debug(
         "Operator Framework %s up and running.",
         ops.__version__,
@@ -115,7 +134,7 @@ def setup_framework(
         # If we are in a RelationBroken event, we want to know which relation is
         # broken within the model, not only in the event's `.relation` attribute.
         broken_relation_id = (
-            event.relation.relation_id  # type: ignore
+            event.relation.id  # type: ignore
             if event.name.endswith("_relation_broken")
             else None
         )
@@ -150,12 +169,26 @@ def setup_charm(charm_class, framework, dispatcher):
     return charm
 
 
-def setup(state: "State", event: "Event", context: "Context", charm_spec: "_CharmSpec"):
+def setup(
+    state: "State",
+    event: "_Event",
+    context: "Context",
+    charm_spec: "_CharmSpec",
+):
     """Setup dispatcher, framework and charm objects."""
     charm_class = charm_spec.charm_type
     charm_dir = _get_charm_dir()
 
-    dispatcher = _Dispatcher(charm_dir)
+    try:
+        dispatcher = _Dispatcher(charm_dir)  # type: ignore
+    except TypeError:
+        # ops 2.16+
+        import ops.jujucontext  # type: ignore
+
+        dispatcher = _Dispatcher(
+            charm_dir,
+            ops.jujucontext._JujuContext.from_dict(os.environ),  # type: ignore
+        )
     dispatcher.run_any_legacy_hook()
 
     framework = setup_framework(charm_dir, state, event, context, charm_spec)
@@ -169,7 +202,7 @@ class Ops:
     def __init__(
         self,
         state: "State",
-        event: "Event",
+        event: "_Event",
         context: "Context",
         charm_spec: "_CharmSpec",
     ):

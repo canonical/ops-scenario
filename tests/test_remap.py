@@ -6,7 +6,7 @@ def test_patch():
     state = scenario.State(relations=[relation])
 
     patched = state.patch(relation, local_app_data={"baz": "qux"})
-    assert patched.relations[0].local_app_data == {"baz": "qux"}
+    assert list(patched.relations)[0].local_app_data == {"baz": "qux"}
 
 
 def test_remap():
@@ -14,7 +14,7 @@ def test_remap():
     state = scenario.State(relations=[relation])
 
     patched = state.patch(relation, local_app_data={"baz": "qux"})
-    assert patched.relations[0].local_app_data == {"baz": "qux"}
+    assert list(patched.relations)[0].local_app_data == {"baz": "qux"}
 
 
 def test_insert():
@@ -32,18 +32,16 @@ def test_without():
     relation2 = scenario.Relation("foo", local_app_data={"buz": "fuz"})
 
     state = scenario.State(relations=[relation, relation2]).without(relation)
-    assert state.relations == [relation2]
+    assert list(state.relations) == [relation2]
 
 
 def test_insert_replace():
-    relation1 = scenario.Relation("foo", local_app_data={"foo": "bar"}, relation_id=1)
-    relation2 = scenario.Relation("foo", local_app_data={"buz": "fuz"}, relation_id=2)
+    relation1 = scenario.Relation("foo", local_app_data={"foo": "bar"}, id=1)
+    relation2 = scenario.Relation("foo", local_app_data={"buz": "fuz"}, id=2)
 
-    relation1_dupe = scenario.Relation(
-        "foo", local_app_data={"noz": "soz"}, relation_id=1
-    )
+    relation1_dupe = scenario.Relation("foo", local_app_data={"noz": "soz"}, id=1)
 
     state = scenario.State(relations=[relation1, relation2]).insert(relation1_dupe)
 
     # inserting a relation with identical ID will kick out the old one
-    assert state.relations == [relation2, relation1_dupe]
+    assert set(state.relations) == {relation2, relation1_dupe}
