@@ -30,6 +30,10 @@ class InconsistentScenarioError(ScenarioRuntimeError):
     """Error raised when the combination of state and event is inconsistent."""
 
 
+class RemapFailedError(ScenarioRuntimeError):
+    """Error raised when scenario fails to remap some object in State."""
+
+
 class StateValidationError(RuntimeError):
     """Raised when individual parts of the State are inconsistent."""
 

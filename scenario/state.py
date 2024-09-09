@@ -47,7 +47,11 @@ from ops.model import CloudCredential as CloudCredential_Ops
 from ops.model import CloudSpec as CloudSpec_Ops
 from ops.model import SecretRotate, StatusBase
 
-from scenario.errors import MetadataNotFoundError, StateValidationError
+from scenario.errors import (
+    MetadataNotFoundError,
+    RemapFailedError,
+    StateValidationError,
+)
 from scenario.logger import logger as scenario_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -58,9 +62,10 @@ RawSecretRevisionContents = RawDataBagContents = Dict[str, str]
 UnitID = int
 
 CharmType = TypeVar("CharmType", bound=CharmBase)
-_Remappable = TypeVar(
-    "_Remappable",
-    bound=Union["Container", "Relation", "Secret", "StoredState"],
+_Remappable = Union["Container", "Relation", "Secret", "StoredState"]
+_R = TypeVar(
+    "_R",
+    bound=_Remappable,
 )
 
 logger = scenario_logger.getChild("state")
@@ -1585,10 +1590,10 @@ class State(_max_posargs(0)):
             if _normalise_name(r.endpoint) == normalized_endpoint
         )
 
-    def _remap(self, *obj: _Remappable) -> Iterable[Tuple[str, Optional[_Remappable]]]:
+    def _remap(self, *obj: _R) -> Iterable[Tuple[str, Optional[_R]]]:
         return map(self._remap_one, obj)
 
-    def _remap_one(self, obj: _Remappable) -> Tuple[str, Optional[_Remappable]]:
+    def _remap_one(self, obj: _R) -> Tuple[str, Optional[_R]]:
         """Return the attribute in which the object can be found and the object itself."""
 
         @singledispatch
@@ -1639,7 +1644,7 @@ class State(_max_posargs(0)):
             )
         return attr, matches[0]
 
-    def remap(self, obj: _Remappable) -> _Remappable:
+    def remap(self, obj: _R) -> Optional[_R]:
         """Get the corresponding object from this State.
         >>> from scenario import Relation, State, Context
         >>> rel1, rel2 = Relation("foo"), Relation("bar")
@@ -1651,7 +1656,7 @@ class State(_max_posargs(0)):
         """
         return self._remap_one(obj)[1]
 
-    def remap_multiple(self, *obj: _Remappable) -> Tuple[_Remappable, ...]:
+    def remap_multiple(self, *obj: _Remappable) -> Tuple[Optional[_Remappable], ...]:
         """Get the corresponding objects from this State.
         >>> from scenario import Relation, State, Context
         >>> rel1, rel2 = Relation("foo"), Relation("bar")
@@ -1661,9 +1666,9 @@ class State(_max_posargs(0)):
         >>> rel1_out, rel2_out = state_out.remap_multiple(rel1, rel2)
         >>> assert rel1.endpoint == "foo"
         """
-        return tuple(remapped[1] for remapped in self._remap(obj))
+        return tuple(rmp[1] for rmp in self._remap(obj))  # type: ignore
 
-    def patch(self, obj_=None, /, **kwargs) -> "State":
+    def patch(self, obj_: _Remappable, /, **kwargs) -> "State":
         """Return a copy of this state with ``obj_`` modified by ``kwargs``.
 
         For example:
@@ -1675,6 +1680,10 @@ class State(_max_posargs(0)):
         >>> s1_ = State(leader=True, relations=[dataclasses.replace(rel1,local_app_data={"foo": "bar"}), rel2])
         """
         obj = self.remap(obj_)
+        if not obj:
+            raise RemapFailedError(
+                f"cannot remap {obj_} to something in {self}: unable to patch it.",
+            )
         modified_obj = dataclasses.replace(obj, **kwargs)
         return self.insert(modified_obj)
 
