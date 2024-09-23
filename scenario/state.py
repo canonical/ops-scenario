@@ -11,6 +11,7 @@ import random
 import re
 import string
 from enum import Enum
+from functools import singledispatch
 from itertools import chain
 from pathlib import Path, PurePosixPath
 from typing import (
@@ -46,7 +47,11 @@ from ops.model import CloudCredential as CloudCredential_Ops
 from ops.model import CloudSpec as CloudSpec_Ops
 from ops.model import SecretRotate, StatusBase
 
-from scenario.errors import MetadataNotFoundError, StateValidationError
+from scenario.errors import (
+    MetadataNotFoundError,
+    RemapFailedError,
+    StateValidationError,
+)
 from scenario.logger import logger as scenario_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -57,6 +62,11 @@ RawSecretRevisionContents = RawDataBagContents = Dict[str, str]
 UnitID = int
 
 CharmType = TypeVar("CharmType", bound=CharmBase)
+_Remappable = Union["Container", "Relation", "Secret", "StoredState"]
+_R = TypeVar(
+    "_R",
+    bound=_Remappable,
+)
 
 logger = scenario_logger.getChild("state")
 
@@ -1579,6 +1589,140 @@ class State(_max_posargs(0)):
             for r in self.relations
             if _normalise_name(r.endpoint) == normalized_endpoint
         )
+
+    def _remap(self, *obj: _R) -> Iterable[Tuple[str, Optional[_R]]]:
+        return map(self._remap_one, obj)
+
+    def _remap_one(self, obj: _R) -> Tuple[str, Optional[_R]]:
+        """Return the attribute in which the object can be found and the object itself."""
+
+        @singledispatch
+        def _filter(x: Any):
+            raise NotImplementedError(type(x))
+
+        @_filter.register
+        def _(x: Relation):
+            return x.id
+
+        @_filter.register
+        def _(x: Container):
+            return x.name
+
+        @_filter.register
+        def _(x: Secret):
+            return x.id
+
+        @singledispatch
+        def _getter(x: Any):
+            raise NotImplementedError(type(x))
+
+        @_getter.register
+        def _(x: Relation):
+            return "relations"
+
+        @_getter.register
+        def _(x: Container):
+            return "containers"
+
+        @_getter.register
+        def _(x: Secret):
+            return "secrets"
+
+        attr = _getter(obj)
+        objects = getattr(self, attr)
+        try:
+            matches = [o for o in objects if _filter(o) == _filter(obj)]
+        except NotImplementedError:
+            raise TypeError(f"cannot remap {type(obj)}")
+
+        if not matches:
+            return attr, None
+
+        if len(matches) > 1:
+            raise RuntimeError(
+                f"too many matches for {obj} (filtered by {_filter(obj)}).",
+            )
+        return attr, matches[0]
+
+    def remap(self, obj: _R) -> Optional[_R]:
+        """Get the corresponding object from this State.
+        >>> from scenario import Relation, State, Context
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> state_in = State(leader=True, relations=[rel1, rel2])
+        >>> ctx = Context(...)
+        >>> state_out = ctx.run(ctx.on.update_status(), state=state_in)
+        >>> rel1_out = state_out.remap(rel1)
+        >>> assert rel1.endpoint == "foo"
+        """
+        return self._remap_one(obj)[1]
+
+    def remap_multiple(self, *obj: _Remappable) -> Tuple[Optional[_Remappable], ...]:
+        """Get the corresponding objects from this State.
+        >>> from scenario import Relation, State, Context
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> state_in = State(leader=True, relations=[rel1, rel2])
+        >>> ctx = Context(...)
+        >>> state_out = ctx.run(ctx.on.update_status(), state=state_in)
+        >>> rel1_out, rel2_out = state_out.remap_multiple(rel1, rel2)
+        >>> assert rel1.endpoint == "foo"
+        """
+        return tuple(rmp[1] for rmp in self._remap(obj))  # type: ignore
+
+    def patch(self, obj_: _Remappable, /, **kwargs) -> "State":
+        """Return a copy of this state with ``obj_`` modified by ``kwargs``.
+
+        For example:
+        >>> from scenario import Relation, State
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> s = State(leader=True, relations=[rel1, rel2])
+        >>> s1 = s.patch(rel1, local_app_data = {"foo": "bar"})
+        ... # is equivalent to:
+        >>> s1_ = State(leader=True, relations=[dataclasses.replace(rel1,local_app_data={"foo": "bar"}), rel2])
+        """
+        obj = self.remap(obj_)
+        if not obj:
+            raise RemapFailedError(
+                f"cannot remap {obj_} to something in {self}: unable to patch it.",
+            )
+        modified_obj = dataclasses.replace(obj, **kwargs)
+        return self.insert(modified_obj)
+
+    def insert(self, *obj: _Remappable) -> "State":
+        """Insert ``obj`` in the right place in this State.
+        >>> from scenario import Relation, State
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> s = State(leader=True, relations=[rel1])
+        >>> s1 = s.insert(rel2)
+        ... # is equivalent to:
+        >>> s1_ = State(leader=True, relations=[rel1, rel2])
+        ... # and
+        >>> s1__ = s.insert(dataclasses.replace(rel2, endpoint="bar"))
+        ... # is equivalent to:
+        >>> s1___ = State(leader=True, relations=[rel2])
+        """
+        # if we can remap the object, we know we have to kick something out in order to insert it.
+        out = self
+        for attr, replace in self._remap(*obj):
+            current = getattr(out, attr)
+            new = [c for c in current if c != replace] + list(obj)
+            out = dataclasses.replace(out, **{attr: new})
+        return out
+
+    def without(self, *obj: _Remappable) -> "State":
+        """Remove ``obj`` from this State.
+        >>> from scenario import Relation, State
+        >>> rel1, rel2 = Relation("foo"), Relation("bar")
+        >>> s = State(leader=True, relations=[rel1, rel2])
+        >>> s1 = s.without(rel2)
+        ... # is equivalent to:
+        >>> s1_ = State(leader=True, relations=[rel1])
+        """
+        out = self
+        for attr, replace in self._remap(*obj):
+            current = getattr(out, attr)
+            new = [c for c in current if c != replace]
+            out = dataclasses.replace(out, **{attr: new})
+        return out
 
 
 def _is_valid_charmcraft_25_metadata(meta: Dict[str, Any]):

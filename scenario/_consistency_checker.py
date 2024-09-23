@@ -198,7 +198,7 @@ def _check_relation_event(
                 f"relation event should start with relation endpoint name. {event.name} does "
                 f"not start with {event.relation.endpoint}.",
             )
-        if event.relation not in state.relations:
+        if event.relation.id not in {relation.id for relation in state.relations}:
             errors.append(
                 f"cannot emit {event.name} because relation {event.relation.id} is not in the state.",
             )
