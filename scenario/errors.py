@@ -9,6 +9,8 @@ used by the framework to signal errors or inconsistencies in the charm tests
 themselves.
 """
 
+from __future__ import annotations
+
 
 class ContextSetupError(RuntimeError):
     """Raised by Context when setup fails."""
@@ -38,7 +40,7 @@ class StateValidationError(RuntimeError):
 
 
 class MetadataNotFoundError(RuntimeError):
-    """Raised when Scenario can't find a metadata file in the provided charm root."""
+    """Raised when a metadata file can't be found in the provided charm root."""
 
 
 class ActionMissingFromContextError(Exception):
