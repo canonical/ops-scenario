@@ -24,6 +24,7 @@ from typing import (
     Final,
     Generic,
     Iterable,
+    List,
     Literal,
     Mapping,
     NoReturn,
