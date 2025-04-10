@@ -1,3 +1,10 @@
+# Public archive
+
+This repo has been integrated into https://github.com/canonical/operator and is now distributed as the pypi package `ops[testing]`.
+Long live scenario.
+
+
+
 # Scenario
 
 [![Build](https://github.com/canonical/ops-scenario/actions/workflows/build_wheels.yaml/badge.svg)](https://github.com/canonical/ops-scenario/actions/workflows/build_wheels.yaml)
